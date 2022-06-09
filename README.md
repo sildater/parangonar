@@ -1,2 +1,5 @@
 # parangonar
-alignment of symbolic music
+
+a python library for note alignment of symbolic music.
+
+
