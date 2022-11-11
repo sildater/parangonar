@@ -53,6 +53,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     packages=find_packages(exclude=('tests',)),
     install_requires=REQUIRED,
+    extras_require={},
     include_package_data=True,
     license="Apache 2.0",
 )
