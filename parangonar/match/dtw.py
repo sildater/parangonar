@@ -1,5 +1,10 @@
-import numpy as np
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains dynamic time warping methods.
+"""
 
+import numpy as np
 
 def element_of_metric(vec1, vec2):
     """
@@ -143,6 +148,7 @@ def cdist(arr1, arr2, metric):
             pdist_array[i, j] = metric(arr1[i], arr2[j])
     return pdist_array
 
+
 def dtw_dmatrix_from_pairwise_dmatrix(D):
     """
     compute dynamic time warping cost matrix 
@@ -175,5 +181,3 @@ def dtw_dmatrix_from_pairwise_dmatrix(D):
             dtwd[i, j] = c + min((insertion, deletion, match))
 
     return (dtwd[1:, 1:])
-
-

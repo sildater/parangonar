@@ -9,19 +9,18 @@ import numpy as np
 # Package meta-data.
 NAME = 'parangonar'
 DESCRIPTION = 'Symbolic music alignment'
-KEYWORDS = 'match alignement midi performance score'
+KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = 'Silvan Peter'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     'numpy',
     'scipy',
     'partitura',
-    'mido',
-    'hiddenmarkov @ git+https://github.com/neosatrapahereje/hiddenmarkov.git'
+    'python-hiddenmarkov'
 ]
 
 include_dirs = [np.get_include()]
@@ -54,4 +53,6 @@ setup(
     python_requires=REQUIRES_PYTHON,
     packages=find_packages(exclude=('tests',)),
     install_requires=REQUIRED,
+    include_package_data=True,
+    license="Apache 2.0",
 )

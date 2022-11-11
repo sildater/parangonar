@@ -1,3 +1,10 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains preprocessing methods
+"""
+
+
 import numpy as np
 from scipy.interpolate import interp1d
 
