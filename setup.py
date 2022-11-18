@@ -4,7 +4,7 @@
 import io
 import os
 from setuptools import find_packages, setup
-import numpy as np
+
 
 # Package meta-data.
 NAME = 'parangonar'
@@ -13,7 +13,7 @@ KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = 'Silvan Peter'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -23,7 +23,6 @@ REQUIRED = [
     'python-hiddenmarkov'
 ]
 
-include_dirs = [np.get_include()]
 here = os.path.abspath(os.path.dirname(__file__))
 
 try:
