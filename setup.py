@@ -11,9 +11,9 @@ NAME = 'parangonar'
 DESCRIPTION = 'Symbolic music alignment'
 KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
-AUTHOR = 'Silvan Peter'
+AUTHOR = 'Silvan Peter, Carlos Cancino-Chacón, Florian Henkel'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.7'
+VERSION = '0.0.8'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -52,7 +52,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     packages=find_packages(exclude=('tests',)),
         package_data={
-        "parangonada": [
+        "parangonar": [
             "assets/mozart_k265_var1.match",
         ]
         },
