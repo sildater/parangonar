@@ -14,24 +14,40 @@ RNG = np.random.RandomState(1984)
 array1 = np.array([[0,1,2,3,6]]).T
 array2 = np.array([[0,1,2,3,4,5,6]]).T
 
+result_dtw = np.array([[ 0,  0],
+       [ 1,  1],
+       [ 2,  2],
+       [ 3,  3],
+       [ 3,  4],
+       [ 4,  5],
+       [ 4,  6]])
+
+result_nw = np.array([[ 0,  0],
+       [ 1,  1],
+       [ 2,  2],
+       [ 3,  3],
+       [-1,  4],
+       [-1,  5],
+       [ 4,  6]])
+
 class TestAlignment(unittest.TestCase):
     def test_DTW_align(self, **kwargs):
 
         vanillaDTW = DTW()
-        print(vanillaDTW(array1, array2))
-        self.assertTrue(True)
+        _, path = vanillaDTW(array1, array2)
+        self.assertTrue(np.all(result_dtw == path))
         
     def test_NWDTW_align(self, **kwargs):
 
         vanillaNW_DTW = NW_DTW()
-        print(vanillaNW_DTW(array1, array2))
-        self.assertTrue(True)
+        _, path = vanillaNW_DTW(array1, array2)
+        self.assertTrue(np.all(result_nw == path))
         
     def test_NW_align(self, **kwargs):
         
         vanillaNW = NW()
-        print(vanillaNW(array1, array2))
-        self.assertTrue(True)
+        _, path = vanillaNW(array1, array2)
+        self.assertTrue(np.all(result_nw == path))
         
         
 if __name__ == "__main__":

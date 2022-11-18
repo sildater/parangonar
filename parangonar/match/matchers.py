@@ -310,7 +310,7 @@ class PianoRollNoNodeMatcher(object):
                  note_matcher=DTW,
                  matcher_kwargs=dict(metric="euclidean"),
                  node_cutter=cut_note_arrays,
-                 node_mender=AugmentedNodeMender(),
+                 node_mender=mend_note_alignments,
                  symbolic_note_matcher=SequenceAugmentedGreedyMatcher(),
                  greedy_symbolic_note_matcher=SimplestGreedyMatcher(),
                  alignment_type="dtw",
