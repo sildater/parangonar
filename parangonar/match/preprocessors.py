@@ -42,9 +42,11 @@ def alignment_times_from_dtw(score_note_array,
     # _____________ fine alignment ____________
     # compute proper piano rolls
     s_pianoroll = compute_pianoroll(score_note_array,
-                                    time_div=s_time_div).toarray()
+                                    time_div=s_time_div,
+                                    remove_drums=False).toarray()
     p_pianoroll = compute_pianoroll(performance_note_array,
-                                    time_div=p_time_div).toarray()
+                                    time_div=p_time_div,
+                                    remove_drums=False,).toarray()
     # make piano rolls binary
     p_pianoroll_ones = np.zeros_like(p_pianoroll)
     p_pianoroll_ones[p_pianoroll > 0.0] = 1.0

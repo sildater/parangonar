@@ -341,7 +341,8 @@ class PianoRollNoNodeMatcher(object):
         self.cap_combinations = cap_combinations
 
     def __call__(self, score_note_array,
-                 performance_note_array, alignment_times):
+                 performance_note_array,
+                 verbose_time=False):
         
         t1 = time.time()
         #print("starting full dtw", t1)
@@ -356,7 +357,8 @@ class PianoRollNoNodeMatcher(object):
                             )
         # cut arrays to windows
         t11 = time.time()
-        print(t11-t1, "initial dtw pass")
+        if verbose_time:
+            print(format(t11-t1, ".3f"), "sec : Initial coarse DTW pass")
         # print(dtw_alignment_times_init)
         score_note_arrays, performance_note_arrays = self.node_cutter(
             performance_note_array,
@@ -371,7 +373,8 @@ class PianoRollNoNodeMatcher(object):
         dtw_al = []
         # test_nal = dict()
         t2 = time.time()
-        print(t2-t11, "cutting")
+        if verbose_time:
+            print(format(t2-t11, ".3f"), "sec : Cutting")
         for window_id in range(len(score_note_arrays)):
             t21 = time.time()    
             
@@ -420,6 +423,10 @@ class PianoRollNoNodeMatcher(object):
                 t4 = time.time()
                 # print(t4-t3, "note_matcher")
         t41 = time.time()
+        if verbose_time:
+            print(format(t41-t2, ".3f"), "sec : Fine-grained DTW passes, symbolic matching")
+
+        
         # MEND windows to global alignment
         global_alignment, score_alignment, \
             performance_alignment = self.node_mender(note_alignments, 
@@ -429,7 +436,8 @@ class PianoRollNoNodeMatcher(object):
                                                     symbolic_note_matcher= self.symbolic_note_matcher,
                                                     max_traversal_depth=150)
         t5 = time.time()
-        print(t5-t41, "mending")
+        if verbose_time:
+            print(format(t5-t41, ".3f"), "sec : Mending")
 
         return global_alignment
 

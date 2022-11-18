@@ -4,8 +4,15 @@
 The top level of the package contains functions to
 note-align symbolic music data.
 """
+import pkg_resources
+EXAMPLE = pkg_resources.resource_filename("tests", "data/mozart_k265_var1.match")
 
-from .match.dtw import DynamicTimeWarping
 
-def test():
-    print("test")
+from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher
+from .evaluate import fscore_alignments
+
+__all__ = [
+    "AnchorPointNoteMatcher",
+    "AutomaticNoteMatcher",
+    "fscore_alignments",
+]
