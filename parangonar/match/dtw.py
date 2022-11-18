@@ -5,6 +5,7 @@ This module contains dynamic time warping methods.
 """
 
 import numpy as np
+from scipy.spatial.distance import cdist
 
 def element_of_metric(vec1, vec2):
     """
@@ -13,13 +14,20 @@ def element_of_metric(vec1, vec2):
     return 1 - np.sum(vec2 == vec1)
 
 
+def l2(vec1, vec2):
+    """
+    l2 metric between vec1 and vec2
+    """
+    return np.sqrt(np.sum((vec2 - vec1)**2))
+
+
 class DynamicTimeWarping(object):
     """
     pure python vanilla Dynamic Time Warping
     """
     
     def __init__(self, 
-                 metric=element_of_metric):
+                 metric= 'euclidean'):
         self.metric = metric
 
     def __call__(self, X, Y, return_path=True,
@@ -43,7 +51,9 @@ class DynamicTimeWarping(object):
         if return_cost_matrix:
             out += (dtwd_matrix, )
         return out
-    
+
+# alias
+DTW = DynamicTimeWarping
     
 def dtw_backtracking(dtwd):
     """
@@ -122,31 +132,31 @@ def dtw_backtracking(dtwd):
     return np.array(path[::-1], dtype=int)
 
 
-def cdist(arr1, arr2, metric):
-    """
-    compute array of pairwise distances between 
-    the elements of two arrays given a metric
+# def cdist(arr1, arr2, metric):
+#     """
+#     compute array of pairwise distances between 
+#     the elements of two arrays given a metric
     
-    Parameters
-    ----------
-    arr1: numpy nd array
+#     Parameters
+#     ----------
+#     arr1: numpy nd array
     
-    arr2: numpy nd array
+#     arr2: numpy nd array
     
-    metric> callable
-        a metric function
+#     metric> callable
+#         a metric function
     
-    Returns
-    -------
+#     Returns
+#     -------
     
-    pdist_array: numpy 2d array
-        array of pairwise distances
-    """
-    pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
-            pdist_array[i, j] = metric(arr1[i], arr2[j])
-    return pdist_array
+#     pdist_array: numpy 2d array
+#         array of pairwise distances
+#     """
+#     pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
+#     for i in range(arr1.shape[0]):
+#         for j in range(arr2.shape[0]):
+#             pdist_array[i, j] = metric(arr1[i], arr2[j])
+#     return pdist_array
 
 
 def dtw_dmatrix_from_pairwise_dmatrix(D):

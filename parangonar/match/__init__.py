@@ -19,5 +19,6 @@ this file contains specific variations and additions.
 """
 
 
-from .dtw import DynamicTimeWarping
-
+from .dtw import DTW
+from .nwtw import NW_DTW, NW
+from .matchers import AnchorPointNoteMatcher, AutomaticNoteMatcher

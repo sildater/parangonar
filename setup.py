@@ -13,13 +13,13 @@ KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = 'Silvan Peter'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     'numpy',
     'scipy',
-    'partitura==1.1.1',
+    'partitura>=1.1.0',
     'python-hiddenmarkov'
 ]
 
@@ -56,4 +56,10 @@ setup(
     extras_require={},
     include_package_data=True,
     license="Apache 2.0",
+    classifiers=[
+        # Trove classifiers
+        # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+    ],
 )
