@@ -13,7 +13,7 @@ KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = 'Silvan Peter'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
