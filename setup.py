@@ -51,6 +51,11 @@ setup(
     url=URL,
     python_requires=REQUIRES_PYTHON,
     packages=find_packages(exclude=('tests',)),
+        package_data={
+        "parangonada": [
+            "assets/mozart_k265_var1.match",
+        ]
+        },
     install_requires=REQUIRED,
     extras_require={},
     include_package_data=True,

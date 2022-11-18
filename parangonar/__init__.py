@@ -6,7 +6,7 @@ note-align symbolic music data.
 """
 import pkg_resources
 EXAMPLE = pkg_resources.resource_filename("parangonar", 
-                                          "data/mozart_k265_var1.match")
+                                          "assets/mozart_k265_var1.match")
 
 
 from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher
