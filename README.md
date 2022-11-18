@@ -1,3 +1,6 @@
+Parangonar
+==========
+
 **Parangonar** is a Python package for note alignment of symbolic music. 
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
 Note alignments produced py **Parangonar** can be visualized using the 
