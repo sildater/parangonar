@@ -95,7 +95,8 @@ alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/
 # https://sildater.github.io/parangonada/
 pt.io.exportparangonada.save_parangonada_csv(alignment, 
                                             performance_data,
-                                            score_data)
+                                            score_data
+                                            outdir="path/to/dir")
 
 # import a corrected note alignment from parangonada:
 # https://sildater.github.io/parangonada/
