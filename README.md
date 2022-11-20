@@ -61,6 +61,47 @@ for alignment_type in types:
 ```
 
 
+Aligning MusicXML Scores and MIDI Performances
+==========
+
+
+```python
+import parangonar as pa
+import partitura as pt
+
+score = pt.load_score(filename= 'path/to/score_file')
+performance = pt.load_performance_midi(filename= 'path/to/midi_file')
+
+# compute note arrays from the loaded score and performance
+pna = performance.note_array()
+sna = score.note_array()
+
+# match the notes in the note arrays
+sdm = pa.AutomaticNoteMatcher()
+pred_alignment = sdm(sna_match, pna_match)
+```
+
+File I/O for note alignments
+==========
+
+```python
+import partitura as pt
+
+# load note alignments of the asap dataset: 
+# https://github.com/CPJKU/asap-dataset/tree/note_alignments
+alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/note_alignment.tsv')
+
+# export a note alignment for visualization with parangonada:
+# https://sildater.github.io/parangonada/
+pt.io.exportparangonada.save_parangonada_csv(alignment, 
+                                            performance_data,
+                                            score_data)
+
+# import a corrected note alignment from parangonada:
+# https://sildater.github.io/parangonada/
+alignment = pt.io.importparangonada.load_parangonada_alignment(filename= 'path/to/note_alignment.csv')
+```
+
 License
 =======
 
