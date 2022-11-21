@@ -7,7 +7,14 @@ This module contains preprocessing methods
 import numpy as np
 from scipy.interpolate import interp1d
 
-from partitura.utils.music import compute_pianoroll
+from partitura.utils.music import (compute_pianoroll, 
+                                   ensure_notearray)
+
+from partitura.musicanalysis.performance_codec import ( 
+                                    to_matched_score,
+                                    get_unique_onset_idxs
+                                    )
+
 
 from .dtw import DTW
 from .nwtw import NW_DTW, NW
@@ -46,7 +53,7 @@ def alignment_times_from_dtw(score_note_array,
                                     remove_drums=False).toarray()
     p_pianoroll = compute_pianoroll(performance_note_array,
                                     time_div=p_time_div,
-                                    remove_drums=False,).toarray()
+                                    remove_drums=False).toarray()
     # make piano rolls binary
     p_pianoroll_ones = np.zeros_like(p_pianoroll)
     p_pianoroll_ones[p_pianoroll > 0.0] = 1.0
@@ -111,32 +118,12 @@ def alignment_times_from_dtw(score_note_array,
         a_min=0,
         a_max=max_performance)
 
-    # idx_of_first_occurence_of_times_in_score = np.array(
-    #     [int(np.min(np.where(times_score >= cut_time)[0]))
-    #      for cut_time in cut_times_score], dtype=int)
-    # cut_times_performance = times_performance[
-    #     idx_of_first_occurence_of_times_in_score]
-    # cut_times_performance = np.append(cut_times_performance, max_performance)
-    # cut_times_score = np.append(cut_times_score, max_score)
-
     cut_times_performance += performance_note_array["onset_sec"].min()
     cut_times_score += score_note_array["onset_beat"].min()
-
-    # ________- sanitiy checks
-    # print("sanity check ranges of aligned times by dtw")
-    # print(min_score, max_score, s_pianoroll.shape,
-    #       s_pianoroll.shape[1]/16, path_array[-5:, 0])
-    # print(cut_times_score.max(),
-    #       score_note_array["onset_beat"].max())
-    # print(cut_times_performance.max(),
-    #       performance_note_array["onset_sec"].max())
 
     dtw_alignment_times = np.column_stack((cut_times_score,
                                            cut_times_performance))
     return dtw_alignment_times
-
-
-
 
 
 def traverse_the_alignment_graph(start_id, 
@@ -355,3 +342,164 @@ def mend_note_alignments(note_alignments,
             alignment.append({'label': 'insertion', 'performance_id': pnote_id})
 
     return alignment, score_alignment, performance_alignment
+
+
+################################### ANCHOR POINT GENERAITON ###################################
+
+
+def node_array(part, 
+                ppart,
+                alignment,
+                tapping_noise=False,
+                node_interval=1, 
+                start_beat=None,
+                nodes_in_beats=True):
+    """
+    generates an array of nodes, corresponding score time point and 
+    performance time point tuples, spacing given by note_interval.
+    
+    Args:
+        part (partitura.Part): a part object
+        ppart (partitura.PerformedPart): a performedpart object
+        alignment (List(Dict)): an alignment
+
+    Returns:
+        np.ndarray: a minimal, aligned 
+            node note array.
+
+    """
+
+    ppart.sustain_pedal_threshold = 128
+
+    matched_score, snote_ids = to_matched_score(part, ppart, alignment)
+
+    # get unique onsets
+    nid_dict = dict((n.id, i) for i, n in enumerate(part.notes_tied))
+    matched_subset_idxs = np.array([nid_dict[nid] for nid in snote_ids])
+
+    part_note_array = ensure_notearray(part,
+                                        include_time_signature=True)
+
+    score_onsets = part_note_array[matched_subset_idxs]['onset_beat']
+    # changed from onset_beat
+    unique_onset_idxs = get_unique_onset_idxs(score_onsets)
+
+    smatched_score_onset = notewise_to_onsetwise(matched_score['onset'],
+                                                    unique_onset_idxs,
+                                                    aggregation_func=np.mean)
+    pmatched_score_onset = notewise_to_onsetwise(matched_score['p_onset'],
+                                                    unique_onset_idxs,
+                                                    aggregation_func=np.mean)
+    
+    if nodes_in_beats:
+        beat_times, sbeat_times = beat_times_from_matched_score(
+            smatched_score_onset, 
+            pmatched_score_onset,
+            tapping_noise=tapping_noise,
+            node_interval=node_interval,
+            start_beat=start_beat)
+    else: 
+        beat_times, sbeat_times = measure_times_from_matched_score(
+            smatched_score_onset, 
+            pmatched_score_onset, 
+            part, 
+            tapping_noise=tapping_noise,
+            measure_interval=node_interval,
+            start_measure=start_beat)
+
+    alignment_times = [*zip(sbeat_times, beat_times)]
+
+    return alignment_times
+
+
+def beat_times_from_matched_score(x, y,
+                                  tapping_noise=False,
+                                  node_interval=1.0,
+                                  start_beat=None):
+
+    beat_times_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
+
+    min_beat = np.ceil(x.min())  # -node_interval
+    min_beat_original = min_beat
+    max_beat = np.floor(x.max())  # +node_interval
+
+    if start_beat is not None:
+        print("first node at ", start_beat, " first beat at ", min_beat)
+        min_beat = start_beat
+        
+    sbeat_times = np.arange(min_beat, max_beat, node_interval)
+    # prepend and append very low and high values to make sure every beat/beat annotation falls between two sbeat_times/beat_times
+    sbeat_times = np.append(np.append(min_beat_original-max(100, node_interval),sbeat_times),max_beat+max(100, node_interval))
+    beat_times = beat_times_func(sbeat_times)
+
+    if tapping_noise:
+        beat_times += np.random.normal(0.0, tapping_noise,
+                                       beat_times.shape)
+
+    return beat_times, sbeat_times
+
+
+def measure_times_from_matched_score(x, y, part, 
+                                  tapping_noise=False,
+                                  measure_interval=1,
+                                  start_measure=None):
+
+    beat_times_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
+
+    measure_times_in_part = [part.beat_map(measure.start.t) for measure in part.iter_all(partitura.score.Measure)]
+    if start_measure is None:
+        start_measure=0
+    
+    smeasure_idx = np.arange(start_measure, len(measure_times_in_part), measure_interval, dtype = int)
+    smeasure_times = np.array(measure_times_in_part)[smeasure_idx]
+    # prepend and append very low and high values to make sure every beat/beat annotation falls between two sbeat_times/beat_times
+    smeasure_times = np.append(np.append(smeasure_times[0]-max(100, measure_interval),smeasure_times),smeasure_times[-1]+max(100, measure_interval))
+    pmeasure_times = beat_times_func(smeasure_times)
+
+    if tapping_noise:
+        pmeasure_times += np.random.normal(0.0, tapping_noise, pmeasure_times.shape)
+
+    return pmeasure_times, smeasure_times
+
+
+def notewise_to_onsetwise(notewise_inputs, 
+                          unique_onset_idxs, 
+                          aggregation_func=np.mean):
+    """Agregate onset times per score onset
+    """
+    
+    onsetwise_inputs = np.zeros(len(unique_onset_idxs),
+                                dtype=notewise_inputs.dtype)
+
+    for i, uix in enumerate(unique_onset_idxs):
+        onsetwise_inputs[i] = aggregation_func(notewise_inputs[uix])
+    return onsetwise_inputs
+
+
+def expand_grace_notes(note_array, backwards_time=0.2):
+    """
+    expand the duration of gracenotes in a note_array and reset their onset by a timespan called backwards_time
+    """
+    grace_note_onsets = np.unique(
+        note_array["onset_beat"][note_array["duration_beat"] == 0.0])
+    for gno in grace_note_onsets:
+        mask = np.all([note_array["duration_beat"] == 0.0,
+                       note_array["onset_beat"] == gno],
+                      axis=0)
+        number_of_grace_notes = mask.sum()
+        note_array["onset_beat"][mask] -= np.linspace(backwards_time,0.0, number_of_grace_notes+1)[:-1]
+        note_array["duration_beat"][mask] += backwards_time/(number_of_grace_notes)
+    return note_array
+
+
+def convert_grace_to_insertions(alignment):
+    """
+    relabel all ornament alignments as insertions
+    """
+    new_alignment = [al for al in alignment if al["label"] != "ornament"]
+    new_alignment_o = [al for al in alignment if al["label"] == "ornament"]
+    for al in new_alignment_o:
+        new_al = {'label': 'insertion', 'performance_id': al["performance_id"]}
+        new_alignment.append(new_al)
+    return new_alignment
+

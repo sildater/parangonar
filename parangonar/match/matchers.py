@@ -233,14 +233,16 @@ class PianoRollSequentialMatcher(object):
         self.cap_combinations = cap_combinations
 
     def __call__(self, score_note_array,
-                 performance_note_array, alignment_times):
+                 performance_note_array, 
+                 alignment_times):
+        
         # cut arrays to windows
-
         score_note_arrays, performance_note_arrays = self.node_cutter(
             performance_note_array,
             score_note_array,
             np.array(alignment_times),
-            sfuzziness=self.sfuzziness, pfuzziness=self.pfuzziness,
+            sfuzziness=self.sfuzziness, 
+            pfuzziness=self.pfuzziness,
             window_size=self.window_size,
             pfuzziness_relative_to_tempo=self.pfuzziness_relative_to_tempo)
 
@@ -248,11 +250,7 @@ class PianoRollSequentialMatcher(object):
         note_alignments = []
         dtw_al = []
 
-
         for window_id in range(len(score_note_arrays)):  
-            # print("window_id ", window_id, "/", len(score_note_arrays),
-            #         "snotes", score_note_arrays[window_id].shape, 
-            #         "pnotes", performance_note_arrays[window_id].shape)
             if self.alignment_type == "greedy":
                 alignment = self.greedy_symbolic_note_matcher(
                     score_note_arrays[window_id],
@@ -345,7 +343,6 @@ class PianoRollNoNodeMatcher(object):
                  verbose_time=False):
         
         t1 = time.time()
-        #print("starting full dtw", t1)
         # start with DTW
         dtw_alignment_times_init = alignment_times_from_dtw(
                             score_note_array,
@@ -359,26 +356,24 @@ class PianoRollNoNodeMatcher(object):
         t11 = time.time()
         if verbose_time:
             print(format(t11-t1, ".3f"), "sec : Initial coarse DTW pass")
-        # print(dtw_alignment_times_init)
         score_note_arrays, performance_note_arrays = self.node_cutter(
             performance_note_array,
             score_note_array,
             np.array(dtw_alignment_times_init),
-            sfuzziness=self.sfuzziness, pfuzziness=self.pfuzziness,
+            sfuzziness=self.sfuzziness, 
+            pfuzziness=self.pfuzziness,
             window_size=self.window_size,
             pfuzziness_relative_to_tempo=self.pfuzziness_relative_to_tempo)
 
         # compute windowed alignments
         note_alignments = []
         dtw_al = []
-        # test_nal = dict()
+
         t2 = time.time()
         if verbose_time:
             print(format(t2-t11, ".3f"), "sec : Cutting")
-        for window_id in range(len(score_note_arrays)):
-            t21 = time.time()    
             
-
+        for window_id in range(len(score_note_arrays)):
             if self.alignment_type == "greedy":
                 alignment = self.greedy_symbolic_note_matcher(
                     score_note_arrays[window_id],
@@ -389,8 +384,6 @@ class PianoRollNoNodeMatcher(object):
                 if self.alignment_type == "dtw":
                     if score_note_arrays[window_id].shape[0] == 0 or \
                         performance_note_arrays[window_id].shape[0] == 0:
-                        # print("empty arrays")
-
                         # for empty arrays fall back to linear
                         dtw_alignment_times = np.array(dtw_alignment_times_init)[
                                 window_id:window_id+2, :]
@@ -408,8 +401,7 @@ class PianoRollNoNodeMatcher(object):
                         window_id:window_id+2, :]
 
                 dtw_al.append(dtw_alignment_times)
-                t3 = time.time()
-                # print(t3-t21, "dtw/time interpolation")
+                
                 # distance augmented greedy align
                 fine_local_alignment = self.symbolic_note_matcher(
                     score_note_arrays[window_id],
@@ -419,9 +411,6 @@ class PianoRollNoNodeMatcher(object):
                     cap_combinations=self.cap_combinations)
 
                 note_alignments.append(fine_local_alignment)
-                # test_nal[window_id] = fine_local_alignment
-                t4 = time.time()
-                # print(t4-t3, "note_matcher")
         t41 = time.time()
         if verbose_time:
             print(format(t41-t2, ".3f"), "sec : Fine-grained DTW passes, symbolic matching")

@@ -5,6 +5,10 @@ This module
 evaluate note alignments symbolic music data.
 """
 from typing import List
+import numpy as np
+import partitura as pt
+import matplotlib.pyplot as plt
+import random
 
 def fscore_alignments(prediction: List[dict], 
                         ground_truth: List[dict], 
@@ -43,6 +47,68 @@ def fscore_alignments(prediction: List[dict],
 
 
 
+def plot_alignment(ppart_na, 
+         part_na, 
+         alignment, 
+         save_file = False,
+         fname = "note_alignment",
+         random_color = False
+         ):
+    
+    first_note_midi = np.min(ppart_na["onset_sec"])
+    last_note_midi = np.max(ppart_na["onset_sec"]+ppart_na["duration_sec"])
+    first_note_start = np.min(part_na["onset_beat"])
+    last_note_start = np.max(part_na["onset_beat"])
+    length_of_midi = last_note_midi - first_note_midi
+    length_of_xml = last_note_start - first_note_start
+
+    length_of_pianorolls = max(10000,int(length_of_xml*8))
+    time_div_midi = int(np.floor(length_of_pianorolls/length_of_midi))
+    time_div_xml = int(np.floor(length_of_pianorolls/length_of_xml))
+    
+    midi_piano_roll, perfidx = pt.utils.compute_pianoroll(ppart_na,
+                                                time_unit = "sec",
+                                                time_div = time_div_midi,
+                                                return_idxs=True,
+                                                remove_drums=False)
+    xml_piano_roll, scoreidx = pt.utils.compute_pianoroll(part_na,
+                                                time_unit = "beat",
+                                                time_div = time_div_xml,
+                                                return_idxs = True,
+                                                remove_drums=False)
+    
+    plot_array = np.zeros((128*2+50, length_of_pianorolls+800))
+    dense_midi_pr = midi_piano_roll.todense()#[:,:time_size]
+    dense_midi_pr[dense_midi_pr>0] = 1
+    plot_array[:128,:xml_piano_roll.shape[1]] = xml_piano_roll.todense()
+    plot_array[50+128:,:midi_piano_roll.shape[1]] = dense_midi_pr
+
+    f, axs = plt.subplots(1,1,figsize=(100, 10))
+    axs.matshow(plot_array, aspect = "auto",  origin='lower')
+    hexadecimal_alphabets = '0123456789ABCDEF'
+
+    if random_color:
+        colors = ["#" + ''.join([random.choice(hexadecimal_alphabets) for j in range(6)]) for i in range(40)]
+    else:
+        colors = ["#00FF00" for i in range(40)]
+        
+    score_dict = dict()
+    for note, pos in zip(part_na, scoreidx):
+        score_dict[note["id"]] = pos
+    perf_dict = dict()
+    for note, pos in zip(ppart_na, perfidx):
+        perf_dict[note["id"]] = pos
+    for i, line in enumerate(alignment):
+        if line["label"]=="match":
+            perf_pos = perf_dict[line["performance_id"]]
+            score_pos = score_dict[line["score_id"]]
+            axs.plot([score_pos[1], perf_pos[1]], [ score_pos[0], 128+50 +perf_pos[0]],'o-', lw=2, c = colors[i%40])
+
+    if save_file:
+        plt.savefig(fname+".png")
+        plt.close(f)
+    else:
+        plt.show()
 
 
 

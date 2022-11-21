@@ -10,7 +10,7 @@ EXAMPLE = pkg_resources.resource_filename("parangonar",
 
 
 from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher
-from .evaluate import fscore_alignments
+from .evaluate import fscore_alignments, plot_alignment
 
 __all__ = [
     "AnchorPointNoteMatcher",
