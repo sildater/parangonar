@@ -86,6 +86,7 @@ File I/O for note alignments
 
 ```python
 import partitura as pt
+import parangonar as pa
 
 # load note alignments of the asap dataset: 
 # https://github.com/CPJKU/asap-dataset/tree/note_alignments
@@ -93,10 +94,10 @@ alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/
 
 # export a note alignment for visualization with parangonada:
 # https://sildater.github.io/parangonada/
-pt.io.exportparangonada.save_parangonada_csv(alignment, 
-                                            performance_data,
-                                            score_data
-                                            outdir="path/to/dir")
+pa.match.save_parangonada_csv(alignment, 
+                            performance_data,
+                            score_data,
+                            outdir="path/to/dir")
 
 # import a corrected note alignment from parangonada:
 # https://sildater.github.io/parangonada/
