@@ -10,7 +10,7 @@ import time
 from itertools import combinations
 from scipy.special import binom
 
-from .dtw import DTW
+from .dtw import DTW, element_of_metric
 from .nwtw import NW_DTW, NW
 
 from .preprocessors import (mend_note_alignments,
@@ -435,3 +435,71 @@ AutomaticNoteMatcher = PianoRollNoNodeMatcher
 
 # alias
 AnchorPointNoteMatcher = PianoRollSequentialMatcher
+
+
+class ChordEncodingMatcher(object):
+    def __init__(self,
+                 note_matcher=DTW,
+                 matcher_kwargs=dict(metric=element_of_metric,
+                                     cdist_local=True),
+                 node_mender=mend_note_alignments,
+                 symbolic_note_matcher=SequenceAugmentedGreedyMatcher(),
+                 greedy_symbolic_note_matcher=SimplestGreedyMatcher(),
+                 alignment_type="dtw",
+                 dtw_window_size=6):
+
+        self.note_matcher = note_matcher(**matcher_kwargs)
+        self.symbolic_note_matcher = symbolic_note_matcher
+        self.node_mender = node_mender
+        self.greedy_symbolic_note_matcher = greedy_symbolic_note_matcher
+        self.alignment_type = alignment_type
+        self.dtw_window_size = dtw_window_size
+
+    def __call__(self, score_note_array,
+                 performance_note_array,
+                 verbose_time=False):
+        
+        
+        score_note_per_ons_encoding = ()
+        matcher = DTW(metric = element_of_metric, cdist_local = True)
+
+        # compute windowed alignments
+        note_alignments = []
+        dtw_al = []
+
+        t2 = time.time()
+
+        for window_id in range(len(score_note_arrays)):
+            if self.alignment_type == "greedy":
+                alignment = self.greedy_symbolic_note_matcher(
+                    score_note_arrays[window_id],
+                    performance_note_arrays[window_id])
+                note_alignments.append(alignment)
+            else:
+                # distance augmented greedy align
+                fine_local_alignment = self.symbolic_note_matcher(
+                    score_note_arrays[window_id],
+                    performance_note_arrays[window_id],
+                    dtw_alignment_times,
+                    shift=self.shift_onsets,
+                    cap_combinations=self.cap_combinations)
+
+                note_alignments.append(fine_local_alignment)
+        t41 = time.time()
+        if verbose_time:
+            print(format(t41-t2, ".3f"), "sec : Fine-grained DTW passes, symbolic matching")
+
+        
+        # MEND windows to global alignment
+        global_alignment, score_alignment, \
+            performance_alignment = self.node_mender(note_alignments, 
+                                                    performance_note_array,
+                                                    score_note_array, 
+                                                    node_times=np.array(dtw_alignment_times_init),
+                                                    symbolic_note_matcher= self.symbolic_note_matcher,
+                                                    max_traversal_depth=150)
+        t5 = time.time()
+        if verbose_time:
+            print(format(t5-t41, ".3f"), "sec : Mending")
+
+        return global_alignment
