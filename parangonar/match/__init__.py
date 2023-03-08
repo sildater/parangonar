@@ -23,4 +23,5 @@ from .dtw import DTW
 from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher)
-from .preprocessors import node_array
+from .utils import (node_array,
+                    save_parangonada_csv)
