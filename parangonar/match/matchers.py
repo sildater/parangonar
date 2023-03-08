@@ -15,7 +15,8 @@ from .nwtw import NW_DTW, NW
 
 from .preprocessors import (mend_note_alignments,
                             cut_note_arrays,
-                            alignment_times_from_dtw)
+                            alignment_times_from_dtw,
+                            note_per_ons_encoding)
 
 ################################### SYMBOLIC MATCHERS ###################################
 
@@ -194,6 +195,81 @@ class SequenceAugmentedGreedyMatcher(object):
         return alignment
     
     
+class OnsetGreedyMatcher(object):
+    """
+    Create alignment in MAPS format (dict) 
+    by pitch matching from an onset-wise
+    alignment
+    """
+    def __call__(self, 
+                 score_note_array, 
+                 performance_note_array,
+                 onset_alignment):
+        alignment = []
+        s_aligned = []
+        p_aligned = []
+        unique_onsets = np.unique(score_note_array['onset_beat'])
+        # for p_no, p_note in enumerate(performance_note_array):
+        for p_no, s_onset_no in onset_alignment:
+            p_note = performance_note_array[p_no]
+            pid = p_note['id']
+            sid = None
+            
+            for k in range(2): # check onsets up to 5 steps in the future
+                # s_candidate_mask = onset_alignment[p_no]
+                try: 
+                    s_onset = unique_onsets[s_onset_no+k]
+                    score_note_array_segment = score_note_array[score_note_array['onset_beat'] == s_onset]
+                    # filter performance notes with matching pitches
+                    matching_pitches = score_note_array_segment[p_note['pitch'] == score_note_array_segment['pitch']]
+
+                    for s_note in matching_pitches:
+                        # take first matching performance note that was not yet aligned
+                        if s_note not in s_aligned and p_note not in p_aligned:
+                            sid = str(s_note['id'])
+                            p_aligned.append(p_note)
+                            s_aligned.append(s_note)
+                            break 
+                    
+                    if sid is not None or len(matching_pitches) == 0:
+                        break
+                   
+                except:
+                    print("next onset trial error in OnsetGreedyMatcher")
+
+            if sid is not None:
+                alignment.append({'label': 'match', 'score_id': sid, 'performance_id': str(pid)})
+                
+        
+        # check for unaligned performance notes (ie insertions) 
+        for p_no, p_note in enumerate(performance_note_array):
+            if p_note not in p_aligned:
+                # neighborhood watch
+                pid = p_note['id']
+                mask  = (onset_alignment[:,0] == p_no)
+                sid = None
+                s_onset = np.min(unique_onsets[onset_alignment[mask,1]])
+                smask  = np.all((score_note_array['onset_beat'] < s_onset + 4, score_note_array['onset_beat'] > s_onset - 4), axis= 0)
+                possible_score_notes = score_note_array[smask]
+                for s_note in possible_score_notes:
+                    if s_note["pitch"] == p_note["pitch"] and s_note not in s_aligned:
+                        sid = str(s_note['id'])
+                        p_aligned.append(p_note)
+                        s_aligned.append(s_note)
+                        alignment.append({'label': 'match', 'score_id': sid, 'performance_id': str(pid)})
+                        break
+                
+                # ok enough
+                if sid is None:
+                    alignment.append({'label': 'insertion', 'performance_id': str(p_note['id'])})
+                
+        # check for unaligned score notes (ie deletions)
+        for s_note in score_note_array:
+            if s_note not in s_aligned:           
+                alignment.append({'label': 'deletion', 'score_id': str(s_note['id'])})
+             
+        return alignment
+
 ################################### FULL MODEL MATCHERS ###################################
 
 
@@ -442,64 +518,31 @@ class ChordEncodingMatcher(object):
                  note_matcher=DTW,
                  matcher_kwargs=dict(metric=element_of_metric,
                                      cdist_local=True),
-                 node_mender=mend_note_alignments,
-                 symbolic_note_matcher=SequenceAugmentedGreedyMatcher(),
-                 greedy_symbolic_note_matcher=SimplestGreedyMatcher(),
-                 alignment_type="dtw",
+                 symbolic_note_matcher=OnsetGreedyMatcher(),
                  dtw_window_size=6):
 
         self.note_matcher = note_matcher(**matcher_kwargs)
         self.symbolic_note_matcher = symbolic_note_matcher
-        self.node_mender = node_mender
-        self.greedy_symbolic_note_matcher = greedy_symbolic_note_matcher
-        self.alignment_type = alignment_type
         self.dtw_window_size = dtw_window_size
 
     def __call__(self, score_note_array,
-                 performance_note_array,
-                 verbose_time=False):
+                 performance_note_array):
         
+        # create encodings
+        score_note_per_ons_encoding = note_per_ons_encoding(score_note_array)
         
-        score_note_per_ons_encoding = ()
+        # match by onset
         matcher = DTW(metric = element_of_metric, cdist_local = True)
-
-        # compute windowed alignments
-        note_alignments = []
-        dtw_al = []
-
-        t2 = time.time()
-
-        for window_id in range(len(score_note_arrays)):
-            if self.alignment_type == "greedy":
-                alignment = self.greedy_symbolic_note_matcher(
-                    score_note_arrays[window_id],
-                    performance_note_arrays[window_id])
-                note_alignments.append(alignment)
-            else:
-                # distance augmented greedy align
-                fine_local_alignment = self.symbolic_note_matcher(
-                    score_note_arrays[window_id],
-                    performance_note_arrays[window_id],
-                    dtw_alignment_times,
-                    shift=self.shift_onsets,
-                    cap_combinations=self.cap_combinations)
-
-                note_alignments.append(fine_local_alignment)
-        t41 = time.time()
-        if verbose_time:
-            print(format(t41-t2, ".3f"), "sec : Fine-grained DTW passes, symbolic matching")
-
         
-        # MEND windows to global alignment
-        global_alignment, score_alignment, \
-            performance_alignment = self.node_mender(note_alignments, 
-                                                    performance_note_array,
-                                                    score_note_array, 
-                                                    node_times=np.array(dtw_alignment_times_init),
-                                                    symbolic_note_matcher= self.symbolic_note_matcher,
-                                                    max_traversal_depth=150)
-        t5 = time.time()
-        if verbose_time:
-            print(format(t5-t41, ".3f"), "sec : Mending")
+        _, onset_alignment_path = matcher(performance_note_array["pitch"], 
+                                          score_note_per_ons_encoding,  return_path=True)
 
-        return global_alignment
+
+        # match by note
+        global_alignment = self.symbolic_note_matcher(
+                                                    score_note_array, 
+                                                    performance_note_array,
+                                                    onset_alignment_path
+                                                    )
+                                                
+        return global_alignment, onset_alignment_path

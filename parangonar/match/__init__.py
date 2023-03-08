@@ -22,6 +22,7 @@ this file contains specific variations and additions.
 from .dtw import DTW
 from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
-                       AutomaticNoteMatcher)
+                       AutomaticNoteMatcher,
+                       ChordEncodingMatcher)
 from .utils import (node_array,
                     save_parangonada_csv)

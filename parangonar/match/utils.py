@@ -204,7 +204,7 @@ def save_parangonada_csv(
         )
 
 
-################################### ANCHOR POINT GENERAITON ###################################
+################################### ANCHOR POINT GENERATION ###################################
 
 
 def node_array(part, 
