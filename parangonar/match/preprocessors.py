@@ -204,6 +204,8 @@ def cut_note_arrays(performance_note_array,
     return score_note_arrays, performance_note_arrays
 
 
+
+
 ################################### SEGMENT MENDING ###################################
 
 

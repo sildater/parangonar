@@ -23,6 +23,7 @@ from .dtw import DTW
 from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher,
-                       ChordEncodingMatcher)
+                       ChordEncodingMatcher,
+                       CleanOnsetMatcher)
 from .utils import (node_array,
                     save_parangonada_csv)

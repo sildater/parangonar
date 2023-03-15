@@ -5,6 +5,7 @@ This module contains full note matcher classes.
 """
 import numpy as np
 from scipy.interpolate import interp1d
+from collections import defaultdict
 
 import time
 from itertools import combinations
@@ -269,6 +270,106 @@ class OnsetGreedyMatcher(object):
                 alignment.append({'label': 'deletion', 'score_id': str(s_note['id'])})
              
         return alignment
+
+
+class CleanOnsetMatcher(object):
+    """
+    Create alignment in MAPS format (dict) 
+    by pitch matching from an onset-wise
+    alignment
+    """
+    def __call__(self, 
+                 score_note_array, 
+                 performance_note_array,
+                 onset_alignment):
+
+
+        # Get time alignments from first unaligned notes
+        print("clean dtw alignment")
+        s_aligned = []
+        p_aligned = []
+        time_tuples = defaultdict(list)
+        unique_onsets = np.unique(score_note_array['onset_beat'])
+        # for p_no, p_note in enumerate(performance_note_array):
+        for p_no, s_onset_no in onset_alignment:
+            p_note = performance_note_array[p_no]
+            pid = str(p_note['id'])
+            if pid not in p_aligned:
+                s_onset = unique_onsets[s_onset_no]
+                if s_onset_no > 0:
+                    s_onset_prev = unique_onsets[s_onset_no-1]
+                else: 
+                    s_onset_prev = -10
+                score_note_array_segment = score_note_array[score_note_array['onset_beat'] == s_onset]
+                score_note_array_segment_prev = score_note_array[score_note_array['onset_beat'] == s_onset_prev]
+                matching_pitches = score_note_array_segment[p_note['pitch'] == score_note_array_segment['pitch']]
+            
+
+                #
+                # print(s_onset, matching_pitches.shape)
+            
+                for s_note in matching_pitches:
+                    sid = str(s_note['id'])
+                    # take first matching performance note that was not yet aligned
+                    if sid not in s_aligned and s_note["pitch"] not in score_note_array_segment_prev["pitch"]:
+                        p_aligned.append(pid)
+                        s_aligned.append(sid)
+                        time_tuples[s_note["onset_beat"]].append( p_note["onset_sec"])
+                        break 
+        
+        x_score = list()
+        y_perf = list()
+        for k in time_tuples.keys():
+            x_score.append(k)
+            y_perf.append(np.min(time_tuples[k]))
+
+        score_to_perf_map = interp1d(x_score,
+                                     y_perf,
+                                     fill_value="extrapolate")
+
+        x_score_cut_locations = np.array(x_score + [x_score[-1]+10]) - 0.05
+
+        cleaned_alignment = np.column_stack((x_score_cut_locations, score_to_perf_map(x_score_cut_locations)))
+        
+        print("cut note arrays", cleaned_alignment.shape)
+
+        score_note_arrays, performance_note_arrays = cut_note_arrays(performance_note_array, 
+                    score_note_array, 
+                    cleaned_alignment,
+                    sfuzziness=0.0, 
+                    pfuzziness=0.0, 
+                    window_size=1,
+                    pfuzziness_relative_to_tempo=False)
+
+        symbolic_note_matcher=SequenceAugmentedGreedyMatcher()
+        note_alignments = list()
+
+        print("local alignment", len(score_note_arrays))
+
+        for window_id in range(len(score_note_arrays)):
+            dtw_alignment_times = cleaned_alignment[window_id:window_id+2, :]
+            fine_local_alignment = symbolic_note_matcher(
+                    score_note_arrays[window_id],
+                    performance_note_arrays[window_id],
+                    dtw_alignment_times,
+                    shift=False,
+                    cap_combinations=100)
+
+            note_alignments.append(fine_local_alignment)
+
+        print("global alignment")
+
+        # MEND windows to global alignment
+        global_alignment, score_alignment, \
+            performance_alignment = mend_note_alignments(note_alignments, 
+                                                    performance_note_array,
+                                                    score_note_array, 
+                                                    node_times=cleaned_alignment,
+                                                    symbolic_note_matcher= symbolic_note_matcher,
+                                                    max_traversal_depth=1500)
+
+        return global_alignment
+
 
 ################################### FULL MODEL MATCHERS ###################################
 

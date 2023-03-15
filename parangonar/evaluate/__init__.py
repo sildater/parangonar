@@ -12,7 +12,9 @@ import random
 
 def fscore_alignments(prediction: List[dict], 
                         ground_truth: List[dict], 
-                        types: List[str]) -> (float, float, float):
+                        types: List[str],
+                        return_numbers= False) -> (float, float, float):
+                        
     """
     Parameters
     ----------
@@ -42,8 +44,10 @@ def fscore_alignments(prediction: List[dict],
         # no prediction and no ground truth for a given type -> correct alignment
         precision, recall, f_score = 1., 1., 1.
 
-    return precision, recall, f_score
-
+    if return_numbers:
+        return precision, recall, f_score, len(pred_filtered), len(gt_filtered)
+    else:
+        return precision, recall, f_score
 
 
 
