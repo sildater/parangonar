@@ -115,7 +115,8 @@ def plot_alignment(ppart_na,
         plt.show()
         
         
-def plot_alignment_comparison(ppart_na, 
+def plot_alignment_comparison(
+         ppart_na, 
          part_na, 
          alignment1, 
          alignment2, 

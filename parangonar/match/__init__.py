@@ -24,6 +24,8 @@ from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher,
                        ChordEncodingMatcher,
-                       CleanOnsetMatcher)
+                       CleanOnsetMatcher,
+                       CleanMatcher,
+                       pitch_and_onset_wise_times)
 from .utils import (node_array,
                     save_parangonada_csv)
