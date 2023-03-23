@@ -19,7 +19,7 @@ this file contains specific variations and additions.
 """
 
 
-from .dtw import DTW
+from .dtw import DTW, DTWSL
 from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher,
