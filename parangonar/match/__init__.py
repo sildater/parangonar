@@ -26,6 +26,9 @@ from .matchers import (AnchorPointNoteMatcher,
                        ChordEncodingMatcher,
                        CleanOnsetMatcher,
                        CleanMatcher,
-                       pitch_and_onset_wise_times)
+                       CleanOrnamentMatcher,
+                       OnlineMatcher,
+                       pitch_and_onset_wise_times,
+                       pitch_and_onset_wise_times_ornament)
 from .utils import (node_array,
                     save_parangonada_csv)
