@@ -1475,11 +1475,49 @@ class OnlineMatcher(object):
                     if best_note["onset_beat"] > self._prev_score_onset:
                         self.tempo_model.update(p_onset, best_note["onset_beat"])
                         self._prev_score_onset = best_note["onset_beat"]
+        else:
+            possible_score_notes = self.score_by_pitch[p_pitch]
+            possible_score_notes = [x for x in possible_score_notes \
+                                    if x["id"] not in self._snote_aligned and \
+                                    x["onset_beat"] >= possible_score_onsets[1] and \
+                                    x["onset_beat"] <= self._prev_score_onset + 5.0 ]
+            if len(possible_score_notes) > 0:
+                possible_note_onsets_mapped = [self.tempo_model.predict(x["onset_beat"]) for x in possible_score_notes]
+                possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) - p_onset)
+                possible_score_notes_id = [x["id"] for x in possible_score_notes]
+                lowest_dist_idx = np.argmin(possible_note_onsets_dist)
+                best_note = possible_score_notes[lowest_dist_idx]
+                lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
+                if lowest_dist < 0.5:
+                    if debug:
+                        print("Second Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
+                        print("SecondPossible notes mapped: ", possible_note_onsets_mapped)
+                        print("Second  note: ", best_note, lowest_dist)
+                    if best_note["is_grace"]:
+                        number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
+                        if lowest_dist < number_of_local_grace_notes*0.2:
+                            self._snote_aligned.add(best_note["id"])
+                            self._pnote_aligned.add(p_id)
+                            self.alignment.append((best_note["id"], p_id))
+                    else:
+                        previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
+                        close_enough = True
+                        if len(previous_aligned_p_onsets) > 0:
+                            close_enough = False
+                        if close_enough:
+                            self._snote_aligned.add(best_note["id"])
+                            self._pnote_aligned.add(p_id)
+                            self.alignment.append((best_note["id"], p_id))
+                            self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
+                            if best_note["onset_beat"] > self._prev_score_onset:
+                                self.tempo_model.update(p_onset, best_note["onset_beat"])
+                                self._prev_score_onset = best_note["onset_beat"]
+
                 
 
 
     def __call__(self):
-                                    
+
         return None
     
 
