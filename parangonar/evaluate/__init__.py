@@ -201,6 +201,62 @@ def plot_alignment_comparison(
         plt.close(f)
     else:
         plt.show()
+        
+
+def plot_alignment_mappings(
+         ppart_na, 
+         part_na, 
+         score_to_performance_mapping1, 
+         score_to_performance_mapping2, 
+         save_file = False,
+         fname = "onset_alignments",
+         ):
+    
+    first_note_midi = np.min(ppart_na["onset_sec"])
+    last_note_midi = np.max(ppart_na["onset_sec"]+ppart_na["duration_sec"])
+    first_note_start = np.min(part_na["onset_beat"])
+    last_note_start = np.max(part_na["onset_beat"])
+    length_of_midi = last_note_midi - first_note_midi
+    length_of_xml = last_note_start - first_note_start
+
+    length_of_pianorolls = max(10000,int(length_of_xml*8))
+    time_div_midi = int(np.floor(length_of_pianorolls/length_of_midi))
+    time_div_xml = int(np.floor(length_of_pianorolls/length_of_xml))
+    
+    midi_piano_roll, perfidx = pt.utils.compute_pianoroll(ppart_na,
+                                                time_unit = "sec",
+                                                time_div = time_div_midi,
+                                                return_idxs=True,
+                                                remove_drums=False)
+    xml_piano_roll, scoreidx = pt.utils.compute_pianoroll(part_na,
+                                                time_unit = "beat",
+                                                time_div = time_div_xml,
+                                                return_idxs = True,
+                                                remove_drums=False)
+    
+    midi_to_pr_mapping = lambda x: int((x-first_note_midi)*time_div_midi)
+    xml_to_pr_mapping = lambda x: int((x-first_note_start)*time_div_xml)
+    
+    plot_array = np.zeros((128*2+50, length_of_pianorolls+800))
+    dense_midi_pr = midi_piano_roll.todense()#[:,:time_size]
+    dense_midi_pr[dense_midi_pr>0] = 1
+    plot_array[:128,:xml_piano_roll.shape[1]] = xml_piano_roll.todense()
+    plot_array[50+128:,:midi_piano_roll.shape[1]] = dense_midi_pr
+
+    f, axs = plt.subplots(1,1,figsize=(100, 10))
+    axs.matshow(plot_array, aspect = "auto",  origin='lower')
+    for unique_onset in np.unique(part_na["onset_beat"]):
+            perf_pos1 = midi_to_pr_mapping(score_to_performance_mapping1(unique_onset))
+            perf_pos2 = midi_to_pr_mapping(score_to_performance_mapping2(unique_onset))
+            score_pos = xml_to_pr_mapping(unique_onset)
+            axs.plot([score_pos, perf_pos1], [ 128, 128+50 ],'o-', lw=2, c = "#00FF00")
+            axs.plot([score_pos, perf_pos2], [ 128, 128+50 ],'o-', lw=2, c = "#0000FF")
+
+    if save_file:
+        plt.savefig(fname+".png")
+        plt.close(f)
+    else:
+        plt.show()
 
 
 
@@ -260,13 +316,6 @@ def plot_alignment_comparison(
 #         y_pred.append(pred_label)
 
 #     return y_pred, y_gt
-
-
-
-
-
-
-
 
 
 # def alignment_confusion_matrices(score_ids: List[str],

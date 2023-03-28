@@ -29,6 +29,7 @@ from .matchers import (AnchorPointNoteMatcher,
                        CleanOrnamentMatcher,
                        OnlineMatcher,
                        pitch_and_onset_wise_times,
-                       pitch_and_onset_wise_times_ornament)
+                       pitch_and_onset_wise_times_ornament,
+                       get_score_to_perf_map)
 from .utils import (node_array,
                     save_parangonada_csv)
