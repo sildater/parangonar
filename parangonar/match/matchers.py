@@ -1912,10 +1912,10 @@ class OnlineMatcher(object):
                                     x["onset_beat"] >= possible_score_onsets[0] and \
                                     x["onset_beat"] <= possible_score_onsets[1] ]
 
-
+        # import pdb; pdb.set_trace()
         if len(possible_score_notes) > 0:
-            possible_note_onsets_mapped = [self.tempo_model.predict(x["onset_beat"]) for x in possible_score_notes]
-            possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) - p_onset)
+            possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
+            possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) )#- p_onset)
             lowest_dist_idx = np.argmin(possible_note_onsets_dist)
             best_note = possible_score_notes[lowest_dist_idx]
             lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
@@ -1943,28 +1943,37 @@ class OnlineMatcher(object):
                     if best_note["onset_beat"] > self._prev_score_onset:
                         self.tempo_model.update(p_onset, best_note["onset_beat"])
                         self._prev_score_onset = best_note["onset_beat"]
+
+            # if p_id == "n306":
+            #     import pdb; pdb.set_trace()
+            
         else:
             # if the neighboring pitches are different, extend the search
             possible_score_notes = self.score_by_pitch[p_pitch]
             possible_score_notes = [x for x in possible_score_notes \
                                     if x["id"] not in self._snote_aligned and \
-                                    x["onset_beat"] >= possible_score_onsets[1] and \
-                                    x["onset_beat"] <= self._prev_score_onset + 5.0 ]
+                                    x["onset_beat"] > possible_score_onsets[1] and \
+                                    x["onset_beat"] <= self._prev_score_onset + 10.0 ]
+            
+            
             if len(possible_score_notes) > 0:
-                possible_note_onsets_mapped = [self.tempo_model.predict(x["onset_beat"]) for x in possible_score_notes]
-                possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) - p_onset)
+                possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
+                possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) )#- p_onset)
                 possible_score_notes_id = [x["id"] for x in possible_score_notes]
                 lowest_dist_idx = np.argmin(possible_note_onsets_dist)
                 best_note = possible_score_notes[lowest_dist_idx]
                 lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-                if lowest_dist < 0.5:
+                # if p_id == "n42":
+                #     import pdb; pdb.set_trace()
+                if lowest_dist < 0.2:
+
                     if debug:
                         print("Second Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
                         print("SecondPossible notes mapped: ", possible_note_onsets_mapped)
                         print("Second  note: ", best_note, lowest_dist)
                     if best_note["is_grace"]:
                         number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                        if lowest_dist < number_of_local_grace_notes*0.2:
+                        if lowest_dist < number_of_local_grace_notes*0.1:
                             self._snote_aligned.add(best_note["id"])
                             self._pnote_aligned.add(p_id)
                             self.alignment.append((best_note["id"], p_id))
@@ -1981,8 +1990,33 @@ class OnlineMatcher(object):
                             if best_note["onset_beat"] > self._prev_score_onset:
                                 self.tempo_model.update(p_onset, best_note["onset_beat"])
                                 self._prev_score_onset = best_note["onset_beat"]
+                elif lowest_dist < 1.0:
 
-                
+                    if debug:
+                        print("Second Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
+                        print("SecondPossible notes mapped: ", possible_note_onsets_mapped)
+                        print("Second  note: ", best_note, lowest_dist)
+                    if best_note["is_grace"]:
+                        number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
+                        if lowest_dist < number_of_local_grace_notes*0.1:
+                            self._snote_aligned.add(best_note["id"])
+                            self._pnote_aligned.add(p_id)
+                            self.alignment.append((best_note["id"], p_id))
+                    else:
+                        previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
+                        close_enough = True
+                        if len(previous_aligned_p_onsets) > 0:
+                            close_enough = False
+                        if close_enough:
+                            self._snote_aligned.add(best_note["id"])
+                            self._pnote_aligned.add(p_id)
+                            self.alignment.append((best_note["id"], p_id))
+                            self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
+                            
+
+                # else:
+                #     print("No match found for ", p_id, possible_score_notes_id, possible_note_onsets_dist)
+                    
 
 
     def __call__(self):
@@ -2021,6 +2055,20 @@ class TempoModel(object):
         self.est_onset = self.score_perf_map(score_onset - self.lookback) + \
             self.lookback * self.beat_period 
         return self.est_onset
+    
+    def predict_ratio(
+        self,
+        score_onset,
+        perf_onset
+        ):
+        self.est_onset = self.score_perf_map(score_onset - self.lookback) + \
+            self.lookback * self.beat_period 
+        error = perf_onset - self.est_onset
+        offset_score =  score_onset  - self.prev_score_onsets[-1] 
+        if offset_score > 0.0:
+            return error/(offset_score * self.beat_period)
+        else:
+            return error
 
     def update(
         self,
@@ -2032,8 +2080,8 @@ class TempoModel(object):
         self.score_perf_map = interp1d(self.prev_score_onsets[-100:], 
                                        self.prev_perf_onsets[-100:], 
                                        fill_value="extrapolate")
-        self.beat_period = np.clip(self.score_perf_map(score_onset) - \
-            self.score_perf_map(score_onset - self.lookback), 0.1, 10.0)
+        self.beat_period = np.clip((self.score_perf_map(score_onset) - \
+            self.score_perf_map(score_onset - self.lookback))/self.lookback, 0.1, 10.0)
         self.counter += 1
 
 
@@ -2065,7 +2113,20 @@ class DummyTempoModel(object):
         ):
         self.est_onset = self.score_perf_map(score_onset)
         return self.est_onset
-
+    
+    # def predict_ratio(
+    #     self,
+    #     score_onset,
+    #     perf_onset
+    #     ):
+    #     self.est_onset = self.score_perf_map(score_onset - self.lookback) + \
+    #         self.lookback * self.beat_period 
+    #     error = perf_onset - self.est_onset
+    #     offset_score =  score_onset  - self.prev_score_onsets[-1] 
+    #     if offset_score > 0.0:
+    #         return error/(offset_score * self.beat_period)
+    #     else:
+    #         return error
     def update(
         self,
         performed_onset,
