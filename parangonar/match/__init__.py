@@ -28,8 +28,10 @@ from .matchers import (AnchorPointNoteMatcher,
                        CleanMatcher,
                        CleanOrnamentMatcher,
                        OnlineMatcher,
+                       OnlineTransformerMatcher,
                        pitch_and_onset_wise_times,
                        pitch_and_onset_wise_times_ornament,
                        get_score_to_perf_map)
 from .utils import (node_array,
                     save_parangonada_csv)
+from .pretrained_models import (AlignmentTransformer)
