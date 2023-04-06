@@ -1204,38 +1204,41 @@ def na_within(note_array,
             exclusion_ids = None,
             inclusion_ids = None,
             ordered_by_field = True):
-    if pitch is None:
-        mask_pitch = np.ones_like(note_array["pitch"])
+    if len(note_array) == 0:
+        return list()
     else:
-        mask_pitch = note_array["pitch"] == pitch
+        if pitch is None:
+            mask_pitch = np.ones_like(note_array["pitch"])
+        else:
+            mask_pitch = note_array["pitch"] == pitch
 
-    if lower_bound is None:
-        mask_lower = np.ones_like(note_array[field])
-    else:
-        mask_lower = note_array[field] >= lower_bound
+        if lower_bound is None:
+            mask_lower = np.ones_like(note_array[field])
+        else:
+            mask_lower = note_array[field] >= lower_bound
 
-    if upper_bound is None:
-        mask_upper = np.ones_like(note_array[field])
-    else:
-        mask_upper = note_array[field] <= upper_bound
+        if upper_bound is None:
+            mask_upper = np.ones_like(note_array[field])
+        else:
+            mask_upper = note_array[field] <= upper_bound
 
-    if exclusion_ids is None:
-        mask_exclusion = np.ones_like(note_array[field])
-    else:
-        mask_exclusion = np.array([n not in exclusion_ids for n in note_array["id"]])
+        if exclusion_ids is None:
+            mask_exclusion = np.ones_like(note_array[field])
+        else:
+            mask_exclusion = np.array([n not in exclusion_ids for n in note_array["id"]])
 
-    if inclusion_ids is None:
-        mask_inclusion = np.ones_like(note_array[field])
-    else:
-        mask_inclusion = np.array([n in exclusion_ids for n in note_array["id"]])
+        if inclusion_ids is None:
+            mask_inclusion = np.ones_like(note_array[field])
+        else:
+            mask_inclusion = np.array([n in exclusion_ids for n in note_array["id"]])
 
-    mask = np.all((mask_pitch, mask_lower, mask_upper, mask_exclusion, mask_inclusion), axis=0)
-    masked_note_array = note_array[mask]
+        mask = np.all((mask_pitch, mask_lower, mask_upper, mask_exclusion, mask_inclusion), axis=0)
+        masked_note_array = note_array[mask]
 
-    if ordered_by_field:
-        return masked_note_array[masked_note_array[field].argsort()]
-    else:
-        return masked_note_array 
+        if ordered_by_field:
+            return masked_note_array[masked_note_array[field].argsort()]
+        else:
+            return masked_note_array 
 
 class CleanOrnamentMatcher(object):
     """
@@ -2296,86 +2299,113 @@ class OnlineTransformerMatcher(object):
                 self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
                 return
         
-        # align with the help of the tempo function
-        possible_score_onsets = self.onset_range_at_onset[self._prev_score_onset]
-        possible_score_notes = na_within(possible_score_notes, "onset_beat", 
-                                         possible_score_onsets[0], possible_score_onsets[1],
-                                         exclusion_ids=self._snote_aligned)
+        # # align with the help of the tempo function
+        # possible_score_onsets = self.onset_range_at_onset[self._prev_score_onset]
+        # possible_score_notes = na_within(possible_score_notes, "onset_beat", 
+        #                                  possible_score_onsets[0], possible_score_onsets[1],
+        #                                  exclusion_ids=self._snote_aligned)
 
-        if len(possible_score_notes) > 0:
-            possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
-            possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped))
-            lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-            best_note = possible_score_notes[lowest_dist_idx]
-            lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-            # if p_id == "n491":
-            #     print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-            #     print("Possible notes mapped: ", possible_note_onsets_mapped)
-            #     print("Best note: ", best_note, lowest_dist)
-            #     import pdb; pdb.set_trace()
-            if debug:
-                print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                print("Possible notes mapped: ", possible_note_onsets_mapped)
-                print("Best note: ", best_note, lowest_dist)
+        # if len(possible_score_notes) > 0:
+        #     possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
+        #     possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped))
+        #     lowest_dist_idx = np.argmin(possible_note_onsets_dist)
+        #     best_note = possible_score_notes[lowest_dist_idx]
+        #     lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
+        #     # if p_id == "n491":
+        #     #     print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
+        #     #     print("Possible notes mapped: ", possible_note_onsets_mapped)
+        #     #     print("Best note: ", best_note, lowest_dist)
+        #     #     import pdb; pdb.set_trace()
+        #     if debug:
+        #         print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
+        #         print("Possible notes mapped: ", possible_note_onsets_mapped)
+        #         print("Best note: ", best_note, lowest_dist)
             
 
-                # HEURISTIC: distance based on number of grace notes
-                # number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                # if lowest_dist < number_of_local_grace_notes*0.2:
-                #     self._snote_aligned.add(best_note["id"])
-                #     self._pnote_aligned.add(p_id)
-                #     self.alignment.append((best_note["id"], p_id))
+        #         # HEURISTIC: distance based on number of grace notes
+        #         # number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
+        #         # if lowest_dist < number_of_local_grace_notes*0.2:
+        #         #     self._snote_aligned.add(best_note["id"])
+        #         #     self._pnote_aligned.add(p_id)
+        #         #     self.alignment.append((best_note["id"], p_id))
 
-                # HEURISTIC: don't stray too far from previously aligned
-                # previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-                # close_enough = True
-                # if len(previous_aligned_p_onsets) > 0:
-                #     close_enough = np.abs(p_onset - np.median(previous_aligned_p_onsets)) < 1.5
-                # if close_enough:
-            if best_note["is_grace"]:
-                self.add_note_alignment(p_id, best_note["id"])
-            else:
-                self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
+        #         # HEURISTIC: don't stray too far from previously aligned
+        #         # previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
+        #         # close_enough = True
+        #         # if len(previous_aligned_p_onsets) > 0:
+        #         #     close_enough = np.abs(p_onset - np.median(previous_aligned_p_onsets)) < 1.5
+        #         # if close_enough:
+        #     if best_note["is_grace"]:
+        #         self.add_note_alignment(p_id, best_note["id"])
+        #     else:
+        #         self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
 
-        # only then do we use the neural network
-        elif self.time_since_nn_update > 1:
-            current_id = self.id_by_onset[self._prev_score_onset]
-            s_slice = slice(np.max((current_id-7, 0)), current_id+9 )
-            p_slice = slice(-8, None )
-            score_seq = self.pitches_at_onset_by_id[s_slice]
-            perf_seq = self._prev_performance_notes[p_slice]
+        # # only then do we use the neural network
+        # elif self.time_since_nn_update > 1:
+        current_id = self.id_by_onset[self._prev_score_onset]
+        s_slice = slice(np.max((current_id-7, 0)), current_id+9 )
+        p_slice = slice(-8, None )
+        score_seq = self.pitches_at_onset_by_id[s_slice]
+        perf_seq = self._prev_performance_notes[p_slice]
 
-            tokenized_score_seq =  tokenize(score_seq, perf_seq, dims = 7)
-            out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
-            pred_id = torch.argmax(torch.softmax(out.squeeze(1),dim=0)[:,1]).cpu().numpy()
-            new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
+        tokenized_score_seq =  tokenize(score_seq, perf_seq, dims = 7)
+        out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
+        pred_id = torch.argmax(torch.softmax(out.squeeze(1),dim=0)[:,1]).cpu().numpy()
+        new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
 
-            if debug: #or p_id in ["n"+str(x) for x in range(750, 780)]:
-                print("predicted id ", pred_id, new_pred_id, p_id)
-                print("predicted score onset, ",      self._unique_score_onsets[current_id + new_pred_id], self._prev_score_onset)
-                import pdb; pdb.set_trace()
-            if new_pred_id > -2 and new_pred_id < 10:#np.min((6,self.time_since_nn_update+2))	:
-                # print("happens", p_id)
-                pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
+        if debug: #or p_id in ["n"+str(x) for x in range(750, 780)]:
+            print("predicted id ", pred_id, new_pred_id, p_id)
+            print("predicted score onset, ",      self._unique_score_onsets[current_id + new_pred_id], self._prev_score_onset)
+            import pdb; pdb.set_trace()
+        if new_pred_id > -5 and new_pred_id < 2:#np.min((6,self.time_since_nn_update+2))	:
+            # print("happens", p_id)
+            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
+            possible_score_notes = self.score_by_pitch[p_pitch]
+            possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
+                                          pred_score_onset, pred_score_onset,
+                                          exclusion_ids=self._snote_aligned)
+
+            if len(possible_score_notes) > 0:
+                best_note = possible_score_notes[0]
+                if best_note["is_grace"]:
+                    self.add_note_alignment(p_id, best_note["id"])
+                else:
+                    self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
+
+        elif new_pred_id >= 2:
+            # print("happens", p_id)
+
+            # check how many notes are implicitly unaligned
+            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
+            implicitly_jumped_notes = 0
+            for onset_id in np.arange(current_id, current_id + new_pred_id, 1) :
+                implicitly_jumped_notes += len(self.pitches_at_onset_by_id[onset_id])
+
+
+            # check whether the predicted note could be in the next onset
+            if p_pitch in self.pitches_at_onset_by_id[current_id + 1]:
+                # check whether the timing is not completely off
                 possible_score_notes = self.score_by_pitch[p_pitch]
-                possible_score_notes = sorted(possible_score_notes, key=lambda x: x["onset_beat"])
-                possible_score_notes = [x for x in possible_score_notes \
-                                        if x["id"] not in self._snote_aligned and \
-                                            x["onset_beat"] >=pred_score_onset and \
-                                            x["onset_beat"] <=pred_score_onset ]
+                possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
+                                           self._unique_score_onsets[current_id + 1], self._unique_score_onsets[current_id + 1],
+                                          exclusion_ids=self._snote_aligned)
+                if len(possible_score_notes) > 0:
+                    dist = np.abs(self.tempo_model.predict(possible_score_notes[0]["onset_beat"]) - p_onset)
+                    if dist < 1.0:
+                        # print("aligned with tempo model:", p_id)
+                        self.add_note_alignment(p_id, possible_score_notes[0]["id"], p_onset, possible_score_notes[0]["onset_beat"])
+                        return
+
+            if self.time_since_nn_update > 2 and implicitly_jumped_notes <= 10:
+                
+                possible_score_notes = self.score_by_pitch[p_pitch]
+                possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
+                                          pred_score_onset, pred_score_onset,
+                                          exclusion_ids=self._snote_aligned)
 
                 if len(possible_score_notes) > 0:
-                    # print("alignment transformer: ", possible_score_notes)
-                    possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
-                    possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) )#- p_onset)
-                    lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-                    best_note = possible_score_notes[lowest_dist_idx]
                     self.time_since_nn_update = 0
-                    if debug:
-                        lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-                        print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                        print("Possible notes mapped: ", possible_note_onsets_mapped)
-                        print("Best note: ", best_note, lowest_dist)
+                    best_note = possible_score_notes[0]
                     if best_note["is_grace"]:
                         self.add_note_alignment(p_id, best_note["id"])
                     else:
