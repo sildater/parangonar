@@ -188,7 +188,7 @@ def cdist_local(arr1, arr2, metric):
     
     arr2: numpy nd array
     
-    metric> callable
+    metric: callable
         a metric function
     
     Returns

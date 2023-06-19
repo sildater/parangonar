@@ -29,6 +29,8 @@ from .matchers import (AnchorPointNoteMatcher,
                        CleanOrnamentMatcher,
                        OnlineMatcher,
                        OnlineTransformerMatcher,
+                       OnlineTransformerMatcher2,
+                       OnlinePureTransformerMatcher,
                        pitch_and_onset_wise_times,
                        pitch_and_onset_wise_times_ornament,
                        get_score_to_perf_map)
