@@ -1096,7 +1096,8 @@ class CleanOrnamentMatcher(object):
                  performance_note_array,
                  onset_alignment,
                  onset_alignment_reverse,
-                 onset_threshold=None):
+                 onset_threshold=None,
+                 process_ornaments=False):
 
         if onset_threshold is None:
             onset_threshold1 = 1000000
@@ -1178,47 +1179,46 @@ class CleanOrnamentMatcher(object):
             else:
                 used_pid_mask.append(False)
                 
+        if process_ornaments:
+            # add ornaments
+            insertions = performance_note_array[np.array(used_pid_mask)]
+            deletions = score_note_array_full[np.array(used_score_mask)]
 
-        # TODO: add and document ornament add-on
-        # # add ornaments
-        # insertions = performance_note_array[np.array(used_pid_mask)]
-        # deletions = score_note_array_full[np.array(used_score_mask)]
-
-        # for ornament in score_note_array_ornaments:
-        #     if len(deletions[deletions["id"] == ornament["id"]]) == 0:
-        #         possible_ornament_notes = list()
-        #         if len(perf_id_from_score_id[ornament["id"]]) > 0:
-        #             p_id = perf_id_from_score_id[ornament["id"]][0]
-        #             note_alignments.remove({'label': 'match', 
-        #                                         "score_id": ornament["id"], 
-        #                                         "performance_id":  p_id})
-        #             note_alignments.append({'label': 'insertion', 'performance_id': p_id})
-        #             possible_ornament_notes = [performance_note_array[performance_note_array["id"] == p_id]]
-                        
-        #         ornament_start = score_to_perf_map(ornament["onset_beat"] )
-        #         ornament_end = score_to_perf_map(ornament["onset_beat"] + ornament["duration_beat"])
-        #         ornament_pitch = ornament["pitch"]
-        #         # find sequence of notes that could belong to the ornament
-                
-        #         for p in np.arange(ornament_pitch-2, ornament_pitch+3, 1):
-        #             possible_ornament_notes.append(na_within(insertions, 
-        #                     field="onset_sec", 
-        #                     pitch=p, 
-        #                     lower_bound=ornament_start-0.25,
-        #                     upper_bound=ornament_end,
-        #                     ordered_by_field=True))
+            for ornament in score_note_array_ornaments:
+                if len(deletions[deletions["id"] == ornament["id"]]) == 0:
+                    possible_ornament_notes = list()
+                    if len(perf_id_from_score_id[ornament["id"]]) > 0:
+                        p_id = perf_id_from_score_id[ornament["id"]][0]
+                        note_alignments.remove({'label': 'match', 
+                                                    "score_id": ornament["id"], 
+                                                    "performance_id":  p_id})
+                        note_alignments.append({'label': 'insertion', 'performance_id': p_id})
+                        possible_ornament_notes = [performance_note_array[performance_note_array["id"] == p_id]]
+                            
+                    ornament_start = score_to_perf_map(ornament["onset_beat"] )
+                    ornament_end = score_to_perf_map(ornament["onset_beat"] + ornament["duration_beat"])
+                    ornament_pitch = ornament["pitch"]
+                    # find sequence of notes that could belong to the ornament
                     
-        #         possible_ornament_notes = np.concatenate(possible_ornament_notes)   
-        #         possible_ornament_notes = possible_ornament_notes[possible_ornament_notes["onset_sec"].argsort()]
-        #         possible_ornament_notes_pitch = possible_ornament_notes[possible_ornament_notes["pitch"] == pitch]
-        #         if len(possible_ornament_notes_pitch) == 0 and len(possible_ornament_notes) > 0:
-        #             note_alignments.append({'label': 'match', 
-        #                                     "score_id": ornament["id"], 
-        #                                     "performance_id":  possible_ornament_notes[0]["id"]})
-        #         elif len(possible_ornament_notes_pitch) > 0:
-        #             note_alignments.append({'label': 'match', 
-        #                                     "score_id": ornament["id"], 
-        #                                     "performance_id":  possible_ornament_notes_pitch[0]["id"]})
+                    for p in np.arange(ornament_pitch-2, ornament_pitch+3, 1):
+                        possible_ornament_notes.append(na_within(insertions, 
+                                field="onset_sec", 
+                                pitch=p, 
+                                lower_bound=ornament_start-0.25,
+                                upper_bound=ornament_end,
+                                ordered_by_field=True))
+                        
+                    possible_ornament_notes = np.concatenate(possible_ornament_notes)   
+                    possible_ornament_notes = possible_ornament_notes[possible_ornament_notes["onset_sec"].argsort()]
+                    possible_ornament_notes_pitch = possible_ornament_notes[possible_ornament_notes["pitch"] == pitch]
+                    if len(possible_ornament_notes_pitch) == 0 and len(possible_ornament_notes) > 0:
+                        note_alignments.append({'label': 'match', 
+                                                "score_id": ornament["id"], 
+                                                "performance_id":  possible_ornament_notes[0]["id"]})
+                    elif len(possible_ornament_notes_pitch) > 0:
+                        note_alignments.append({'label': 'match', 
+                                                "score_id": ornament["id"], 
+                                                "performance_id":  possible_ornament_notes_pitch[0]["id"]})
         return note_alignments
 
 
@@ -1517,7 +1517,34 @@ class DualDTWNoteMatcher(object):
 
     def __call__(self, 
                  score_note_array,
-                 performance_note_array):
+                 performance_note_array,
+                 process_ornaments = False,
+                 score_part = None):
+        
+        if process_ornaments:
+            if score_part is None:
+                print("score part is required for ornament extraction")
+                score_note_array_ornament = score_note_array
+            else:
+                # add ornament tags to score_note_array
+                notes = score_part.notes_tied
+                fields = [("id", "U256"),("ornament", "b")]
+                ornament_tags = list()
+                for n in notes:
+                    ornament = False
+                    if n.ornaments:
+                        ornament = True
+                    ornament_tags.append((n.id, ornament))
+                ornament_tags_array = np.array(ornament_tags, dtype=fields)
+                note_array_joined = np.lib.recfunctions.join_by("id", score_note_array, ornament_tags_array)
+                score_note_array = note_array_joined.data 
+                sort_idx = np.lexsort(
+                    (score_note_array["duration_div"], score_note_array["pitch"], score_note_array["onset_div"])
+                    )
+                score_note_array = score_note_array[sort_idx]
+                score_note_array_ornament = score_note_array[score_note_array["ornament"] == True]    
+        else:
+            score_note_array_ornament = score_note_array
         
         score_note_array_no_grace = score_note_array[score_note_array["is_grace"] == False]    
         score_note_array_grace = score_note_array[score_note_array["is_grace"] == True]
@@ -1529,14 +1556,19 @@ class DualDTWNoteMatcher(object):
                                                              performance_note_array,
                                                              flip = True)
         
+
+        
+            
+
         global_alignment = self.note_matcher(score_note_array, # score notes including grace notes
                                             score_note_array_no_grace, # score notes excluding grace notes 
                                             score_note_array_grace, # grace notes
-                                            score_note_array_grace, # TODO:score notes with ornaments
+                                            score_note_array_ornament,
                                             performance_note_array,
                                             onset_alignment_path,
                                             onset_alignment_path_reverse,
-                                            onset_threshold=1.5) # TODO: document
+                                            onset_threshold=1.5,
+                                            process_ornaments=process_ornaments) # TODO: document
         
         return global_alignment
 
