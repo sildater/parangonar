@@ -23,14 +23,8 @@ from .dtw import DTW, DTWSL
 from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher,
-                       ChordEncodingMatcher,
-                       CleanOnsetMatcher,
-                       CleanMatcher,
                        CleanOrnamentMatcher,
-                       OnlineMatcher,
-                       OnlineTransformerMatcher,
-                       OnlineTransformerMatcher2,
-                       OnlinePureTransformerMatcher,
+                       DualDTWNoteMatcher,
                        pitch_and_onset_wise_times,
                        pitch_and_onset_wise_times_ornament,
                        get_score_to_perf_map)

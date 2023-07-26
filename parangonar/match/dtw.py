@@ -76,9 +76,11 @@ class DynamicTimeWarpingSingleLoop(object):
     
     def __init__(self, 
                  metric=element_of_set_metric):
-        self.metric = metric
+                self.metric = metric
 
-    def __call__(self, X, Y, return_path=True,
+    def __call__(self, 
+                 X, Y, 
+                 return_path=True,
                  return_cost_matrix=False):
 
        # Compute the pw distances and accumulated cost matrix

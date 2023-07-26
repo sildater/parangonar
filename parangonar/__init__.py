@@ -9,7 +9,7 @@ EXAMPLE = pkg_resources.resource_filename("parangonar",
                                           "assets/mozart_k265_var1.match")
 
 
-from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher
+from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher, DualDTWNoteMatcher
 from .evaluate import fscore_alignments, plot_alignment
 
 __all__ = [

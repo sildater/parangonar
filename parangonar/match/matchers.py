@@ -12,7 +12,7 @@ import time
 from itertools import combinations
 from scipy.special import binom
 
-from .dtw import DTW, element_of_metric
+from .dtw import DTW, DTWSL
 from .nwtw import NW_DTW, NW
 
 from .preprocessors import (mend_note_alignments,
@@ -21,6 +21,7 @@ from .preprocessors import (mend_note_alignments,
                             note_per_ons_encoding)
 
 from .pretrained_models import (AlignmentTransformer)
+
 
 ################################### SYMBOLIC MATCHERS ###################################
 
@@ -284,185 +285,6 @@ class OnsetGreedyMatcher(object):
         return alignment
 
 
-class CleanOnsetMatcher(object):
-    """
-    Create alignment in MAPS format (dict) 
-    by pitch matching from an onset-wise
-    alignment.
-
-    1. clean onset alignment,
-        don't reuse pitches of previous onsets
-    2. create score to perf map
-    3. cut the note arrays at every onset tuple!
-    4. local mathing
-    5. alignment mending
-
-    """
-    def __call__(self, 
-                 score_note_array, 
-                 performance_note_array,
-                 onset_alignment):
-
-
-        # Get time alignments from first unaligned notes
-        print("clean dtw alignment")
-        s_aligned = []
-        p_aligned = []
-        time_tuples = defaultdict(list)
-        unique_onsets = np.unique(score_note_array['onset_beat'])
-        # for p_no, p_note in enumerate(performance_note_array):
-        for p_no, s_onset_no in onset_alignment:
-            p_note = performance_note_array[p_no]
-            pid = str(p_note['id'])
-            if pid not in p_aligned:
-                s_onset = unique_onsets[s_onset_no]
-                if s_onset_no > 0:
-                    s_onset_prev = unique_onsets[s_onset_no-1]
-                else: 
-                    s_onset_prev = -10
-                score_note_array_segment = score_note_array[score_note_array['onset_beat'] == s_onset]
-                score_note_array_segment_prev = score_note_array[score_note_array['onset_beat'] == s_onset_prev]
-                matching_pitches = score_note_array_segment[p_note['pitch'] == score_note_array_segment['pitch']]
-            
-                for s_note in matching_pitches:
-                    sid = str(s_note['id'])
-                    # take first matching performance note that was not yet aligned
-                    if sid not in s_aligned and s_note["pitch"] not in score_note_array_segment_prev["pitch"]:
-                        p_aligned.append(pid)
-                        s_aligned.append(sid)
-                        time_tuples[s_note["onset_beat"]].append( p_note["onset_sec"])
-                        break 
-        
-        x_score = list()
-        y_perf = list()
-        for k in time_tuples.keys():
-            x_score.append(k)
-            y_perf.append(np.min(time_tuples[k]))
-
-        score_to_perf_map = interp1d(x_score,
-                                     y_perf,
-                                     fill_value="extrapolate")
-
-        x_score_cut_locations = np.array(x_score + [x_score[-1]+10]) - 0.05
-
-        cleaned_alignment = np.column_stack((x_score_cut_locations, score_to_perf_map(x_score_cut_locations)))
-        
-        print("cut note arrays", cleaned_alignment.shape)
-
-        score_note_arrays, performance_note_arrays = cut_note_arrays(performance_note_array, 
-                    score_note_array, 
-                    cleaned_alignment,
-                    sfuzziness=0.0, 
-                    pfuzziness=0.0, 
-                    window_size=1,
-                    pfuzziness_relative_to_tempo=False)
-
-        symbolic_note_matcher=SequenceAugmentedGreedyMatcher()
-        note_alignments = list()
-
-        print("local alignment", len(score_note_arrays))
-
-        for window_id in range(len(score_note_arrays)):
-            dtw_alignment_times = cleaned_alignment[window_id:window_id+2, :]
-            fine_local_alignment = symbolic_note_matcher(
-                    score_note_arrays[window_id],
-                    performance_note_arrays[window_id],
-                    dtw_alignment_times,
-                    shift=False,
-                    cap_combinations=100)
-
-            note_alignments.append(fine_local_alignment)
-
-        print("global alignment")
-
-        # MEND windows to global alignment
-        global_alignment, score_alignment, \
-            performance_alignment = mend_note_alignments(note_alignments, 
-                                                    performance_note_array,
-                                                    score_note_array, 
-                                                    node_times=cleaned_alignment,
-                                                    symbolic_note_matcher= symbolic_note_matcher,
-                                                    max_traversal_depth=1500)
-
-        return global_alignment
-
-
-class CleanMatcher(object):
-    """
-    Create alignment in MAPS format (dict) 
-    by pitch matching from an onset-wise
-    alignment
-
-    1. get cleaned time tuples from onset alignment
-    2. create score to perf map
-    3. map each pitch-wise sequence from score to perf
-    4. symbolic alignment via onset seq dtw (check threshold) 
-
-    """
-    def __call__(self, 
-                 score_note_array, 
-                 performance_note_array,
-                 onset_alignment,
-                 onset_threshold=3.0):
-
-        if onset_threshold is None:
-            onset_threshold1 = 1000000
-        else:
-            onset_threshold1 = onset_threshold
-        # Get time alignments from first unaligned notes
-        time_tuples_by_onset, unique_time_tuples_by_onset, \
-            time_tuples_by_pitch, \
-                unique_time_tuples = pitch_and_onset_wise_times(performance_note_array, 
-                                                                score_note_array, 
-                                                                onset_alignment)
-
-        score_to_perf_map = interp1d(unique_time_tuples[:,0],# score onsets
-                                     unique_time_tuples[:,1],# perf onsets
-                                     fill_value="extrapolate")
-        
-        note_alignments = list()
-        used_score_note_ids = set()
-        used_performance_note_ids = set()
-        for pitch in np.unique(score_note_array['pitch']):
-            score_note_array_pitch = score_note_array[score_note_array['pitch'] == pitch]
-            score_note_array_pitch_sort_idx = np.argsort(score_note_array_pitch['onset_beat'])
-            score_note_array_pitch = score_note_array_pitch[score_note_array_pitch_sort_idx]
-            performance_note_array_pitch = performance_note_array[performance_note_array['pitch'] == pitch]
-            estimated_performance_note_onsets = score_to_perf_map(score_note_array_pitch['onset_beat'])
-
-            if performance_note_array_pitch.shape[0] > 1 and score_note_array_pitch.shape[0] > 1:
-                s_p_ID_tuples = unique_alignments(estimated_performance_note_onsets, 
-                                                performance_note_array_pitch["onset_sec"],
-                                                threshold=onset_threshold1)
-            
-            elif performance_note_array_pitch.shape[0] == 1 and score_note_array_pitch.shape[0] == 1: 
-                if np.abs(estimated_performance_note_onsets[0] - performance_note_array_pitch["onset_sec"][0]) < onset_threshold1:
-                    s_p_ID_tuples = [(0,0)]
-                else:
-                    s_p_ID_tuples = []
-            else:
-                s_p_ID_tuples = []       
-            
-            for s_ID, p_ID in s_p_ID_tuples:
-                note_alignments.append({'label': 'match', 
-                                        "score_id": score_note_array_pitch["id"][s_ID], 
-                                        "performance_id": performance_note_array_pitch["id"][p_ID]})
-                used_score_note_ids.add(score_note_array_pitch["id"][s_ID])
-                used_performance_note_ids.add(performance_note_array_pitch["id"][p_ID])
-
-        
-        # add unmatched notes
-        for score_note in score_note_array:
-            if score_note["id"] not in used_score_note_ids:
-                note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in used_performance_note_ids:
-                note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return note_alignments
-
-
 def unique_alignments(xs, ys, threshold = None):
     """
     From two sequences of numbers, return the unique ID
@@ -545,6 +367,7 @@ def unique_alignments(xs, ys, threshold = None):
                 tuples.append((current_ids[candidate_id,0], current_ids[candidate_id,1]))
                 used_x.update( set(np.unique(current_x)))
     return tuples
+
 
 def pitch_and_onset_wise_times(performance_note_array, 
                                score_note_array, 
@@ -681,6 +504,7 @@ def pitch_and_onset_wise_times(performance_note_array,
     return time_tuples_by_onset, unique_time_tuples_by_onset, time_tuples_by_pitch, unique_time_tuples
     # else:
     #     return time_tuples_by_onset_id, unique_time_tuples_by_onset_id, time_tuples_by_pitch_id, unique_time_tuples_id
+
 
 def pitch_and_onset_wise_times_ornament(performance_note_array, 
                                score_note_array, 
@@ -839,6 +663,7 @@ def pitch_and_onset_wise_times_ornament(performance_note_array,
 
     return time_tuples_by_onset, unique_time_tuples_by_onset, time_tuples_by_pitch, unique_time_tuples
 
+
 def pitch_and_onset_wise_times_simple(performance_note_array, 
                                score_note_array, 
                                alignment_ids
@@ -920,6 +745,7 @@ def pitch_and_onset_wise_times_simple(performance_note_array,
     unique_time_tuples = unique_time_tuples[unique_time_tuples[:,0].argsort()]
 
     return time_tuples_by_onset, unique_time_tuples_by_onset, time_tuples_by_pitch, unique_time_tuples
+
 
 def pitch_and_onset_wise_times_rev(performance_note_array, 
                                score_note_array, 
@@ -1086,6 +912,7 @@ def pitch_and_onset_wise_times_rev(performance_note_array,
 
     return time_tuples_by_onset, unique_time_tuples_by_onset, time_tuples_by_pitch, unique_time_tuples
 
+
 def get_score_to_perf_map(score_note_array, 
                        performance_note_array, 
                        onset_alignment,
@@ -1196,6 +1023,7 @@ def get_score_to_perf_map(score_note_array,
 
         return score_to_perf_map
 
+
 def na_within(note_array, 
             field="onset_beat", 
             lower_bound = None, 
@@ -1241,6 +1069,7 @@ def na_within(note_array,
         else:
             return masked_note_array 
 
+
 class CleanOrnamentMatcher(object):
     """
     Create alignment in MAPS format (dict) 
@@ -1281,8 +1110,9 @@ class CleanOrnamentMatcher(object):
         
         # Mix the grace notes into the score note array
         grace_onsets = np.unique(score_note_array_grace["onset_beat"])
-        grace_onsets_perf = score_to_perf_map(grace_onsets)
-        for grace_onset, grace_onset_perf in zip(grace_onsets, grace_onsets_perf):
+        #grace_onsets_perf = score_to_perf_map(grace_onsets)
+        #for grace_onset, grace_onset_perf in zip(grace_onsets, grace_onsets_perf):
+        for grace_onset in grace_onsets:
             mask = (score_note_array_grace['onset_beat'] == grace_onset)
             number_of_grace_notes = mask.sum()
             score_note_array_grace["onset_beat"][mask] -= np.linspace(number_of_grace_notes*0.1,0.0, number_of_grace_notes+1)[:-1]
@@ -1304,10 +1134,7 @@ class CleanOrnamentMatcher(object):
                                                 field="onset_sec",
                                                 pitch = pitch,
                                                 ordered_by_field = True)
-            # score_note_array_pitch = alignment_score_note_array[alignment_score_note_array['pitch'] == pitch]
-            # score_note_array_pitch_sort_idx = np.argsort(score_note_array_pitch['onset_beat'])
-            # score_note_array_pitch = score_note_array_pitch[score_note_array_pitch_sort_idx]
-            # performance_note_array_pitch = performance_note_array[performance_note_array['pitch'] == pitch]
+            
             estimated_performance_note_onsets = score_to_perf_map(score_note_array_pitch['onset_beat'])
 
             if  (performance_note_array_pitch.shape[0] > 1 and score_note_array_pitch.shape[0] > 1) or \
@@ -1352,58 +1179,84 @@ class CleanOrnamentMatcher(object):
                 used_pid_mask.append(False)
                 
 
+        # TODO: add and document ornament add-on
+        # # add ornaments
+        # insertions = performance_note_array[np.array(used_pid_mask)]
+        # deletions = score_note_array_full[np.array(used_score_mask)]
 
-        # add ornaments
-        insertions = performance_note_array[np.array(used_pid_mask)]
-        deletions = score_note_array_full[np.array(used_score_mask)]
-
-        for ornament in score_note_array_ornaments:
-            if len(deletions[deletions["id"] == ornament["id"]]) == 0:
-                possible_ornament_notes = list()
-                if len(perf_id_from_score_id[ornament["id"]]) > 0:
-                    p_id = perf_id_from_score_id[ornament["id"]][0]
-                    note_alignments.remove({'label': 'match', 
-                                                "score_id": ornament["id"], 
-                                                "performance_id":  p_id})
-                    note_alignments.append({'label': 'insertion', 'performance_id': p_id})
-                    possible_ornament_notes = [performance_note_array[performance_note_array["id"] == p_id]]
+        # for ornament in score_note_array_ornaments:
+        #     if len(deletions[deletions["id"] == ornament["id"]]) == 0:
+        #         possible_ornament_notes = list()
+        #         if len(perf_id_from_score_id[ornament["id"]]) > 0:
+        #             p_id = perf_id_from_score_id[ornament["id"]][0]
+        #             note_alignments.remove({'label': 'match', 
+        #                                         "score_id": ornament["id"], 
+        #                                         "performance_id":  p_id})
+        #             note_alignments.append({'label': 'insertion', 'performance_id': p_id})
+        #             possible_ornament_notes = [performance_note_array[performance_note_array["id"] == p_id]]
                         
-                ornament_start = score_to_perf_map(ornament["onset_beat"] )
-                ornament_end = score_to_perf_map(ornament["onset_beat"] + ornament["duration_beat"])
-                ornament_pitch = ornament["pitch"]
-                # find sequence of notes that could belong to the ornament
+        #         ornament_start = score_to_perf_map(ornament["onset_beat"] )
+        #         ornament_end = score_to_perf_map(ornament["onset_beat"] + ornament["duration_beat"])
+        #         ornament_pitch = ornament["pitch"]
+        #         # find sequence of notes that could belong to the ornament
                 
-                for p in np.arange(ornament_pitch-2, ornament_pitch+3, 1):
-                    possible_ornament_notes.append(na_within(insertions, 
-                            field="onset_sec", 
-                            pitch=p, 
-                            lower_bound=ornament_start-0.25,
-                            upper_bound=ornament_end,
-                            ordered_by_field=True))
+        #         for p in np.arange(ornament_pitch-2, ornament_pitch+3, 1):
+        #             possible_ornament_notes.append(na_within(insertions, 
+        #                     field="onset_sec", 
+        #                     pitch=p, 
+        #                     lower_bound=ornament_start-0.25,
+        #                     upper_bound=ornament_end,
+        #                     ordered_by_field=True))
                     
-                possible_ornament_notes = np.concatenate(possible_ornament_notes)   
-                possible_ornament_notes = possible_ornament_notes[possible_ornament_notes["onset_sec"].argsort()]
-                possible_ornament_notes_pitch = possible_ornament_notes[possible_ornament_notes["pitch"] == pitch]
-                if len(possible_ornament_notes_pitch) == 0 and len(possible_ornament_notes) > 0:
-                    note_alignments.append({'label': 'match', 
-                                            "score_id": ornament["id"], 
-                                            "performance_id":  possible_ornament_notes[0]["id"]})
-                elif len(possible_ornament_notes_pitch) > 0:
-                    note_alignments.append({'label': 'match', 
-                                            "score_id": ornament["id"], 
-                                            "performance_id":  possible_ornament_notes_pitch[0]["id"]})
-
-                # for p in possible_ornament_notes[1:]:
-                #     pass
-                    # note_alignments.append({'label': 'ornament', 
-                    #                         "score_id": ornament["id"], 
-                    #                         'performance_id': p["id"]})
-
-
-            
-
+        #         possible_ornament_notes = np.concatenate(possible_ornament_notes)   
+        #         possible_ornament_notes = possible_ornament_notes[possible_ornament_notes["onset_sec"].argsort()]
+        #         possible_ornament_notes_pitch = possible_ornament_notes[possible_ornament_notes["pitch"] == pitch]
+        #         if len(possible_ornament_notes_pitch) == 0 and len(possible_ornament_notes) > 0:
+        #             note_alignments.append({'label': 'match', 
+        #                                     "score_id": ornament["id"], 
+        #                                     "performance_id":  possible_ornament_notes[0]["id"]})
+        #         elif len(possible_ornament_notes_pitch) > 0:
+        #             note_alignments.append({'label': 'match', 
+        #                                     "score_id": ornament["id"], 
+        #                                     "performance_id":  possible_ornament_notes_pitch[0]["id"]})
         return note_alignments
 
+
+################################### ONSET MATCHERS ###################################
+
+
+class OnsetMatcherDTW(object):
+    """
+    Create an onset matching using pitch-based DTW from note_arrays
+    """
+    def __init__(self, 
+                 dtw = DTWSL()):
+        self.dtw = dtw
+
+    def __call__(self,
+                 score_note_array_no_grace, 
+                 performance_note_array, 
+                 flip = False):
+
+        
+        unique_onsets = np.unique(score_note_array_no_grace["onset_beat"])
+        score_pitch_at_onsets = list()
+        for onset in unique_onsets:
+            score_pitch_at_onsets.append(set(score_note_array_no_grace[score_note_array_no_grace["onset_beat"] == onset]["pitch"]))
+
+        if flip:
+            score_pitch_at_onsets.reverse()
+            _, onset_alignment_path = self.dtw(np.flipud(performance_note_array["pitch"]), 
+                                    score_pitch_at_onsets,  
+                                    return_path=True)
+        else:
+            _, onset_alignment_path = self.dtw(performance_note_array["pitch"], 
+                                    score_pitch_at_onsets,  
+                                    return_path=True)
+        
+        return onset_alignment_path, unique_onsets
+
+    
 ################################### FULL MODEL MATCHERS ###################################
 
 
@@ -1650,1147 +1503,40 @@ AutomaticNoteMatcher = PianoRollNoNodeMatcher
 
 # alias
 AnchorPointNoteMatcher = PianoRollSequentialMatcher
+    
 
-
-class ChordEncodingMatcher(object):
+class DualDTWNoteMatcher(object):
     def __init__(self,
-                 note_matcher=DTW,
-                 matcher_kwargs=dict(metric=element_of_metric,
-                                     cdist_local=True),
-                 symbolic_note_matcher=OnsetGreedyMatcher(),
-                 dtw_window_size=6):
+                 onset_matcher=OnsetMatcherDTW(),
+                 note_matcher=CleanOrnamentMatcher(),
+                 ):
 
-        self.note_matcher = note_matcher(**matcher_kwargs)
-        self.symbolic_note_matcher = symbolic_note_matcher
-        self.dtw_window_size = dtw_window_size
+        self.onset_matcher = onset_matcher
+        self.note_matcher = note_matcher
 
-    def __call__(self, score_note_array,
+
+    def __call__(self, 
+                 score_note_array,
                  performance_note_array):
         
-        # create encodings
-        score_note_per_ons_encoding = note_per_ons_encoding(score_note_array)
+        score_note_array_no_grace = score_note_array[score_note_array["is_grace"] == False]    
+        score_note_array_grace = score_note_array[score_note_array["is_grace"] == True]
+
+        onset_alignment_path, _ = self.onset_matcher(score_note_array_no_grace, 
+                                                     performance_note_array)
+
+        onset_alignment_path_reverse, _ = self.onset_matcher(score_note_array_no_grace, 
+                                                             performance_note_array,
+                                                             flip = True)
         
-        # match by onset
-        matcher = DTW(metric = element_of_metric, cdist_local = True)
+        global_alignment = self.note_matcher(score_note_array, # score notes including grace notes
+                                            score_note_array_no_grace, # score notes excluding grace notes 
+                                            score_note_array_grace, # grace notes
+                                            score_note_array_grace, # TODO:score notes with ornaments
+                                            performance_note_array,
+                                            onset_alignment_path,
+                                            onset_alignment_path_reverse,
+                                            onset_threshold=1.5) # TODO: document
         
-        _, onset_alignment_path = matcher(performance_note_array["pitch"], 
-                                          score_note_per_ons_encoding,  return_path=True)
+        return global_alignment
 
-
-        # match by note
-        global_alignment = self.symbolic_note_matcher(
-                                                    score_note_array, 
-                                                    performance_note_array,
-                                                    onset_alignment_path
-                                                    )
-                                                
-        return global_alignment, onset_alignment_path
-    
-
-################################### ONLINE MATCHERS ###################################
-
-
-class OnlineMatcherOG(object):
-    def __init__(self,
-                 score_note_array_full,
-                 score_note_array_no_grace,
-                 score_note_array_grace,
-                 score_note_array_ornament
-                 ):
-        self.score_note_array_full = score_note_array_full
-        self.score_note_array_no_grace = score_note_array_no_grace
-        self.score_note_array_grace = score_note_array_grace
-        self.score_note_array_ornament = score_note_array_ornament
-        self.first_p_onset = None
-        self.tempo_model = None
-        
-        self._prev_performance_onset = None
-        self._prev_score_onset = None
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self.alignment = []
-        self.note_alignments = []
-        self.prepare_score()
-
-    def prepare_score(self):
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            self.score_by_pitch[pitch] += list(self.score_note_array_full[
-                self.score_note_array_full["pitch"] == pitch])
-        
-        self.number_of_grace_notes_at_onset = defaultdict(int)
-        for s_note in self.score_note_array_grace:
-            self.number_of_grace_notes_at_onset[s_note["onset_beat"]] += 1
-
-        self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
-        self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [self._unique_score_onsets[s_id], self._unique_score_onsets[s_id+2]]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [self._unique_score_onsets[0], self._unique_score_onsets[1]]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [self._unique_score_onsets[-2], self._unique_score_onsets[-1]]
-        # self.onset_range_at_onset[self._unique_score_onsets[-2]] = [self._unique_score_onsets[-3], self._unique_score_onsets[-1]]
-
-
-        self.aligned_notes_at_onset = defaultdict(list)
-
-
-    def prepare_performance(self, first_onset, func = None):
-        if func is None:
-            self.tempo_model = TempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 1)
-        else:
-            self.tempo_model = DummyTempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 1,
-                                    func = func)
-
-    def offline(self, performance_note_array, func = None):
-
-        self.prepare_performance(performance_note_array[0]["onset_sec"], func)
-
-        for p_note in performance_note_array[:]:
-            self.online(p_note)
-
-        for s_ID, p_ID in self.alignment:
-                self.note_alignments.append({'label': 'match', 
-                                        "score_id": s_ID, 
-                                        "performance_id": p_ID})
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                self.note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                self.note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return self.note_alignments
-
-
-
-    def online(self, performance_note, debug=False):
-        p_id = performance_note["id"]
-        p_onset = performance_note["onset_sec"]
-        p_pitch = performance_note["pitch"]
-        possible_score_onsets = self.onset_range_at_onset[self._prev_score_onset]
-        if debug:
-            print("--------------------")
-            print("Performance note: ", p_id, p_onset, p_pitch)
-            print("Current onset: ", self._prev_score_onset)
-            print("Possible score onsets: ", possible_score_onsets)
-
-        possible_score_notes = self.score_by_pitch[p_pitch]
-        # possible_score_notes = sorted(possible_score_notes, key=lambda x: x["onset_beat"])
-        possible_score_notes = [x for x in possible_score_notes \
-                                if x["id"] not in self._snote_aligned and \
-                                    x["onset_beat"] >= possible_score_onsets[0] and \
-                                    x["onset_beat"] <= possible_score_onsets[1] ]
-
-
-        if len(possible_score_notes) > 0:
-            possible_note_onsets_mapped = [self.tempo_model.predict(x["onset_beat"]) for x in possible_score_notes]
-            possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) - p_onset)
-            lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-            best_note = possible_score_notes[lowest_dist_idx]
-            lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-
-            if debug:
-                print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                print("Possible notes mapped: ", possible_note_onsets_mapped)
-                print("Best note: ", best_note, lowest_dist)
-            if best_note["is_grace"]:
-                number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                if lowest_dist < number_of_local_grace_notes*0.2:
-                    self._snote_aligned.add(best_note["id"])
-                    self._pnote_aligned.add(p_id)
-                    self.alignment.append((best_note["id"], p_id))
-            else:
-                previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-                close_enough = True
-                if len(previous_aligned_p_onsets) > 0:
-                    close_enough = np.abs(p_onset - np.median(previous_aligned_p_onsets)) < 0.25
-                if close_enough:
-                    self._snote_aligned.add(best_note["id"])
-                    self._pnote_aligned.add(p_id)
-                    self.alignment.append((best_note["id"], p_id))
-                    self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
-                    if best_note["onset_beat"] > self._prev_score_onset:
-                        self.tempo_model.update(p_onset, best_note["onset_beat"])
-                        self._prev_score_onset = best_note["onset_beat"]
-                
-
-
-    def __call__(self):
-                                    
-        return None
-    
-
-class OnlineMatcher(object):
-    def __init__(self,
-                 score_note_array_full,
-                 score_note_array_no_grace,
-                 score_note_array_grace,
-                 score_note_array_ornament
-                 ):
-        self.score_note_array_full = score_note_array_full
-        self.score_note_array_no_grace = score_note_array_no_grace
-        self.score_note_array_grace = score_note_array_grace
-        self.score_note_array_ornament = score_note_array_ornament
-        self.first_p_onset = None
-        self.tempo_model = None
-        
-        self._prev_performance_onset = None
-        self._prev_score_onset = None
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self.alignment = []
-        self.note_alignments = []
-        self.prepare_score()
-
-    def prepare_score(self):
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            self.score_by_pitch[pitch] += list(self.score_note_array_full[
-                self.score_note_array_full["pitch"] == pitch])
-        
-        self.number_of_grace_notes_at_onset = defaultdict(int)
-        for s_note in self.score_note_array_grace:
-            self.number_of_grace_notes_at_onset[s_note["onset_beat"]] += 1
-
-        self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
-        self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [self._unique_score_onsets[s_id], self._unique_score_onsets[s_id+2]]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [self._unique_score_onsets[0], self._unique_score_onsets[1]]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [self._unique_score_onsets[-2], self._unique_score_onsets[-1]]
-        # self.onset_range_at_onset[self._unique_score_onsets[-2]] = [self._unique_score_onsets[-3], self._unique_score_onsets[-1]]
-
-
-        self.aligned_notes_at_onset = defaultdict(list)
-
-
-    def prepare_performance(self, first_onset, func = None):
-        if func is None:
-            self.tempo_model = TempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3)
-        else:
-            self.tempo_model = DummyTempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3,
-                                    func = func)
-
-    def offline(self, performance_note_array, func = None):
-
-        self.prepare_performance(performance_note_array[0]["onset_sec"], func)
-
-        for p_note in performance_note_array[:]:
-            self.online(p_note)
-
-        for s_ID, p_ID in self.alignment:
-                self.note_alignments.append({'label': 'match', 
-                                        "score_id": s_ID, 
-                                        "performance_id": p_ID})
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                self.note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                self.note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return self.note_alignments
-
-
-
-    def online(self, performance_note, debug=False):
-        p_id = performance_note["id"]
-        p_onset = performance_note["onset_sec"]
-        p_pitch = performance_note["pitch"]
-        possible_score_onsets = self.onset_range_at_onset[self._prev_score_onset]
-        if debug:
-            print("--------------------")
-            print("Performance note: ", p_id, p_onset, p_pitch)
-            print("Current onset: ", self._prev_score_onset)
-            print("Possible score onsets: ", possible_score_onsets)
-
-        possible_score_notes = self.score_by_pitch[p_pitch]
-        # possible_score_notes = sorted(possible_score_notes, key=lambda x: x["onset_beat"])
-        possible_score_notes = [x for x in possible_score_notes \
-                                if x["id"] not in self._snote_aligned and \
-                                    x["onset_beat"] >= possible_score_onsets[0] and \
-                                    x["onset_beat"] <= possible_score_onsets[1] ]
-
-        # import pdb; pdb.set_trace()
-        if len(possible_score_notes) > 0:
-            possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
-            possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) )#- p_onset)
-            lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-            best_note = possible_score_notes[lowest_dist_idx]
-            lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-
-            if debug:
-                print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                print("Possible notes mapped: ", possible_note_onsets_mapped)
-                print("Best note: ", best_note, lowest_dist)
-            if best_note["is_grace"]:
-                number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                if lowest_dist < number_of_local_grace_notes*0.2:
-                    self._snote_aligned.add(best_note["id"])
-                    self._pnote_aligned.add(p_id)
-                    self.alignment.append((best_note["id"], p_id))
-            else:
-                previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-                close_enough = True
-                if len(previous_aligned_p_onsets) > 0:
-                    close_enough = np.abs(p_onset - np.median(previous_aligned_p_onsets)) < 0.25
-                if close_enough:
-                    self._snote_aligned.add(best_note["id"])
-                    self._pnote_aligned.add(p_id)
-                    self.alignment.append((best_note["id"], p_id))
-                    self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
-                    if best_note["onset_beat"] > self._prev_score_onset:
-                        self.tempo_model.update(p_onset, best_note["onset_beat"])
-                        self._prev_score_onset = best_note["onset_beat"]
-
-            # if p_id == "n306":
-            #     import pdb; pdb.set_trace()
-            
-        else:
-            # if the neighboring pitches are different, extend the search
-            possible_score_notes = self.score_by_pitch[p_pitch]
-            possible_score_notes = [x for x in possible_score_notes \
-                                    if x["id"] not in self._snote_aligned and \
-                                    x["onset_beat"] > possible_score_onsets[1] and \
-                                    x["onset_beat"] <= self._prev_score_onset + 10.0 ]
-            
-            
-            if len(possible_score_notes) > 0:
-                possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
-                possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped) )#- p_onset)
-                possible_score_notes_id = [x["id"] for x in possible_score_notes]
-                lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-                best_note = possible_score_notes[lowest_dist_idx]
-                lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-                # if p_id == "n42":
-                #     import pdb; pdb.set_trace()
-                if lowest_dist < 0.2:
-
-                    if debug:
-                        print("Second Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                        print("SecondPossible notes mapped: ", possible_note_onsets_mapped)
-                        print("Second  note: ", best_note, lowest_dist)
-                    if best_note["is_grace"]:
-                        number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                        if lowest_dist < number_of_local_grace_notes*0.1:
-                            self._snote_aligned.add(best_note["id"])
-                            self._pnote_aligned.add(p_id)
-                            self.alignment.append((best_note["id"], p_id))
-                    else:
-                        previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-                        close_enough = True
-                        if len(previous_aligned_p_onsets) > 0:
-                            close_enough = False
-                        if close_enough:
-                            self._snote_aligned.add(best_note["id"])
-                            self._pnote_aligned.add(p_id)
-                            self.alignment.append((best_note["id"], p_id))
-                            self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
-                            if best_note["onset_beat"] > self._prev_score_onset:
-                                self.tempo_model.update(p_onset, best_note["onset_beat"])
-                                self._prev_score_onset = best_note["onset_beat"]
-                elif lowest_dist < 1.0:
-
-                    if debug:
-                        print("Second Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-                        print("SecondPossible notes mapped: ", possible_note_onsets_mapped)
-                        print("Second  note: ", best_note, lowest_dist)
-                    if best_note["is_grace"]:
-                        number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-                        if lowest_dist < number_of_local_grace_notes*0.1:
-                            self._snote_aligned.add(best_note["id"])
-                            self._pnote_aligned.add(p_id)
-                            self.alignment.append((best_note["id"], p_id))
-                    else:
-                        previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-                        close_enough = True
-                        if len(previous_aligned_p_onsets) > 0:
-                            close_enough = False
-                        if close_enough:
-                            self._snote_aligned.add(best_note["id"])
-                            self._pnote_aligned.add(p_id)
-                            self.alignment.append((best_note["id"], p_id))
-                            self.aligned_notes_at_onset[best_note["onset_beat"]].append(p_onset)
-                            
-
-                # else:
-                #     print("No match found for ", p_id, possible_score_notes_id, possible_note_onsets_dist)
-                    
-
-
-    def __call__(self):
-
-        return None
-    
-
-class TempoModel(object):
-    """
-    Base class for synchronization models
-
-    Attributes
-    ----------
-    """
-    def __init__(
-        self,
-        init_beat_period = 0.5,
-        init_score_onset = 0,
-        init_perf_onset = 0,
-        lookback = 1    
-        ):
-        self.lookback = lookback
-        self.beat_period = init_beat_period
-        self.prev_score_onsets = [init_score_onset - 2 * lookback]
-        self.prev_perf_onsets = [init_perf_onset - 2 * lookback * self.beat_period]
-        self.prev_perf_onsets_at_score_onsets = defaultdict(list)
-        self.prev_perf_onsets_at_score_onsets[self.prev_score_onsets[-1]].append(self.prev_perf_onsets[-1])
-        self.est_onset = None
-        self.score_perf_map = None
-        # Count how many times has the tempo model been called
-        self.counter = 0
-        self.update(init_perf_onset - lookback * self.beat_period, init_score_onset - lookback)
-
-    def predict(
-        self,
-        score_onset
-        ):
-        self.est_onset = self.score_perf_map(score_onset - (self.lookback+1)) + \
-            (self.lookback+1) * self.beat_period 
-        return self.est_onset
-
-    
-    def predict_ratio(
-        self,
-        score_onset,
-        perf_onset
-        ):
-        self.est_onset = self.score_perf_map(score_onset - (self.lookback+1)) + \
-            (self.lookback+1) * self.beat_period 
-        error = perf_onset - self.est_onset
-        offset_score =  score_onset  - self.prev_score_onsets[-1] 
-        if offset_score > 0.0:
-            return error/(offset_score * self.beat_period)
-        else:
-            return error
-
-    def update(
-        self,
-        performed_onset,
-        score_onset
-        ):
-
-        self.prev_perf_onsets_at_score_onsets[score_onset].append(performed_onset)
-        if score_onset == self.prev_score_onsets[-1]:
-            #     self.prev_perf_onsets[-1] = 4/5 * self.prev_perf_onsets[-1] + 1/5* performed_onset
-            self.prev_perf_onsets[-1] = np.median(self.prev_perf_onsets_at_score_onsets[score_onset])
-        else:
-            self.prev_score_onsets.append(score_onset)
-            self.prev_perf_onsets.append(performed_onset)
-            
-        self.score_perf_map = interp1d(self.prev_score_onsets[-100:], 
-                                       self.prev_perf_onsets[-100:], 
-                                       fill_value="extrapolate")
-        self.beat_period = np.clip((self.score_perf_map(score_onset) - \
-            self.score_perf_map(score_onset - self.lookback))/self.lookback, 0.1, 10.0)
-        self.counter += 1
-
-
-class DummyTempoModel(object):
-
-
-    """
-    Base class for synchronization models
-
-    Attributes
-    ----------
-    """
-    def __init__(
-        self,
-        init_beat_period = 0.5,
-        init_score_onset = 0,
-        init_perf_onset = 0,
-        lookback = 1,
-        func = None
-    ):
-        
-        self.lookback = lookback
-        self.beat_period = init_beat_period
-        self.score_perf_map = func
-        # Count how many times has the tempo model been called
-        self.counter = 0
-
-    def predict(
-        self,
-        score_onset
-        ):
-        self.est_onset = self.score_perf_map(score_onset)
-        return self.est_onset
-    
-    # def predict_ratio(
-    #     self,
-    #     score_onset,
-    #     perf_onset
-    #     ):
-    #     self.est_onset = self.score_perf_map(score_onset - self.lookback) + \
-    #         self.lookback * self.beat_period 
-    #     error = perf_onset - self.est_onset
-    #     offset_score =  score_onset  - self.prev_score_onsets[-1] 
-    #     if offset_score > 0.0:
-    #         return error/(offset_score * self.beat_period)
-    #     else:
-    #         return error
-    def update(
-        self,
-        performed_onset,
-        score_onset
-        ):
-        self.counter += 1
-
-
-
-class OnlineTransformerMatcher(object):
-    def __init__(self,
-                 score_note_array_full,
-                 score_note_array_no_grace,
-                 score_note_array_grace,
-                 score_note_array_ornament
-                 ):
-        self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
-        self.score_note_array_no_grace = np.sort(score_note_array_no_grace, order="onset_beat")
-        self.score_note_array_grace = np.sort(score_note_array_grace, order="onset_beat")
-        self.score_note_array_ornament = np.sort(score_note_array_ornament, order="onset_beat")
-        self.first_p_onset = None
-        self.tempo_model = None
-        
-        self._prev_performance_notes = list()
-        self._prev_score_onset = None
-        # self._prev_score_onset = self.score_note_array_full[0]["onset_beat"]
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self._pnote_aligned_pitch = list()
-        self.alignment = []
-        self.note_alignments = []
-        self.time_since_nn_update = 0
-        self.prepare_score()
-        self.prepare_model()
-
-    def prepare_score(self):
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            # self.score_by_pitch[pitch] += list(self.score_note_array_full[
-            #     self.score_note_array_full["pitch"] == pitch])
-            self.score_by_pitch[pitch] = self.score_note_array_full[self.score_note_array_full["pitch"] == pitch]
-        
-        self.number_of_grace_notes_at_onset = defaultdict(int)
-        for s_note in self.score_note_array_grace:
-            self.number_of_grace_notes_at_onset[s_note["onset_beat"]] += 1
-
-        self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
-        self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-
-        # onset range for forward backward view
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [self._unique_score_onsets[s_id], self._unique_score_onsets[s_id+2]]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [self._unique_score_onsets[0], self._unique_score_onsets[1]]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [self._unique_score_onsets[-2], self._unique_score_onsets[-1]]
-
-        # set of pitches at onset / map from onset to idx in unique onsets
-        self.pitches_at_onset_by_id = list()
-        self.id_by_onset = dict()
-
-        for i, onset in enumerate(self._unique_score_onsets):
-            self.pitches_at_onset_by_id.append(
-                set(self.score_note_array_no_grace[
-                    self.score_note_array_no_grace["onset_beat"] == onset
-                    ]["pitch"])
-                )
-            self.id_by_onset[onset] = i
-
-        # aligned notes at each onset
-        self.aligned_notes_at_onset = defaultdict(list)
-
-    def prepare_performance(self, first_onset, func = None):
-        if func is None:
-            self.tempo_model = TempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3)
-        else:
-            self.tempo_model = DummyTempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3,
-                                    func = func)
-
-    def prepare_model(self):
-        self.model = AlignmentTransformer(
-            token_number = 91,# 21 - 108 + 2 for padding (start_score, end) + 1 for non_pitch
-            dim_model = 64,
-            dim_class = 2,
-            num_heads = 8,
-            num_decoder_layers = 6,
-            dropout_p = 0.1
-            )
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(r"C:\Users\silva\Documents\repos\ZDUDLES\alignment_transformer\alignment_transformer_epoch_positional_70.pt", 
-                                map_location=torch.device(self.device))
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.to(self.device)
-        self.model.eval()
-
-    def offline(self, performance_note_array, func = None):
-
-        self.prepare_performance(performance_note_array[0]["onset_sec"], func)
-
-        for p_note in performance_note_array[:]:
-            self.online(p_note)
-
-        for s_ID, p_ID in self.alignment:
-                self.note_alignments.append({'label': 'match', 
-                                        "score_id": s_ID, 
-                                        "performance_id": p_ID})
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                self.note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                self.note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return self.note_alignments
-
-    def online(self, performance_note, debug=False):
-        self.time_since_nn_update += 1
-        p_id = performance_note["id"]
-        p_onset = performance_note["onset_sec"]
-        p_pitch = performance_note["pitch"]
-        self._prev_performance_notes.append(p_pitch)
-
-        possible_score_notes = self.score_by_pitch[p_pitch]
-
-        # align greedily if open note at current oonset
-        if p_pitch in self.pitches_at_onset_by_id[self.id_by_onset[self._prev_score_onset]]:
-            best_notes = na_within(possible_score_notes, "onset_beat", 
-                                    self._prev_score_onset, self._prev_score_onset,
-                                    exclusion_ids=self._snote_aligned)
-            if len(best_notes) > 0:
-                best_note = best_notes[0]
-                self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
-                return
-        
-        # # align with the help of the tempo function
-        # possible_score_onsets = self.onset_range_at_onset[self._prev_score_onset]
-        # possible_score_notes = na_within(possible_score_notes, "onset_beat", 
-        #                                  possible_score_onsets[0], possible_score_onsets[1],
-        #                                  exclusion_ids=self._snote_aligned)
-
-        # if len(possible_score_notes) > 0:
-        #     possible_note_onsets_mapped = [self.tempo_model.predict_ratio(x["onset_beat"], p_onset) for x in possible_score_notes]
-        #     possible_note_onsets_dist = np.abs(np.array(possible_note_onsets_mapped))
-        #     lowest_dist_idx = np.argmin(possible_note_onsets_dist)
-        #     best_note = possible_score_notes[lowest_dist_idx]
-        #     lowest_dist = possible_note_onsets_dist[lowest_dist_idx]
-        #     # if p_id == "n491":
-        #     #     print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-        #     #     print("Possible notes mapped: ", possible_note_onsets_mapped)
-        #     #     print("Best note: ", best_note, lowest_dist)
-        #     #     import pdb; pdb.set_trace()
-        #     if debug:
-        #         print("Possible notes onsets: ", [x["onset_beat"] for x in possible_score_notes])
-        #         print("Possible notes mapped: ", possible_note_onsets_mapped)
-        #         print("Best note: ", best_note, lowest_dist)
-            
-
-        #         # HEURISTIC: distance based on number of grace notes
-        #         # number_of_local_grace_notes = self.number_of_grace_notes_at_onset[best_note["onset_beat"]]
-        #         # if lowest_dist < number_of_local_grace_notes*0.2:
-        #         #     self._snote_aligned.add(best_note["id"])
-        #         #     self._pnote_aligned.add(p_id)
-        #         #     self.alignment.append((best_note["id"], p_id))
-
-        #         # HEURISTIC: don't stray too far from previously aligned
-        #         # previous_aligned_p_onsets = self.aligned_notes_at_onset[best_note["onset_beat"]]
-        #         # close_enough = True
-        #         # if len(previous_aligned_p_onsets) > 0:
-        #         #     close_enough = np.abs(p_onset - np.median(previous_aligned_p_onsets)) < 1.5
-        #         # if close_enough:
-        #     if best_note["is_grace"]:
-        #         self.add_note_alignment(p_id, best_note["id"])
-        #     else:
-        #         self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
-
-        # # only then do we use the neural network
-        # elif self.time_since_nn_update > 1:
-        current_id = self.id_by_onset[self._prev_score_onset]
-        s_slice = slice(np.max((current_id-7, 0)), current_id+9 )
-        p_slice = slice(-8, None )
-        score_seq = self.pitches_at_onset_by_id[s_slice]
-        perf_seq = self._prev_performance_notes[p_slice]
-
-        tokenized_score_seq =  tokenize(score_seq, perf_seq, dims = 7)
-        out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
-        pred_id = torch.argmax(torch.softmax(out.squeeze(1),dim=0)[:,1]).cpu().numpy()
-        new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
-
-        if debug: #or p_id in ["n"+str(x) for x in range(750, 780)]:
-            print("predicted id ", pred_id, new_pred_id, p_id)
-            print("predicted score onset, ",      self._unique_score_onsets[current_id + new_pred_id], self._prev_score_onset)
-            import pdb; pdb.set_trace()
-        if new_pred_id > -5 and new_pred_id < 2:#np.min((6,self.time_since_nn_update+2))	:
-            # print("happens", p_id)
-            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
-            possible_score_notes = self.score_by_pitch[p_pitch]
-            possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
-                                          pred_score_onset, pred_score_onset,
-                                          exclusion_ids=self._snote_aligned)
-
-            if len(possible_score_notes) > 0:
-                best_note = possible_score_notes[0]
-                if best_note["is_grace"]:
-                    self.add_note_alignment(p_id, best_note["id"])
-                else:
-                    self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
-
-        elif new_pred_id >= 2:
-            # print("happens", p_id)
-
-            # check how many notes are implicitly unaligned
-            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
-            implicitly_jumped_notes = 0
-            for onset_id in np.arange(current_id, current_id + new_pred_id, 1) :
-                implicitly_jumped_notes += len(self.pitches_at_onset_by_id[onset_id])
-
-
-            # check whether the predicted note could be in the next onset
-            if p_pitch in self.pitches_at_onset_by_id[current_id + 1]:
-                # check whether the timing is not completely off
-                possible_score_notes = self.score_by_pitch[p_pitch]
-                possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
-                                           self._unique_score_onsets[current_id + 1], self._unique_score_onsets[current_id + 1],
-                                          exclusion_ids=self._snote_aligned)
-                if len(possible_score_notes) > 0:
-                    dist = np.abs(self.tempo_model.predict(possible_score_notes[0]["onset_beat"]) - p_onset)
-                    if dist < 1.0:
-                        # print("aligned with tempo model:", p_id)
-                        self.add_note_alignment(p_id, possible_score_notes[0]["id"], p_onset, possible_score_notes[0]["onset_beat"])
-                        return
-
-            if self.time_since_nn_update > 2 and implicitly_jumped_notes <= 10:
-                
-                possible_score_notes = self.score_by_pitch[p_pitch]
-                possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
-                                          pred_score_onset, pred_score_onset,
-                                          exclusion_ids=self._snote_aligned)
-
-                if len(possible_score_notes) > 0:
-                    self.time_since_nn_update = 0
-                    best_note = possible_score_notes[0]
-                    if best_note["is_grace"]:
-                        self.add_note_alignment(p_id, best_note["id"])
-                    else:
-                        self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
-                            
-
-    def add_note_alignment(self,
-                           perf_id, score_id, 
-                           perf_onset = None, score_onset = None
-                           ):
-        self.alignment.append((score_id, perf_id))
-        self._snote_aligned.add(score_id)
-        self._pnote_aligned.add(perf_id)
-        if perf_onset is not None and score_onset is not None:
-            self.aligned_notes_at_onset[score_onset].append(perf_onset)
-            if score_onset >= self._prev_score_onset:
-                self.tempo_model.update(perf_onset, score_onset)
-                self._prev_score_onset = score_onset
-
-    def __call__(self):
-
-        return None
-    
-
-class OnlineTransformerMatcher2(object):
-    def __init__(self,
-                 score_note_array_full
-                 ):
-        self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
-        self.first_p_onset = None
-        self.tempo_model = None
-        
-        self._prev_performance_notes = list()
-        self._prev_score_onset = None
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self._pnote_aligned_pitch = list()
-        self.alignment = []
-        self.note_alignments = []
-        self.time_since_nn_update = 0
-        self.prepare_score()
-        self.prepare_model()
-
-    def prepare_score(self):
-
-        self.score_note_array_no_grace = self.score_note_array_full[self.score_note_array_full["is_grace"] == False]
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            self.score_by_pitch[pitch] = self.score_note_array_full[self.score_note_array_full["pitch"] == pitch]
-
-        self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
-        self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-
-        # onset range for forward backward view
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [self._unique_score_onsets[s_id], self._unique_score_onsets[s_id+2]]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [self._unique_score_onsets[0], self._unique_score_onsets[1]]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [self._unique_score_onsets[-2], self._unique_score_onsets[-1]]
-
-        # set of pitches at onset / map from onset to idx in unique onsets
-        self.pitches_at_onset_by_id = list()
-        self.id_by_onset = dict()
-
-        for i, onset in enumerate(self._unique_score_onsets):
-            self.pitches_at_onset_by_id.append(
-                set(self.score_note_array_no_grace[
-                    self.score_note_array_no_grace["onset_beat"] == onset
-                    ]["pitch"])
-                )
-            self.id_by_onset[onset] = i
-
-        # aligned notes at each onset
-        self.aligned_notes_at_onset = defaultdict(list)
-
-    def prepare_performance(self, first_onset):
-        self.tempo_model = TempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 1)
-        
-    def prepare_model(self):
-        self.model = AlignmentTransformer(
-            token_number = 91,
-            dim_model = 64,
-            dim_class = 2,
-            num_heads = 8,
-            num_decoder_layers = 6,
-            dropout_p = 0.1
-            )
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(r"C:\Users\silva\Documents\repos\ZDUDLES\alignment_transformer\alignment_transformer_epoch_positional_70.pt", 
-                                map_location=torch.device(self.device))
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.to(self.device)
-        self.model.eval()
-
-    def offline(self, performance_note_array):
-        self.prepare_performance(performance_note_array[0]["onset_sec"])
-
-        for p_note in performance_note_array[:]:
-            self.online(p_note)
-
-        for s_ID, p_ID in self.alignment:
-                self.note_alignments.append({'label': 'match', 
-                                        "score_id": s_ID, 
-                                        "performance_id": p_ID})
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                self.note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                self.note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return self.note_alignments
-
-    def online(self, performance_note, debug=False):
-        self.time_since_nn_update += 1
-        p_id = performance_note["id"]
-        p_onset = performance_note["onset_sec"]
-        p_pitch = performance_note["pitch"]
-        self._prev_performance_notes.append(p_pitch)
-
-        possible_score_notes = self.score_by_pitch[p_pitch]
-
-        # align greedily if open note at current onset
-        if p_pitch in self.pitches_at_onset_by_id[self.id_by_onset[self._prev_score_onset]]:
-            best_notes = na_within(possible_score_notes, "onset_beat", 
-                                    self._prev_score_onset, self._prev_score_onset,
-                                    exclusion_ids=self._snote_aligned)
-            if len(best_notes) > 0:
-                best_note = best_notes[0]
-                self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
-                return
-        
-        current_id = self.id_by_onset[self._prev_score_onset]
-        s_slice = slice(np.max((current_id-7, 0)), current_id+9 )
-        p_slice = slice(-8, None )
-        score_seq = self.pitches_at_onset_by_id[s_slice]
-        perf_seq = self._prev_performance_notes[p_slice]
-
-        tokenized_score_seq =  tokenize(score_seq, perf_seq, dims = 7)
-        out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
-        pred_ids = torch.argsort(torch.softmax(out.squeeze(1),dim=0)[:,1], descending=True).cpu().numpy()
-
-        top_three_notes = dict()
-        for pred_id in pred_ids[:3]:
-            new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
-
-            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
-            possible_score_notes = self.score_by_pitch[p_pitch]
-            possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
-                                          pred_score_onset, pred_score_onset,
-                                          exclusion_ids=self._snote_aligned)
-
-            if len(possible_score_notes) > 0:
-                dist = np.abs(self.tempo_model.predict(possible_score_notes[0]["onset_beat"]) - p_onset)
-                top_three_notes[dist] = possible_score_notes[0]
-                
-        dists = list(top_three_notes.keys())
-        if len(dists) >= 1:
-
-            best_note = top_three_notes[np.min(dists)]
-            if best_note["is_grace"]:
-                self.add_note_alignment(p_id, best_note["id"])
-            else:
-                self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])                        
-
-    def add_note_alignment(self,
-                           perf_id, score_id, 
-                           perf_onset = None, score_onset = None
-                           ):
-        self.alignment.append((score_id, perf_id))
-        self._snote_aligned.add(score_id)
-        self._pnote_aligned.add(perf_id)
-        if perf_onset is not None and score_onset is not None:
-            self.aligned_notes_at_onset[score_onset].append(perf_onset)
-            if score_onset >= self._prev_score_onset:
-                self.tempo_model.update(perf_onset, score_onset)
-                self._prev_score_onset = score_onset
-
-    def __call__(self):
-        return None
-
-
-def perf_tokenizer(pitch, dims = 7):
-    return np.ones((1,dims), dtype = int) * (pitch - 20)
-
-def score_tokenizer(pitch_set, dims = 7):
-    token = np.zeros((1,dims), dtype = int)
-    for no, pitch in enumerate(list(pitch_set)):
-        if pitch >= 21 and pitch <= 108 and no < dims:
-            token[0,no] = pitch - 20
-    return token
-
-def perf_to_score_tokenizer(dims = 7):
-    return np.ones((1,dims), dtype = int) *89
-
-def end_tokenizer(dims = 7, end_dims=1):
-    return np.ones((end_dims,dims), dtype = int) *90
-
-
-def tokenize(score_segment, perf_segment, dims = 7):
-    tokens = list()
-    for perf_note in perf_segment:
-        perf_token = perf_tokenizer(perf_note, dims)
-        tokens.append(perf_token)
-    tokens.append(perf_to_score_tokenizer(dims))
-    for score_set in score_segment:
-        score_token = score_tokenizer(score_set, dims)
-        tokens.append(score_token)
-    
-    end_token = end_tokenizer(dims, 26 - len(tokens))
-    tokens.append(end_token)
-
-    return np.row_stack(tokens)
-
-
-
-
-class OnlinePureTransformerMatcher(object):
-    def __init__(self,
-                 score_note_array_full,
-                 score_note_array_no_grace,
-                 score_note_array_grace,
-                 score_note_array_ornament
-                 ):
-        self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
-        self.score_note_array_no_grace = np.sort(score_note_array_no_grace, order="onset_beat")
-        self.score_note_array_grace = np.sort(score_note_array_grace, order="onset_beat")
-        self.score_note_array_ornament = np.sort(score_note_array_ornament, order="onset_beat")
-        self.first_p_onset = None
-        self.tempo_model = None
-        
-        self._prev_performance_notes = list()
-        self._prev_score_onset = None
-        # self._prev_score_onset = self.score_note_array_full[0]["onset_beat"]
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self._pnote_aligned_pitch = list()
-        self.alignment = []
-        self.note_alignments = []
-        self.time_since_nn_update = 0
-        self.prepare_score()
-        self.prepare_model()
-
-    def prepare_score(self):
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            # self.score_by_pitch[pitch] += list(self.score_note_array_full[
-            #     self.score_note_array_full["pitch"] == pitch])
-            self.score_by_pitch[pitch] = self.score_note_array_full[self.score_note_array_full["pitch"] == pitch]
-        
-        self.number_of_grace_notes_at_onset = defaultdict(int)
-        for s_note in self.score_note_array_grace:
-            self.number_of_grace_notes_at_onset[s_note["onset_beat"]] += 1
-
-        self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
-        self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-
-        # onset range for forward backward view
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [self._unique_score_onsets[s_id], self._unique_score_onsets[s_id+2]]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [self._unique_score_onsets[0], self._unique_score_onsets[1]]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [self._unique_score_onsets[-2], self._unique_score_onsets[-1]]
-
-        # set of pitches at onset / map from onset to idx in unique onsets
-        self.pitches_at_onset_by_id = list()
-        self.id_by_onset = dict()
-
-        for i, onset in enumerate(self._unique_score_onsets):
-            self.pitches_at_onset_by_id.append(
-                set(self.score_note_array_no_grace[
-                    self.score_note_array_no_grace["onset_beat"] == onset
-                    ]["pitch"])
-                )
-            self.id_by_onset[onset] = i
-
-        # aligned notes at each onset
-        self.aligned_notes_at_onset = defaultdict(list)
-
-    def prepare_performance(self, first_onset, func = None):
-        if func is None:
-            self.tempo_model = TempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3)
-        else:
-            self.tempo_model = DummyTempoModel(init_beat_period = 0.5,
-                                    init_score_onset = self.score_note_array_full["onset_beat"][0],
-                                    init_perf_onset = first_onset,
-                                    lookback = 3,
-                                    func = func)
-
-    def prepare_model(self):
-        self.model = AlignmentTransformer(
-            token_number = 91,# 21 - 108 + 2 for padding (start_score, end) + 1 for non_pitch
-            dim_model = 64,
-            dim_class = 2,
-            num_heads = 8,
-            num_decoder_layers = 6,
-            dropout_p = 0.1
-            )
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(r"C:\Users\silva\Documents\repos\ZDUDLES\alignment_transformer\alignment_transformer_epoch_positional_70.pt", 
-                                map_location=torch.device(self.device))
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.to(self.device)
-        self.model.eval()
-
-    def offline(self, performance_note_array, func = None):
-        self.prepare_performance(performance_note_array[0]["onset_sec"], func)
-
-        for p_note in performance_note_array[:]:
-            self.online(p_note)
-
-        for s_ID, p_ID in self.alignment:
-                self.note_alignments.append({'label': 'match', 
-                                        "score_id": s_ID, 
-                                        "performance_id": p_ID})
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                self.note_alignments.append({'label': 'deletion', 'score_id': score_note["id"]})
-        
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                self.note_alignments.append({'label': 'insertion', 'performance_id': performance_note["id"]})
-
-        return self.note_alignments
-
-    def online(self, performance_note, debug=False):
-        # directly align with NN without any cautionary measures
-        p_id = performance_note["id"]
-        p_onset = performance_note["onset_sec"]
-        p_pitch = performance_note["pitch"]
-        self._prev_performance_notes.append(p_pitch)
-
-        current_id = self.id_by_onset[self._prev_score_onset]
-        s_slice = slice(np.max((current_id-7, 0)), current_id+9 )
-        p_slice = slice(-8, None )
-        score_seq = self.pitches_at_onset_by_id[s_slice]
-        perf_seq = self._prev_performance_notes[p_slice]
-
-        tokenized_score_seq =  tokenize(score_seq, perf_seq, dims = 7)
-        out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
-        pred_id = torch.argmax(
-            torch.softmax(out.squeeze(1),dim=1)[:,1]
-            ).cpu().numpy()
-        new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
-
-        
-        pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
-        possible_score_notes = self.score_by_pitch[p_pitch]
-        possible_score_notes =  na_within(possible_score_notes, "onset_beat", 
-                                        pred_score_onset, pred_score_onset,
-                                        exclusion_ids=self._snote_aligned)
-
-        if len(possible_score_notes) > 0:
-            best_note = possible_score_notes[0]
-            if best_note["is_grace"]:
-                self.add_note_alignment(p_id, best_note["id"])
-            else:
-                self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])    
-
-    def add_note_alignment(self,
-                           perf_id, score_id, 
-                           perf_onset = None, 
-                           score_onset = None
-                           ):
-        self.alignment.append((score_id, perf_id))
-        self._snote_aligned.add(score_id)
-        self._pnote_aligned.add(perf_id)
-        if perf_onset is not None and score_onset is not None:
-            self.aligned_notes_at_onset[score_onset].append(perf_onset)
-            if score_onset >= self._prev_score_onset:
-                self.tempo_model.update(perf_onset, score_onset)
-                self._prev_score_onset = score_onset
-
-    def __call__(self):
-
-        return None
