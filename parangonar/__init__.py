@@ -9,13 +9,17 @@ EXAMPLE = pkg_resources.resource_filename("parangonar",
                                           "assets/mozart_k265_var1.match")
 ALIGNMENT_TRANSFORMER_CHECKPOINT = pkg_resources.resource_filename("parangonar", 
                                           "assets/alignment_transformer_checkpoint.pt")
-
-
 from .match import AnchorPointNoteMatcher, AutomaticNoteMatcher, DualDTWNoteMatcher
-from .evaluate import fscore_alignments, plot_alignment
+from .match import OnlineTransformerMatcher, OnlinePureTransformerMatcher
+from .evaluate import fscore_alignments, plot_alignment, plot_alignment_comparison
 
 __all__ = [
     "AnchorPointNoteMatcher",
     "AutomaticNoteMatcher",
+    "DualDTWNoteMatcher",
+    "OnlineTransformerMatcher",
+    "OnlinePureTransformerMatcher"
     "fscore_alignments",
+    "plot_alignment_comparison",
+    "plot_alignment"
 ]

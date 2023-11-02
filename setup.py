@@ -13,14 +13,14 @@ KEYWORDS = 'match alignment midi performance score'
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = 'Silvan Peter, Carlos Cancino-Chacón, Florian Henkel'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.0.10'
+VERSION = '1.0.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
     'numpy',
     'scipy',
+    'torch',
     'partitura>=1.1.0',
-    'python-hiddenmarkov'
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))

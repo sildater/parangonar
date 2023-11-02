@@ -10,7 +10,7 @@ import partitura as pt
 import matplotlib.pyplot as plt
 import random
 import os
-import json
+
 
 def fscore_alignments(prediction: List[dict], 
                         ground_truth: List[dict], 
@@ -50,7 +50,6 @@ def fscore_alignments(prediction: List[dict],
         return precision, recall, f_score, len(pred_filtered), len(gt_filtered)
     else:
         return precision, recall, f_score
-
 
 
 def plot_alignment(ppart_na, 
@@ -259,100 +258,6 @@ def plot_alignment_mappings(
         plt.close(f)
     else:
         plt.show()
-
-
-
-
-
-# def transform_labels(ids: List[str], 
-#                      prediction: List[dict],
-#                      ground_truth: List[dict], 
-#                      field: str) -> (List[str], List[str]):
-#     """
-#     Parameters
-#     ----------
-#     ids: List of note ids
-#     prediction: List of dictionaries containing the predicted alignments
-#     ground_truth: List of dictionaries containing the ground truth alignments
-#     field: which note ids to evaluate (score_id or performance_id)
-
-#     Returns
-#     -------
-#     List of predicted labels, List of ground truth labels
-#     """
-
-#     assert field in ['score_id', 'performance_id']
-
-#     y_pred, y_gt = [], []
-#     for id in ids:
-
-#         pred = list(filter(lambda x: field in x and str(x[field]) == id, prediction))
-#         gt = list(filter(lambda x: field in x and str(x[field]) == id, ground_truth))
-#         try:
-#             assert len(pred) == len(gt) == 1
-#             pred = pred[0]
-
-#         except:
-#             print(f'Missing note in predictions {id}')
-
-#             if field == 'score_id':
-#                 pred = dict(label='deletion',
-#                             score_id=id)
-#             elif field == 'performance_id':
-#                 pred = dict(label='insertion',
-#                             performance_id=id)
-#             # import pdb
-#             # pdb.set_trace()
-            
-#         gt = gt[0]
-
-#         gt_label = gt['label']
-#         pred_label = pred['label']
-
-#         if gt_label == pred_label == 'match':
-#             # matched to different note in performance -> mismatch
-#             if pred['performance_id'] != gt['performance_id']:
-#                 pred_label = 'mismatch'
-
-#         y_gt.append(gt_label)
-#         y_pred.append(pred_label)
-
-#     return y_pred, y_gt
-
-
-# def alignment_confusion_matrices(score_ids: List[str],
-#                                  performance_ids: List[str],
-#                                  prediction: List[dict],
-#                                  ground_truth: List[dict],
-#                                  normalize: str or None=None) -> (np.ndarray, np.ndarray):
-#     """
-
-#     Parameters
-#     ----------
-#     score_ids: List of score note ids
-#     performance_ids: List of performance note ids
-#     prediction: List of dictionaries containing the predicted alignments
-#     ground_truth: List of dictionaries containing the ground truth alignments
-
-#     Returns
-#     -------
-#     2 3x3 numpy array containing the confusion matrices for score and performance
-#     (note that the last row (mismatch) should always be 0 for each column since does not occur in the ground truth
-#     """
-#     if normalize is not None:
-#         assert normalize in ['true', 'pred', 'all']
-
-#     y_pred_score, y_gt_score = transform_labels(score_ids, prediction, ground_truth, field='score_id')
-#     y_pred_perf, y_gt_perf = transform_labels(performance_ids, prediction, ground_truth, field='performance_id')
-
-#     conf_matrix_score = confusion_matrix(y_gt_score, y_pred_score,
-#                                          labels=['match', 'deletion',  'mismatch'],
-#                                          normalize=normalize)
-#     conf_matrix_perf = confusion_matrix(y_gt_perf, y_pred_perf,
-#                                         labels=['match', 'insertion', 'mismatch'],
-#                                         normalize=normalize)
-
-#     return conf_matrix_score, conf_matrix_perf
 
 
 def evaluate_asynchrony(

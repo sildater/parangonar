@@ -4,7 +4,6 @@
 This module contains full note matcher classes.
 """
 import numpy as np
-import torch
 from scipy.interpolate import interp1d
 from collections import defaultdict
 

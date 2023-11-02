@@ -3,19 +3,6 @@
 """
 This module contains methods for note and sequence alignment.
 
-sequence alignment:
-- Dynamic Time Warping
-- Needleman-Wunsch 
-
-note alignment:
-- Hidden Markov Model
-- Greedy note alignment
-- Path-augmented combinatorial alignment
-
-most of the hidden markov machinery comes from 
-https://github.com/neosatrapahereje/hiddenmarkov.git
-this file contains specific variations and additions.
-
 """
 
 from .dtw import DTW, DTWSL
@@ -27,7 +14,7 @@ from .matchers import (AnchorPointNoteMatcher,
                        pitch_and_onset_wise_times,
                        pitch_and_onset_wise_times_ornament,
                        get_score_to_perf_map)
-from .online_matchers import (AnchorPointNoteMatcher, 
+from .online_matchers import (OnlineTransformerMatcher, 
                               OnlinePureTransformerMatcher)
 from .utils import (node_array,
                     save_parangonada_csv)

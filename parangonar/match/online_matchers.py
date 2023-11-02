@@ -1,4 +1,10 @@
-
+from .. import ALIGNMENT_TRANSFORMER_CHECKPOINT
+import numpy as np
+from collections import defaultdict
+from .pretrained_models import AlignmentTransformer
+import torch
+from .matchers import na_within
+from scipy.interpolate import interp1d
 
 ################################### TEMPO MODELS ###################################
 
@@ -197,7 +203,7 @@ class OnlineTransformerMatcher(object):
             dropout_p = 0.1
             )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load("POINT TO CHECKPOINT.pth", 
+        checkpoint = torch.load(ALIGNMENT_TRANSFORMER_CHECKPOINT, 
                                 map_location=torch.device(self.device))
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
@@ -331,21 +337,14 @@ def tokenize(score_segment, perf_segment, dims = 7):
 
 class OnlinePureTransformerMatcher(object):
     def __init__(self,
-                 score_note_array_full,
-                 score_note_array_no_grace,
-                 score_note_array_grace,
-                 score_note_array_ornament
+                 score_note_array_full
                  ):
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
-        self.score_note_array_no_grace = np.sort(score_note_array_no_grace, order="onset_beat")
-        self.score_note_array_grace = np.sort(score_note_array_grace, order="onset_beat")
-        self.score_note_array_ornament = np.sort(score_note_array_ornament, order="onset_beat")
         self.first_p_onset = None
         self.tempo_model = None
         
         self._prev_performance_notes = list()
         self._prev_score_onset = None
-        # self._prev_score_onset = self.score_note_array_full[0]["onset_beat"]
         self._snote_aligned = set()
         self._pnote_aligned = set()
         self._pnote_aligned_pitch = list()
@@ -356,14 +355,12 @@ class OnlinePureTransformerMatcher(object):
         self.prepare_model()
 
     def prepare_score(self):
+
+        self.score_note_array_no_grace = self.score_note_array_full[self.score_note_array_full["is_grace"] == False]
         self.score_by_pitch = defaultdict(list)
         unique_pitches = np.unique(self.score_note_array_full["pitch"])
         for pitch in unique_pitches:
             self.score_by_pitch[pitch] = self.score_note_array_full[self.score_note_array_full["pitch"] == pitch]
-        
-        self.number_of_grace_notes_at_onset = defaultdict(int)
-        for s_note in self.score_note_array_grace:
-            self.number_of_grace_notes_at_onset[s_note["onset_beat"]] += 1
 
         self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
         self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
@@ -413,7 +410,7 @@ class OnlinePureTransformerMatcher(object):
             dropout_p = 0.1
             )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(parangonar.ALIGNMENT_TRANSFORMER_CHECKPOINT), 
+        checkpoint = torch.load(ALIGNMENT_TRANSFORMER_CHECKPOINT, 
                                 map_location=torch.device(self.device))
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)

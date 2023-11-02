@@ -18,14 +18,13 @@ pip install parangonar
 This will install the latest release of the package and will install all dependencies automatically.
 
 
-Quickstart Examples
+Getting Started
 ==========
 
 The following code loads the contents of a a previously aligned performance
-and score alignment file (encoded in the [match file format](https://arxiv.org/abs/2206.01104)). 
+and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)). 
 
-A new alignment is computed using a hierarchical DTW-based note matcher and the resulting
-alignment are compared to the ground truth:
+A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth:
 
 1 - Automatic Note Matching: `AutomaticNoteMatcher` and `DualDTWNoteMatcher`
 -----
@@ -40,10 +39,10 @@ perf_match, groundtruth_alignment, score_match = pt.load_match(
 )
 
 # compute note arrays from the loaded score and performance
-pna_match = perf_match.note_array()
-sna_match = score_match.note_array()
+pna_match = perf_match[0].note_array()
+sna_match = score_match[0].note_array()
 
-# match the notes in the note arrays
+# match the notes in the note arrays --------------------- DualDTWNoteMatcher
 sdm = pa.AutomaticNoteMatcher()
 pred_alignment = sdm(sna_match, 
                      pna_match,
@@ -61,6 +60,33 @@ for alignment_type in types:
           'Recall ',format(recall, '.3f'),
           'F-Score ',format(f_score, '.3f'))
     print('------------------')
+
+
+
+
+# this matcher requires grace note info
+sna_match = score_match[0].note_array(include_grace_notes=True)
+
+# match the notes in the note arrays --------------------- DualDTWNoteMatcher
+sdm = pa.DualDTWNoteMatcher()
+pred_alignment = sdm(sna_match, 
+                     pna_match,
+                     process_ornaments=False,
+                     score_part=score_match[0]) # if a score part is passed, ornaments can be handled seperately
+
+# compute f-score and print the results
+print('------------------')
+types = ['match','insertion', 'deletion']
+for alignment_type in types:
+    precision, recall, f_score = pa.fscore_alignments(pred_alignment, 
+                                                      groundtruth_alignment, 
+                                                      alignment_type)
+    print('Evaluate ',alignment_type)
+    print('Precision: ',format(precision, '.3f'),
+          'Recall ',format(recall, '.3f'),
+          'F-Score ',format(f_score, '.3f'))
+    print('------------------')
+
 ```
 
 Aligning MusicXML Scores and MIDI Performances
@@ -79,7 +105,8 @@ sna = score.note_array()
 
 # match the notes in the note arrays
 sdm = pa.AutomaticNoteMatcher()
-pred_alignment = sdm(sna_match, pna_match)
+pred_alignment = sdm(sna, pna)
+
 ```
 
 2 - Anchor Point Alignment: `AnchorPointNoteMatcher` 
@@ -129,42 +156,41 @@ for alignment_type in types:
 ----
 
 ```python
-import partitura as pt
 import parangonar as pa
+import partitura as pt
 
-### TODO
+perf_match, groundtruth_alignment, score_match = pt.load_match(
+    filename= pa.EXAMPLE,
+    create_score=True
+)
+
+# compute note arrays from the loaded score and performance
+pna_match = perf_match[0].note_array()
+# this matcher requires grace note info
+sna_match = score_match[0].note_array(include_grace_notes=True)
+
+# set up the matcher using the score information: OnlineTransformerMatcher / OnlinePureTransformerMatcher
+matcher = pa.OnlinePureTransformerMatcher(sna_match)
+
+# the "offline" method loops over all notes in the performance and calls the "online" method for each one.
+pred_alignment = matcher.offline(pna_match)
+
+# compute f-score and print the results
+print('------------------')
+types = ['match','insertion', 'deletion']
+for alignment_type in types:
+    precision, recall, f_score = pa.fscore_alignments(pred_alignment, 
+                                                      groundtruth_alignment, 
+                                                      alignment_type)
+    print('Evaluate ',alignment_type)
+    print('Precision: ',format(precision, '.3f'),
+          'Recall ',format(recall, '.3f'),
+          'F-Score ',format(f_score, '.3f'))
+    print('------------------')
 ```
 
-
-
-
-
-4 - File I/O for note alignments
+4 - Visualize Alignment
 ----
-
-```python
-import partitura as pt
-import parangonar as pa
-
-# load note alignments of the asap dataset: 
-# https://github.com/CPJKU/asap-dataset/tree/note_alignments
-alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/note_alignment.tsv')
-
-# export a note alignment for visualization with parangonada:
-# https://sildater.github.io/parangonada/
-pa.match.save_parangonada_csv(alignment, 
-                            performance_data,
-                            score_data,
-                            outdir="path/to/dir")
-
-# import a corrected note alignment from parangonada:
-# https://sildater.github.io/parangonada/
-alignment = pt.io.importparangonada.load_parangonada_alignment(filename= 'path/to/note_alignment.csv')
-```
-
-5 - Visualize Alignment
-----
-
 
 ```python
 import parangonar as pa
@@ -180,10 +206,67 @@ sna_match = score_match.note_array()
 # show or save plot of note alignment
 pa.plot_alignment(pna_match,
                 sna_match,
-                alignment,
+                alignment,s
                 save_file = False)
+
+# or plot the performance and score as piano rolls given a reference: 
+# we can encode errors if given ground truth
+# Blue lines indicate correct matches, red lines incorrect ones.
+pa.plot_alignment_comparison(pna_match, sna_match, 
+                         pred_alignment, groundtruth_alignment)
 ```
 
+5 - File I/O for note alignments
+----
+
+Most I/O functions are handled by partitura. 
+For [Parangonada](https://sildater.github.io/parangonada/):
+- pt.io.importparangonada.load_parangonada_alignment
+- pt.io.importparangonada.load_parangonada_csv
+- pt.io.exportparangonada.save_parangonada_alignment
+- pt.io.exportparangonada.save_parangonada_csv
+
+For [(n)ASAP alignments](https://github.com/CPJKU/asap-dataset)
+- pt.io.importparangonada.load_alignment_from_ASAP
+- pt.io.exportparangonada.save_alignment_for_ASAP
+
+For [match files](https://cpjku.github.io/matchfile/)
+- pt.io.importmatch.load_match
+- pt.io.exportmatch.save_match
+
+and a basic interface for saving parangonada-ready csv files is also available:
+
+----
+
+```python
+import partitura as pt
+import parangonar as pa
+
+# export a note alignment for visualization with parangonada:
+# https://sildater.github.io/parangonada/
+pa.match.save_parangonada_csv(alignment, 
+                            performance_data,
+                            score_data,
+                            outdir="path/to/dir")
+
+
+# import a corrected note alignment from parangonada:
+# https://sildater.github.io/parangonada/
+alignment = pt.io.importparangonada.load_parangonada_alignment(filename= 'path/to/note_alignment.csv')
+
+# load note alignments of the asap dataset: 
+# https://github.com/CPJKU/asap-dataset/tree/note_alignments
+alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/note_alignment.tsv')
+```
+
+
+6 - Aligned Data
+----
+
+These note-aligned datasets are publically available:
+- [Vienna 4x22](https://github.com/CPJKU/vienna4x22)
+- [(n)ASAP note alignments](https://github.com/CPJKU/asap-dataset)
+- [Batik Dataset](https://github.com/huispaty/batik_plays_mozart)
 
 Publications
 =====
@@ -216,7 +299,8 @@ The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTra
 }
 ```
 
-## Acknowledgments
+Acknowledgments
+=======
 
 This work is supported by the European Research Council (ERC) under the EU’s Horizon 2020 research & innovation programme, grant agreement No. 10101937 (”Wither Music?”).
 
