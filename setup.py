@@ -19,6 +19,7 @@ REQUIRED = [
     'numpy',
     'scipy',
     'torch',
+    'matplotlib',
     'partitura>=1.1.0',
 ]
 

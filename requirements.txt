@@ -2,3 +2,4 @@ numpy
 scipy
 partitura==1.1.1
 torch
+matplotlib
