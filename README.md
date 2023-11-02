@@ -204,13 +204,12 @@ The anchor point-enhanced `AnchorPointNoteMatcher` and the automatic `AutomaticN
 and the former is used in the creation of the [note-aligned (n)ASAP Dataset](https://github.com/CPJKU/asap-dataset).
 
 
-The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTransformerMatcher` are described in:
+The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTransformerMatcher` / `OnlinePureTransformerMatcher` are described in:
 
 
 ```
 @inproceedings{peter-2023,
-  title={Online Symbolic Music Alignment with Offline
-Reinforcement Learning},
+  title={Online Symbolic Music Alignment with Offline Reinforcement Learning},
   author={Peter, Silvan David},
   booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
   year={2023}

@@ -359,8 +359,6 @@ class OnlinePureTransformerMatcher(object):
         self.score_by_pitch = defaultdict(list)
         unique_pitches = np.unique(self.score_note_array_full["pitch"])
         for pitch in unique_pitches:
-            # self.score_by_pitch[pitch] += list(self.score_note_array_full[
-            #     self.score_note_array_full["pitch"] == pitch])
             self.score_by_pitch[pitch] = self.score_note_array_full[self.score_note_array_full["pitch"] == pitch]
         
         self.number_of_grace_notes_at_onset = defaultdict(int)
@@ -415,7 +413,7 @@ class OnlinePureTransformerMatcher(object):
             dropout_p = 0.1
             )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(r"PATH TO CHECKPOINT", 
+        checkpoint = torch.load(parangonar.ALIGNMENT_TRANSFORMER_CHECKPOINT), 
                                 map_location=torch.device(self.device))
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
