@@ -204,6 +204,8 @@ def cut_note_arrays(performance_note_array,
     return score_note_arrays, performance_note_arrays
 
 
+
+
 ################################### SEGMENT MENDING ###################################
 
 
@@ -337,3 +339,33 @@ def mend_note_alignments(note_alignments,
     return alignment, score_alignment, performance_alignment
 
 
+
+################################### NOTE ARRAY ###################################
+
+
+def note_per_ons_encoding(sarray):
+    """
+    create an onset-wise pitch based encoding
+    of score note arrays
+    """
+    score_onsets = np.unique(sarray["onset_beat"])
+    
+    how_many_notes_per_ons = list()
+    notes_per_ons = dict()
+    
+    
+    # get unique pitches per score onset
+    for ons in score_onsets:
+        notes_per_ons[ons] = np.unique(sarray[sarray["onset_beat"] == ons]["pitch"])
+        how_many_notes_per_ons.append(notes_per_ons[ons].shape[0])
+    
+    how_many_notes_per_ons = np.array(how_many_notes_per_ons)
+    max_notes_per_ons = np.max(how_many_notes_per_ons)
+    score_note_per_ons_encoding = np.ones((score_onsets.shape[0], max_notes_per_ons))*-1
+    
+    # encode unique pitches per onset in array
+    for idx, ons in enumerate(score_onsets):
+        notes = notes_per_ons[ons]
+        score_note_per_ons_encoding[idx,:notes.shape[0]] = notes
+        
+    return score_note_per_ons_encoding

@@ -13,6 +13,15 @@ def element_of_metric(vec1, vec2):
     """
     return 1 - np.sum(vec2 == vec1)
 
+def element_of_set_metric(element_, set_):
+    """
+    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
+    """
+    if element_ in set_: 
+        return 0.0
+    else: 
+        return 1.0
+
 
 def l2(vec1, vec2):
     """
@@ -27,8 +36,10 @@ class DynamicTimeWarping(object):
     """
     
     def __init__(self, 
-                 metric= 'euclidean'):
+                 metric= 'euclidean',
+                 cdist_local=False):
         self.metric = metric
+        self.cdist_local = cdist_local
 
     def __call__(self, X, Y, return_path=True,
                  return_cost_matrix=False):
@@ -36,7 +47,10 @@ class DynamicTimeWarping(object):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
-        D = cdist(X, Y, self.metric)
+        if self.cdist_local:
+            D = cdist_local(X, Y, self.metric)
+        else:
+            D = cdist(X, Y, self.metric)
         # Compute accumulated cost matrix
         dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
         dtwd_distance = dtwd_matrix[-1, -1]
@@ -54,6 +68,40 @@ class DynamicTimeWarping(object):
 
 # alias
 DTW = DynamicTimeWarping
+
+class DynamicTimeWarpingSingleLoop(object):
+    """
+    pure python vanilla Dynamic Time Warping
+    """
+    
+    def __init__(self, 
+                 metric=element_of_set_metric):
+                self.metric = metric
+
+    def __call__(self, 
+                 X, Y, 
+                 return_path=True,
+                 return_cost_matrix=False):
+
+       # Compute the pw distances and accumulated cost matrix
+        dtwd_matrix = cdist_dtw_single_loop(X, Y, self.metric)
+        
+        # dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
+        dtwd_distance = dtwd_matrix[-1, -1]
+
+        # Output
+        out = (dtwd_distance, )
+
+        if return_path:
+            # Compute alignment path
+            path = dtw_backtracking(dtwd_matrix)
+            out += (path,)
+        if return_cost_matrix:
+            out += (dtwd_matrix, )
+        return out
+    
+# alias
+DTWSL = DynamicTimeWarpingSingleLoop
     
 def dtw_backtracking(dtwd):
     """
@@ -131,33 +179,31 @@ def dtw_backtracking(dtwd):
 
     return np.array(path[::-1], dtype=int)
 
-
-# def cdist(arr1, arr2, metric):
-#     """
-#     compute array of pairwise distances between 
-#     the elements of two arrays given a metric
+def cdist_local(arr1, arr2, metric):
+    """
+    compute array of pairwise distances between 
+    the elements of two arrays given a metric
     
-#     Parameters
-#     ----------
-#     arr1: numpy nd array
+    Parameters
+    ----------
+    arr1: numpy nd array
     
-#     arr2: numpy nd array
+    arr2: numpy nd array
     
-#     metric> callable
-#         a metric function
+    metric: callable
+        a metric function
     
-#     Returns
-#     -------
+    Returns
+    -------
     
-#     pdist_array: numpy 2d array
-#         array of pairwise distances
-#     """
-#     pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
-#     for i in range(arr1.shape[0]):
-#         for j in range(arr2.shape[0]):
-#             pdist_array[i, j] = metric(arr1[i], arr2[j])
-#     return pdist_array
-
+    pdist_array: numpy 2d array
+        array of pairwise distances
+    """
+    pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
+    for i in range(arr1.shape[0]):
+        for j in range(arr2.shape[0]):
+            pdist_array[i, j] = metric(arr1[i], arr2[j])
+    return pdist_array
 
 def dtw_dmatrix_from_pairwise_dmatrix(D):
     """
@@ -191,3 +237,46 @@ def dtw_dmatrix_from_pairwise_dmatrix(D):
             dtwd[i, j] = c + min((insertion, deletion, match))
 
     return (dtwd[1:, 1:])
+
+def cdist_dtw_single_loop(arr1, arr2, metric):
+    """
+
+    compute  a pairwise distance matrix
+    and its dynamic time warping cost matrix 
+    
+    Parameters
+    ----------
+    
+    arr1: numpy nd array or list
+    
+    arr2: numpy nd array or list
+    
+    metric> callable
+        a metric function
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    """
+    # Initialize arrays and helper variables
+    M = len(arr1) #arr1.shape[0]
+    N = len(arr2) #arr2.shape[0]
+
+    # pdist_array = np.ones((M,N))*np.inf
+    # the dtwd distance matrix is initialized with INFINITY
+    dtwd = np.ones((M + 1, N + 1),dtype=float) * np.inf
+    
+    # Compute the distance iteratively
+    dtwd[0, 0] = 0
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            # pdist_array[i-1, j-1] = metric(arr1[i-1], arr2[j-1])
+            # c = pdist_array[i - 1, j - 1]
+            c = metric(arr1[i-1], arr2[j-1])
+            insertion = dtwd[i - 1, j]
+            deletion = dtwd[i, j - 1]
+            match = dtwd[i - 1, j - 1]
+            dtwd[i, j] = c + min((insertion, deletion, match))
+
+    return dtwd[1:, 1:] #pdist_array
