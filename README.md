@@ -11,7 +11,7 @@ Installation
 -------
 
 The easiest way to install the package is via `pip` from the [PyPI (Python
-Package Index)](https://pypi.python.org/pypi>):
+Package Index)](https://pypi.org/project/parangonar/>):
 ```shell
 pip install parangonar
 ```
