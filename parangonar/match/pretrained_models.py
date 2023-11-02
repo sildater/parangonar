@@ -10,21 +10,18 @@ from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.transformer import _get_clones
 from torch.nn.modules.normalization import LayerNorm
 from torch.nn.init import *
-
 from torch.nn.functional import linear, softmax, dropout
 
+# RELATIVE ATTENTION
+
+"""
+Relative attention classes below are taken / modified from Pytorch, modified by Damon Gwinn
+For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
+https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/activation.html#MultiheadAttention
+Modification to add RPR embedding Er and call custom multi_head_attention_forward_rpr
+"""
 
 class TransformerEncoderRPR(Module):
-    """
-    ----------
-    Author: Pytorch
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/transformer.html#TransformerEncoder
-    No modification. Copied here to ensure continued compatibility with other edits.
-    ----------
-    """
-
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(TransformerEncoderRPR, self).__init__()
         self.layers = _get_clones(encoder_layer, num_layers)
@@ -46,17 +43,6 @@ class TransformerEncoderRPR(Module):
 
 # TransformerEncoderLayerRPR
 class TransformerEncoderLayerRPR(Module):
-    """
-    ----------
-    Author: Pytorch
-    Modified: Damon Gwinn
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/transformer.html#TransformerEncoderLayer
-    Modification to create and call custom MultiheadAttentionRPR
-    ----------
-    """
-
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation = F.relu, er_len=None):
         super(TransformerEncoderLayerRPR, self).__init__()
         self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
@@ -83,17 +69,6 @@ class TransformerEncoderLayerRPR(Module):
 
 # MultiheadAttentionRPR
 class MultiheadAttentionRPR(Module):
-    """
-    ----------
-    Author: Pytorch
-    Modified: Damon Gwinn
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/modules/activation.html#MultiheadAttention
-    Modification to add RPR embedding Er and call custom multi_head_attention_forward_rpr
-    ----------
-    """
-
     def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None, er_len=None):
         super(MultiheadAttentionRPR, self).__init__()
         self.embed_dim = embed_dim
@@ -226,17 +201,6 @@ def multi_head_attention_forward_rpr(query,                       # type: Tensor
                                  static_v=None,                   # type: Optional[Tensor]
                                  rpr_mat=None
                                  ):
-    """
-    ----------
-    Author: Pytorch
-    Modified: Damon Gwinn
-    ----------
-    For Relative Position Representation support (https://arxiv.org/abs/1803.02155)
-    https://pytorch.org/docs/1.2.0/_modules/torch/nn/functional.html
-    Modification to take RPR embedding matrix and perform skew optimized RPR (https://arxiv.org/abs/1809.04281)
-    ----------
-    """
-
     # type: (...) -> Tuple[Tensor, Optional[Tensor]]
 
     qkv_same = torch.equal(query, key) and torch.equal(key, value)
@@ -430,27 +394,11 @@ def multi_head_attention_forward_rpr(query,                       # type: Tensor
         return attn_output, None
 
 def _get_valid_embedding(Er, len_q, len_k):
-    """
-    ----------
-    Author: Damon Gwinn
-    ----------
-    Gets valid embeddings based on max length of RPR attention
-    ----------
-    """
-
     len_e = Er.shape[0]
     start = max(0, len_e - len_q)
     return Er[start:, :]
 
 def _skew(qe):
-    """
-    ----------
-    Author: Damon Gwinn
-    ----------
-    Performs the skew optimized RPR computation (https://arxiv.org/abs/1809.04281)
-    ----------
-    """
-
     sz = qe.shape[1]
     mask = (torch.triu(torch.ones(sz, sz).to(qe.device)) == 1).float().flip(0)
 
@@ -461,17 +409,7 @@ def _skew(qe):
     srel = qe[:, 1:, :]
     return srel
 
-
 class DummyDecoder(nn.Module):
-    """
-    ----------
-    Author: Damon Gwinn
-    ----------
-    A dummy decoder that returns its input. Used to make the Pytorch transformer into a decoder-only
-    architecture (stacked encoders with dummy decoder fits the bill)
-    ----------
-    """
-
     def __init__(self):
         super(DummyDecoder, self).__init__()
 
@@ -482,43 +420,10 @@ class DummyDecoder(nn.Module):
                 memory_mask,
                 tgt_key_padding_mask,
                 memory_key_padding_mask):
-        """
-        ----------
-        Author: Damon Gwinn
-        ----------
-        Returns the input (memory)
-        ----------
-        """
 
         return memory
 
-
-
-
-# RELATIVE ATTENTION END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# ALIGNMENT TRANSFORMER
 
 class PositionalEncoding(nn.Module):
     def __init__(self, 

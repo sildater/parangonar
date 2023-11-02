@@ -8,7 +8,7 @@ web tool [Parangonda](https://sildater.github.io/parangonada/)
 
 
 Installation
-==========
+-------
 
 The easiest way to install the package is via `pip` from the [PyPI (Python
 Package Index)](https://pypi.python.org/pypi>):
@@ -18,7 +18,7 @@ pip install parangonar
 This will install the latest release of the package and will install all dependencies automatically.
 
 
-Quickstart
+Quickstart Examples
 ==========
 
 The following code loads the contents of a a previously aligned performance
@@ -26,6 +26,9 @@ and score alignment file (encoded in the [match file format](https://arxiv.org/a
 
 A new alignment is computed using a hierarchical DTW-based note matcher and the resulting
 alignment are compared to the ground truth:
+
+1 - Automatic Note Matching: `AutomaticNoteMatcher` and `DualDTWNoteMatcher`
+-----
 
 ```python
 import parangonar as pa
@@ -60,10 +63,8 @@ for alignment_type in types:
     print('------------------')
 ```
 
-
 Aligning MusicXML Scores and MIDI Performances
-==========
-
+-----
 
 ```python
 import parangonar as pa
@@ -81,33 +82,8 @@ sdm = pa.AutomaticNoteMatcher()
 pred_alignment = sdm(sna_match, pna_match)
 ```
 
-File I/O for note alignments
-==========
-
-```python
-import partitura as pt
-import parangonar as pa
-
-# load note alignments of the asap dataset: 
-# https://github.com/CPJKU/asap-dataset/tree/note_alignments
-alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/note_alignment.tsv')
-
-# export a note alignment for visualization with parangonada:
-# https://sildater.github.io/parangonada/
-pa.match.save_parangonada_csv(alignment, 
-                            performance_data,
-                            score_data,
-                            outdir="path/to/dir")
-
-# import a corrected note alignment from parangonada:
-# https://sildater.github.io/parangonada/
-alignment = pt.io.importparangonada.load_parangonada_alignment(filename= 'path/to/note_alignment.csv')
-```
-
-
-
-Anchor Point Alignment Example
-==========
+2 - Anchor Point Alignment: `AnchorPointNoteMatcher` 
+----
 
 ```python
 import parangonar as pa
@@ -148,8 +124,48 @@ for alignment_type in types:
     print('------------------')
 ```
 
-Visualize Alignment
-==========
+
+3 - Online / Realtime Alignment: `OnlineTransformerMatcher` 
+----
+
+```python
+import partitura as pt
+import parangonar as pa
+
+### TODO
+```
+
+
+
+
+
+4 - File I/O for note alignments
+----
+
+```python
+import partitura as pt
+import parangonar as pa
+
+# load note alignments of the asap dataset: 
+# https://github.com/CPJKU/asap-dataset/tree/note_alignments
+alignment = pt.io.importparangonada.load_alignment_from_ASAP(filename= 'path/to/note_alignment.tsv')
+
+# export a note alignment for visualization with parangonada:
+# https://sildater.github.io/parangonada/
+pa.match.save_parangonada_csv(alignment, 
+                            performance_data,
+                            score_data,
+                            outdir="path/to/dir")
+
+# import a corrected note alignment from parangonada:
+# https://sildater.github.io/parangonada/
+alignment = pt.io.importparangonada.load_parangonada_alignment(filename= 'path/to/note_alignment.csv')
+```
+
+5 - Visualize Alignment
+----
+
+
 ```python
 import parangonar as pa
 import partitura as pt
@@ -167,6 +183,43 @@ pa.plot_alignment(pna_match,
                 alignment,
                 save_file = False)
 ```
+
+
+Publications
+=====
+
+Two publications are associated with models available in **Parangonar**.
+The anchor point-enhanced `AnchorPointNoteMatcher` and the automatic `AutomaticNoteMatcher` are this described in:
+
+```
+@article{nasap-dataset,
+ title = {Automatic Note-Level Score-to-Performance Alignments in the ASAP Dataset},
+ author = {Peter, Silvan David and Cancino-Chacón, Carlos Eduardo and Foscarin, Francesco and McLeod, Andrew Philip and Henkel, Florian and Karystinaios, Emmanouil and Widmer, Gerhard},
+ doi = {10.5334/tismir.149},
+ journal = {Transactions of the International Society for Music Information Retrieval {(TISMIR)}},
+ year = {2023}
+}
+```
+
+and the former is used in the creation of the [note-aligned (n)ASAP Dataset](https://github.com/CPJKU/asap-dataset).
+
+
+The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTransformerMatcher` are described in:
+
+
+```
+@inproceedings{peter-2023,
+  title={Online Symbolic Music Alignment with Offline
+Reinforcement Learning},
+  author={Peter, Silvan David},
+  booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
+  year={2023}
+}
+```
+
+## Acknowledgments
+
+This work is supported by the European Research Council (ERC) under the EU’s Horizon 2020 research & innovation programme, grant agreement No. 10101937 (”Wither Music?”).
 
 License
 =======
