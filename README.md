@@ -21,10 +21,13 @@ This will install the latest release of the package and will install all depende
 Getting Started
 ==========
 
-The following code loads the contents of a a previously aligned performance
+The following code snippets load the contents of a a previously aligned performance
 and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)). 
 
 A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth:
+
+For an interactive version of these snippets, check the `getting_started.ipynb` notebook.
+
 
 1 - Automatic Note Matching: `AutomaticNoteMatcher` and `DualDTWNoteMatcher`
 -----
@@ -152,7 +155,7 @@ for alignment_type in types:
 ```
 
 
-3 - Online / Realtime Alignment: `OnlineTransformerMatcher` 
+3 - Online / Realtime Alignment: `OnlineTransformerMatcher` and `OnlinePureTransformerMatcher` 
 ----
 
 ```python

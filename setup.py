@@ -5,7 +5,6 @@ import io
 import os
 from setuptools import find_packages, setup
 
-
 # Package meta-data.
 NAME = 'parangonar'
 DESCRIPTION = 'Symbolic music alignment'
