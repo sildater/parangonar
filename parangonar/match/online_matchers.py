@@ -187,8 +187,8 @@ class OnlineTransformerMatcher(object):
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
 
-    def prepare_performance(self, first_onset):
-        self.tempo_model = TempoModel(init_beat_period = 0.5,
+    def prepare_performance(self, first_onset, init_beat_period = 0.5):
+        self.tempo_model = TempoModel(init_beat_period = init_beat_period,
                                     init_score_onset = self.score_note_array_full["onset_beat"][0],
                                     init_perf_onset = first_onset,
                                     lookback = 1)
@@ -297,6 +297,9 @@ class OnlineTransformerMatcher(object):
 
     def __call__(self):
         return None
+    
+    def get_current_score_onset(self):
+        return self._prev_score_onset
 
 
 def perf_tokenizer(pitch, dims = 7):

@@ -122,6 +122,7 @@ def plot_alignment_comparison(
          alignment1, 
          alignment2, 
          save_file = False,
+         return_figure = False,
          fname = "note_alignments",
          ):
     
@@ -201,7 +202,10 @@ def plot_alignment_comparison(
         plt.savefig(fname+".png")
         plt.close(f)
     else:
-        plt.show()
+        if return_figure:
+            return f
+        else:
+            plt.show()
         
 
 def plot_alignment_mappings(
