@@ -123,6 +123,7 @@ def plot_alignment_comparison(
          alignment2, 
          save_file = False,
          return_figure = False,
+         figsize = (100, 10),
          fname = "note_alignments",
          ):
     
@@ -154,7 +155,7 @@ def plot_alignment_comparison(
     plot_array[:128,:xml_piano_roll.shape[1]] = xml_piano_roll.todense()
     plot_array[50+128:,:midi_piano_roll.shape[1]] = dense_midi_pr
 
-    f, axs = plt.subplots(1,1,figsize=(100, 10))
+    f, axs = plt.subplots(1,1,figsize=figsize)
     axs.matshow(plot_array, aspect = "auto",  origin='lower')
     hexadecimal_alphabets = '0123456789ABCDEF'
 

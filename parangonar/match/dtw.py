@@ -102,6 +102,45 @@ class DynamicTimeWarpingSingleLoop(object):
     
 # alias
 DTWSL = DynamicTimeWarpingSingleLoop
+
+class DynamicTimeWarpingSimilarityMatrix(object):
+    """
+    pure python vanilla Dynamic Time Warping
+    where the input is a pairwise similarity matrix.
+    """
+    
+    def __init__(self, 
+                 inversion = "reciprocal",
+                 directional_weights = [1, 1, 1]):
+        self.inversion = inversion
+        self.directional_weights = directional_weights
+
+    def __call__(self, S, return_path=True,
+                 return_cost_matrix=False):
+
+        # Compute distance matrix from similarity
+        if self.inversion == "reciprocal":
+            D = 1/(S + 1e-4)
+        else:
+            D = -S
+        # Compute accumulated cost matrix fro
+        dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D,
+                                                        self.directional_weights)
+        dtwd_distance = dtwd_matrix[-1, -1]
+
+        # Output
+        out = (dtwd_distance, )
+
+        if return_path:
+            # Compute alignment path
+            path = dtw_backtracking(dtwd_matrix)
+            out += (path,)
+        if return_cost_matrix:
+            out += (dtwd_matrix, )
+        return out
+    
+# alias
+DTWSM = DynamicTimeWarpingSimilarityMatrix
     
 def dtw_backtracking(dtwd):
     """
@@ -205,7 +244,8 @@ def cdist_local(arr1, arr2, metric):
             pdist_array[i, j] = metric(arr1[i], arr2[j])
     return pdist_array
 
-def dtw_dmatrix_from_pairwise_dmatrix(D):
+def dtw_dmatrix_from_pairwise_dmatrix(D, 
+                                      directional_weights = [1, 1, 1]):
     """
     compute dynamic time warping cost matrix 
     from a pairwise distance matrix
@@ -231,9 +271,9 @@ def dtw_dmatrix_from_pairwise_dmatrix(D):
     for i in range(1, M + 1):
         for j in range(1, N + 1):
             c = D[i - 1, j - 1]
-            insertion = dtwd[i - 1, j]
-            deletion = dtwd[i, j - 1]
-            match = dtwd[i - 1, j - 1]
+            insertion = directional_weights[0] * dtwd[i - 1, j]
+            deletion =  directional_weights[2] *dtwd[i, j - 1]
+            match = directional_weights[1] * dtwd[i - 1, j - 1]
             dtwd[i, j] = c + min((insertion, deletion, match))
 
     return (dtwd[1:, 1:])
