@@ -2,10 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 This module contains dynamic time warping methods.
+
+
+
+
 """
 
 import numpy as np
 from scipy.spatial.distance import cdist
+import numba
+from numba import jit
+
+# helpers and metrics
 
 def element_of_metric(vec1, vec2):
     """
@@ -42,6 +50,123 @@ def invert_matrix(S,
     if positive:
         D -= D.min()
     return D  
+
+def cdist_local(arr1, arr2, metric):
+    """
+    compute array of pairwise distances between 
+    the elements of two arrays given a metric
+    
+    Parameters
+    ----------
+    arr1: numpy nd array
+    
+    arr2: numpy nd array
+    
+    metric: callable
+        a metric function
+    
+    Returns
+    -------
+    
+    pdist_array: numpy 2d array
+        array of pairwise distances
+    """
+    pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
+    for i in range(arr1.shape[0]):
+        for j in range(arr2.shape[0]):
+            pdist_array[i, j] = metric(arr1[i], arr2[j])
+    return pdist_array
+
+# DTW classes
+
+class WeightedDynamicTimeWarping(object):
+    """
+    Generalized Weighted Dynamic Time Warping.
+
+    Parameters
+    ----------
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+
+    """
+    def __init__(self, 
+                 directional_weights = np.array([1, 1, 1]),
+                 directions = np.array([[1, 0],[1, 1],[0, 1]]),
+                 metric= 'euclidean',
+                 cdist_local= False):
+        self.directional_weights = directional_weights
+        self.directions = directions
+        self.metric = metric
+        self.cdist_local = cdist_local
+        
+    def __call__(self, X, Y, 
+                 return_matrices = False,
+                 return_cost = False):
+        """
+        Parameters
+        ----------
+        X : np.ndarray
+            sequence 1 features, 1 row per step.
+        Y : np.ndarray
+            sequence 2 features, 1 row per step.
+        return_matrices: bool
+            return accumulated cost matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
+
+        X = np.asanyarray(X, dtype=float)
+        Y = np.asanyarray(Y, dtype=float)
+        # Compute pairwise distance
+        if self.cdist_local:
+            pwD = cdist_local(X, Y, self.metric)
+        else:
+            pwD = cdist(X, Y, self.metric)
+
+        out = self.from_distance_matrix(self, pwD,
+                             return_matrices = return_matrices,
+                             return_cost = return_cost)
+        return out
+        
+    def from_distance_matrix(self, pwD,
+                             return_matrices = False,
+                             return_cost = False):
+        """
+            Parameters
+        ----------
+        pwD : np.ndarray
+            pairwise distance matrix
+        return_matrices: bool
+            return accumulated costmatrix, backtracking, and
+            starting point matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
+
+        D, path = weighted_dtw_forward_and_backward(pwD,
+                                            self.directional_weights,
+                                            self.directions)
+        out = (path,)
+        if return_matrices:
+            out += (D,)
+        if return_cost:
+            out += (D[path[-1,0],path[-1,1]],)
+        return out
+
+# alias
+WDTW = WeightedDynamicTimeWarping
 
 class DynamicTimeWarping(object):
     """
@@ -116,47 +241,54 @@ class DynamicTimeWarpingSingleLoop(object):
 # alias
 DTWSL = DynamicTimeWarpingSingleLoop
 
-class WeightedDynamicTimeWarpingDistanceMatrix(object):
-    """
-    pure python weighted Dynamic Time Warping
-    where the input is a pairwise distance matrix.
-    """
-    
-    def __init__(self, 
-                 directional_weights = [1, 1, 1]):
-        self.directional_weights = directional_weights
-
-    def __call__(self, D, 
-                 return_cost_matrix=False):
-
-        # Compute accumulated cost matrix from D
-        dtwd_matrix, path = weighted_dtw_forward_and_backward(D,
-                                                        self.directional_weights)
-       
-        if return_cost_matrix:
-            return path, dtwd_matrix
-        else:
-            return path
-    
-# alias
-WDTWDM = WeightedDynamicTimeWarpingDistanceMatrix
-
 class FlexDynamicTimeWarping(object):
     """
     FlexDTW: https://ismir2023program.ismir.net/poster_235.html
     from two vectors
+
+    Parameters
+    ----------
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+    buffer: int
+        buffer zone for flexible path end point
+
     """
     def __init__(self, 
-                 directional_weights = [1, 1, 1],
-                 buffer = 100,
+                 directional_weights = np.array([1, 1, 1]),
+                 directions = np.array([[1, 0],[1, 1],[0, 1]]),
+                 buffer = 1,
                  metric= 'euclidean',
-                 cdist_local=False):
+                 cdist_local= False):
         self.directional_weights = directional_weights
+        self.directions = directions
         self.buffer = buffer
         self.metric = metric
         self.cdist_local = cdist_local
         
-    def __call__(self, X, Y, return_matrices = False):
+    def __call__(self, X, Y, 
+                 return_matrices = False,
+                 return_cost = False):
+        """
+        Parameters
+        ----------
+        X : np.ndarray
+            sequence 1 features, 1 row per step.
+        Y : np.ndarray
+            sequence 2 features, 1 row per step.
+        return_matrices: bool
+            return accumulated costmatrix, backtracking, and
+            starting point matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
 
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
@@ -165,51 +297,125 @@ class FlexDynamicTimeWarping(object):
             pwD = cdist_local(X, Y, self.metric)
         else:
             pwD = cdist(X, Y, self.metric)
-    
-        # Compute accumulated cost matrix fro
-        D, B, S = flexdtw_dmatrix_from_pairwise_dmatrix(pwD,
-                                        self.directional_weights)
-        
-        path = flexdtw_backtracking(D, B, S, buffer = self.buffer)
 
+        out = self.from_distance_matrix(self, pwD,
+                             return_matrices = return_matrices,
+                             return_cost = return_cost)
+        return out
+        
+    def from_distance_matrix(self, pwD,
+                             return_matrices = False,
+                             return_cost = False):
+        """
+            Parameters
+        ----------
+        pwD : np.ndarray
+            pairwise distance matrix
+        return_matrices: bool
+            return accumulated costmatrix, backtracking, and
+            starting point matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
+        path, D, B, S = flexdtw_forward_and_backward(pwD,
+                                            self.directional_weights,
+                                            self.directions)
+        out = (path, )
         if return_matrices:
-            return path, D, B, S
-        else:
-            return path
+            out += (D, B, S,)
+        if return_cost:
+            out += (D[path[-1,0],path[-1,1]])
+        return out
 
 # alias
 FDTW = FlexDynamicTimeWarping
 
-class FlexDynamicTimeWarpingDistanceMatrix(object):
+# DTW fw + bw
+
+@jit(nopython=True)
+def weighted_dtw_forward_and_backward(pwD, 
+                                      directional_weights = np.array([1, 1, 1]),
+                                      directions = np.array([[1, 0],[1, 1],[0, 1]])):
     """
-    FlexDTW: https://ismir2023program.ismir.net/poster_235.html
-    from pairwise distance matrix
+    compute dynamic time warping cost matrix
+    and backtracking path
+    from weighted directions and
+    a pairwise distance matrix
+
+    Parameters
+    ----------
+    D : np.ndarray
+        Pairwise distance matrix (computed e.g., with `cdist`).
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    path: np.ndarray
+        backtracked path
     """
+    # Initialize arrays and helper variables
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+    # the dtwd distance matrix is initialized with INFINITY
+    D = np.ones((M + 1, N + 1),dtype=float) * np.inf
+    # Backtracking
+    B = np.ones((M, N),dtype=np.int8) * -1
     
-    def __init__(self, 
-                 directional_weights = [1, 1, 1],
-                 buffer = 100):
-        self.directional_weights = directional_weights
-        self.buffer = buffer
-        
-    def __call__(self, 
-                 pwD, 
-                 return_matrices = False):
+    # Compute the distance iteratively
+    D[0, 0] = 0
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            mincost = np.inf
+            minidx = -1
+            bestiprev = -1
+            bestjprev = -1
+            for directionsidx, direction in enumerate(directions):
+                (istep, jstep) = direction
+                previ = i - istep
+                prevj = j - jstep
+                if previ >= 0 and prevj >= 0:      
+                    cost = D[previ, prevj] + pwD[i - 1, j - 1] * directional_weights[directionsidx]                    
+                    if cost < mincost:
+                        mincost = cost
+                        minidx = directionsidx
+                        bestiprev = previ
+                        bestjprev = prevj
+                        
+            D[i, j] = D[bestiprev, bestjprev] + pwD[i - 1, j - 1] * directional_weights[minidx]
+            B[i - 1, j - 1] = minidx
 
-        # Compute accumulated cost matrix fro
-        D, B, S = flexdtw_dmatrix_from_pairwise_dmatrix(pwD,
-                                        self.directional_weights)
-        
-        path = flexdtw_backtracking(D, B, S, buffer = self.buffer)
-
-        if return_matrices:
-            return path, D, B, S
+    # return (dtwd[1:, 1:])
+    n = N - 1
+    m = M - 1
+    step = [m, n]
+    path = [step]
+    # initialize boolean variables for stopping decoding
+    crit = True
+    while crit:
+        if n == 0 and m == 0:
+            crit = False
         else:
-            return path
+            backtracking_pointer = B[m, n]
+            bt_vector = directions[backtracking_pointer]
+            m -= bt_vector[0]
+            n -= bt_vector[1]
+            step = [m, n]
+        # append next step to the path
+        path.append(step)
 
-# alias
-FDTWDM = FlexDynamicTimeWarpingDistanceMatrix
-
+    output_path = np.array(path, dtype=np.int32)[::-1]
+    output_D = D[1:, 1:]
+    return  output_D, output_path
 
 def dtw_backtracking(dtwd):
     """
@@ -287,149 +493,6 @@ def dtw_backtracking(dtwd):
 
     return np.array(path[::-1], dtype=int)
 
-def flexdtw_backtracking(D, B, S, buffer = 100):
-    """
-    Decode path from the accumulated dtw cost matrix,
-    backtrace matrix, and starting point matrix
-
-    Parameters
-    ----------
-    D : np.ndarray
-        Accumulated cost matrix
-    B : np.ndarray
-        backtrace matrix
-    S : np.ndarray
-        starting point matrix
-    
-    Returns
-    -------
-    path : np.ndarray
-       A 2D array of size (n_steps, 2), where i-th row has elements 
-       (i_m, i_n) where i_m represents the index in the input array
-       and i_n represents the corresponding index in the reference array.
-    """
-    
-    N = D.shape[0]
-    M = D.shape[1]
-    if buffer > N - 2 or buffer > M - 2:
-        raise ValueError("buffer size needs to be smaller than matrix dimensions")
-    
-    endpoint_candidates_n = np.column_stack((np.arange(buffer, N - 1), np.full(N - buffer - 1, M - 1))) # right column
-    endpoint_candidates_m = np.column_stack((np.full(M - buffer - 1, N - 1), np.arange(buffer, M - 1))) # bottom row
-    ep_c = np.concatenate((endpoint_candidates_n, np.array([[N - 1, M - 1]]), endpoint_candidates_m))
-
-    # import pdb; pdb.set_trace()
-    endpoints_values = D[ep_c[:,0],ep_c[:,1]] / (np.sum(ep_c, axis = 1) - np.abs(S[ep_c[:,0],ep_c[:,1]]))
-    minimal_ep = np.argmin(endpoints_values)
-    n = ep_c[minimal_ep, 0]
-    m = ep_c[minimal_ep, 1]
-    step = np.array([n, m])
-    path = [step]
-
-    # initialize boolean variables for stopping decoding
-    crit = True
-    backtracking_vectors = np.array([[-1, 0],[-1, -1],[0, -1]])
-
-  
-    while crit:
-        if step[0] == 0 or step[1] == 0:
-            crit = False
-
-        else:
-            backtracking_pointer = B[step[0], step[1]]
-            bt_vector = backtracking_vectors[backtracking_pointer,:]
-            step = np.copy(step) + bt_vector
-            path.append(step)
-
-    return np.array(path[::-1], dtype=int)
-
-def weighted_dtw_forward_and_backward(D, 
-                                      directional_weights = [1, 1, 1]):
-    """
-    compute dynamic time warping cost matrix
-    and backtracking path
-    from weighted directions and
-    a pairwise distance matrix
-
-    Parameters
-    ----------
-    D : np.ndarray
-        Pairwise distance matrix (computed e.g., with `cdist`).
-    directional_weights: np.ndarray
-        weights associated with each of the three possible steps
-
-    Returns
-    -------
-    dtwd : np.ndarray
-        Accumulated cost matrix
-    path: np.ndarray
-        backtracked path
-    """
-    # Initialize arrays and helper variables
-    M = D.shape[0]
-    N = D.shape[1]
-    # the dtwd distance matrix is initialized with INFINITY
-    dtwd = np.ones((M + 1, N + 1),dtype=float) * np.inf
-    # Backtracking
-    B = np.ones((M, N),dtype=int) * -1
-    
-    # Compute the distance iteratively
-    dtwd[0, 0] = 0
-    for i in range(1, M + 1):
-        for j in range(1, N + 1):
-            c = D[i - 1, j - 1]
-            insertion = directional_weights[0] * c + dtwd[i - 1, j]
-            match = directional_weights[1] * c + dtwd[i - 1, j - 1]
-            deletion =  directional_weights[2] * c + dtwd[i, j - 1]
-            dtwd[i, j] = min((insertion, deletion, match))
-            B[i - 1, j - 1] = np.argmin((insertion, match, deletion))
-
-    # return (dtwd[1:, 1:])
-    n = N - 1
-    m = M - 1
-    step = np.array([n, m])
-    path = [step]
-    # initialize boolean variables for stopping decoding
-    crit = True
-    backtracking_vectors = np.array([[-1, 0],[-1, -1],[0, -1]])
-    while crit:
-        if step[0] == 0 and step[1] == 0:
-            crit = False
-        else:
-            backtracking_pointer = B[step[0], step[1]]
-            bt_vector = backtracking_vectors[backtracking_pointer,:]
-            step = np.copy(step) + bt_vector
-            path.append(step)
-    output_path = np.array(path[::-1], dtype=int)
-    output_dtwd = dtwd[1:, 1:]
-    return  output_dtwd, output_path
-
-def cdist_local(arr1, arr2, metric):
-    """
-    compute array of pairwise distances between 
-    the elements of two arrays given a metric
-    
-    Parameters
-    ----------
-    arr1: numpy nd array
-    
-    arr2: numpy nd array
-    
-    metric: callable
-        a metric function
-    
-    Returns
-    -------
-    
-    pdist_array: numpy 2d array
-        array of pairwise distances
-    """
-    pdist_array = np.ones((arr1.shape[0],arr2.shape[0]))*np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
-            pdist_array[i, j] = metric(arr1[i], arr2[j])
-    return pdist_array
-
 def dtw_dmatrix_from_pairwise_dmatrix(D):
     """
     compute dynamic time warping cost matrix 
@@ -462,67 +525,6 @@ def dtw_dmatrix_from_pairwise_dmatrix(D):
             dtwd[i, j] = c + min((insertion, deletion, match))
 
     return (dtwd[1:, 1:])
-
-def flexdtw_dmatrix_from_pairwise_dmatrix(pwD, 
-                directional_weights = [1, 1, 1]):
-    """
-    compute felxDTW cost matrix,
-    backtrace matrix, 
-    and starting point matrix 
-    from a pairwise distance matrix
-
-    Parameters
-    ----------
-    pwD : double array
-        Pairwise distance matrix (computed e.g., with `cdist`).
-
-    Returns
-    -------
-    D : np.ndarray
-        Accumulated cost matrix
-    B : np.ndarray
-        backtrace matrix
-    S : np.ndarray
-        starting point matrix
-    """
-    # Initialize arrays and helper variables
-    M = pwD.shape[0]
-    N = pwD.shape[1]
-    # the dtwd distance matrix is initialized with INFINITY
-    D = np.ones((M, N),dtype=float) * np.inf
-    B = np.ones((M, N),dtype=int) * -1
-    S = np.ones((M, N),dtype=int) * -1
-    
-    # initialize matrices
-    M_idx = np.arange(M)
-    N_idx = np.arange(N)
-    D[M_idx,0] = pwD[M_idx,0] 
-    D[0,N_idx] = pwD[0,N_idx] 
-    S[M_idx,0] = M_idx
-    S[0,N_idx] = -N_idx 
-    # Compute the distance iteratively
-    
-    for i in range(1, M):
-        for j in range(1, N):
-            c = pwD[i - 1, j - 1]
-            insertion = directional_weights[0] * c + D[i - 1, j] 
-            match = directional_weights[1] * c + D[i - 1, j - 1]
-            deletion =  directional_weights[2] * c + D[i, j - 1]
-            insertion_normalized = insertion / (i + j - np.abs(S[i - 1, j]))
-            match_normalized = match / (i + j - np.abs(S[i - 1, j - 1]))
-            deletion_normalized =  deletion / (i + j - np.abs(S[i, j - 1]))
-            B[i, j] = np.argmin((insertion_normalized, match_normalized, deletion_normalized))
-            if B[i, j] == 0:
-                D[i, j] = insertion
-                S[i, j] = S[i - 1, j]
-            if B[i, j] == 1:
-                D[i, j] = match
-                S[i, j] = S[i - 1, j - 1]
-            if B[i, j] == 2:
-                D[i, j] = deletion
-                S[i, j] = S[i, j - 1]
-
-    return D, B, S
 
 def cdist_dtw_single_loop(arr1, arr2, metric):
     """
@@ -566,3 +568,221 @@ def cdist_dtw_single_loop(arr1, arr2, metric):
             dtwd[i, j] = c + min((insertion, deletion, match))
 
     return dtwd[1:, 1:] #pdist_array
+
+# FDTW fw + bw
+
+@jit(nopython=True)
+def flexdtw_forward_and_backward(pwD, 
+            directional_weights = np.array([1, 1, 1]),
+            directions = np.array([[1, 0],[1, 1],[0, 1]]),
+            buffer = 1):
+    """
+    compute felxDTW cost matrix,
+    backtrace matrix, 
+    and starting point matrix 
+    from a pairwise distance matrix
+
+    Parameters
+    ----------
+    pwD : double array
+        Pairwise distance matrix (computed e.g., with `cdist`).
+    directional_weights : double array
+        weights for each direction
+    directions : double array
+        directions.
+    buffer : int
+        buffer for candidate end points
+
+    Returns
+    -------
+    D : np.ndarray
+        Accumulated cost matrix
+    B : np.ndarray
+        backtrace matrix
+    S : np.ndarray
+        starting point matrix
+    """
+    # Initialize arrays and helper variables
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+    D = np.zeros((M,N)) #* np.inf
+    B = np.zeros((M,N),dtype=np.int8) #* -1
+    S = np.zeros((M,N),dtype=np.int32) #* -1
+    # initialize matrices
+    M_idx = np.arange(M)
+    N_idx = np.arange(N)
+    D[0,:] = pwD[0,:] 
+    D[:,0] = pwD[:,0] 
+    S[:,0] = M_idx
+    S[0,:] = -N_idx 
+    if buffer > N - 2 or buffer > M - 2:
+        raise ValueError("buffer size needs to be smaller than matrix dimensions")
+
+    # Compute the distance iteratively
+    for i in range(1, M):
+        for j in range(1, N):  
+            mincost = np.inf
+            minidx = -1
+            bestiprev = -1
+            bestjprev = -1
+            for directionsidx, direction in enumerate(directions):
+                (istep, jstep) = direction
+                previ = i - istep
+                prevj = j - jstep
+                if previ >= 0 and prevj >= 0:      
+                    cost = D[previ, prevj] + pwD[i, j] * directional_weights[directionsidx]
+                    if S[previ, previ] >= 0:
+                        dist = i + (j - S[previ, prevj])
+                    else:
+                        dist = i + (j + S[previ, prevj])
+                    cost_per_mb = cost / dist
+                    
+                    if cost_per_mb < mincost:
+                        mincost = cost_per_mb
+                        minidx = directionsidx
+                        bestiprev = previ
+                        bestjprev = prevj
+                        
+            D[i, j] = D[bestiprev, bestjprev] + pwD[i, j] * directional_weights[minidx]
+            B[i, j] = minidx
+            S[i, j] = S[bestiprev, bestjprev]
+
+    # get end point
+    endpoint_candidates_n = np.column_stack((np.arange(buffer, N - 1, dtype=np.int32), np.full(N - buffer - 1, M - 1, dtype=np.int32))) # right column
+    endpoint_candidates_m = np.column_stack((np.full(M - buffer - 1, N - 1, dtype=np.int32), np.arange(buffer, M - 1, dtype=np.int32))) # bottom row
+    ep_c = np.concatenate((endpoint_candidates_n, np.array([[N - 1, M - 1]], dtype=np.int32), endpoint_candidates_m))
+    # endpoints_values = D[ep_c[:,0],ep_c[:,1]] / (np.sum(ep_c, axis = 1) - np.abs(S[ep_c[:,0],ep_c[:,1]]))
+    endpoints_values = np.zeros(ep_c.shape[0])
+    for idx, ep_c_cand in enumerate(ep_c):
+        ep_c1 = ep_c_cand[0]
+        ep_c2 = ep_c_cand[1]
+        endpoints_values[idx] = D[ep_c1, ep_c2] / (ep_c1 + ep_c2 - np.abs(S[ep_c1, ep_c2]))
+    
+    minimal_ep = np.argmin(endpoints_values)
+    m = ep_c[minimal_ep, 0]
+    n = ep_c[minimal_ep, 1]
+    step = (m, n)
+    path = []
+    path.append(step)
+    # loop over backtracking matrix
+    crit = True
+    while crit:
+        if n == 0 or m == 0:
+            crit = False
+        else:
+            backtracking_pointer = B[m, n]
+            bt_vector = directions[backtracking_pointer,:]
+            m -= bt_vector[0]
+            n -= bt_vector[1]
+            step = (m, n)
+        # append next step to the path
+        path.append(step)
+    output_path = np.array(path, dtype = np.int32)[::-1]
+    return output_path, D, B, S
+    # return 1,2,3,4
+
+def flexdtw_dmatrix_from_pairwise_dmatrix(pwD, 
+                directional_weights = np.array([1, 1, 1])):
+    """
+    compute felxDTW cost matrix,
+    backtrace matrix, 
+    and starting point matrix 
+    from a pairwise distance matrix
+
+    Parameters
+    ----------
+    pwD : double array
+        Pairwise distance matrix (computed e.g., with `cdist`).
+
+    Returns
+    -------
+    D : np.ndarray
+        Accumulated cost matrix
+    B : np.ndarray
+        backtrace matrix
+    S : np.ndarray
+        starting point matrix
+    """
+    # Initialize arrays and helper variables
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+    dw = directional_weights
+    D = np.ones((M, N),dtype=float) * np.inf
+    B = np.zeros((M, N),dtype=np.int8) #* -1
+    S = np.zeros((M, N),dtype=np.int32) #* -1
+    # initialize matrices
+    M_idx = np.arange(M)
+    N_idx = np.arange(N)
+    D[:,0] = pwD[:,0] 
+    D[0,:] = pwD[0,:] 
+    S[:,0] = M_idx
+    S[0,:] = -N_idx 
+    # Compute the distance iteratively
+    for i in range(1, M):
+        for j in range(1, N):
+            c = pwD[i, j]
+            S_local = np.array([S[i - 1, j],S[i - 1, j - 1],S[i, j - 1]])
+            D_local = np.array([dw[0] * c + D[i - 1, j],dw[1] * c + D[i - 1, j - 1],dw[2] * c + D[i, j - 1]])
+            B_local = D_local / (i + j - np.abs(S_local))
+            B_dir = np.argmin(B_local)
+            B[i, j] = B_dir
+            D[i, j] = D_local[B_dir]
+            S[i, j] = S_local[B_dir]
+    return D, B, S
+
+def flexdtw_backtracking(D, B, S, buffer = 1):
+    """
+    Decode path from the accumulated dtw cost matrix,
+    backtrace matrix, and starting point matrix
+
+    Parameters
+    ----------
+    D : np.ndarray
+        Accumulated cost matrix
+    B : np.ndarray
+        backtrace matrix
+    S : np.ndarray
+        starting point matrix
+    
+    Returns
+    -------
+    path : np.ndarray
+       A 2D array of size (n_steps, 2), where i-th row has elements 
+       (i_m, i_n) where i_m represents the index in the input array
+       and i_n represents the corresponding index in the reference array.
+    """
+    
+    N = D.shape[0]
+    M = D.shape[1]
+    if buffer > N - 2 or buffer > M - 2:
+        raise ValueError("buffer size needs to be smaller than matrix dimensions")
+    
+    endpoint_candidates_n = np.column_stack((np.arange(buffer, N - 1), np.full(N - buffer - 1, M - 1))) # right column
+    endpoint_candidates_m = np.column_stack((np.full(M - buffer - 1, N - 1), np.arange(buffer, M - 1))) # bottom row
+    ep_c = np.concatenate((endpoint_candidates_n, np.array([[N - 1, M - 1]]), endpoint_candidates_m))
+
+    endpoints_values = D[ep_c[:,0],ep_c[:,1]] / (np.sum(ep_c, axis = 1) - np.abs(S[ep_c[:,0],ep_c[:,1]]))
+    minimal_ep = np.argmin(endpoints_values)
+    n = ep_c[minimal_ep, 0]
+    m = ep_c[minimal_ep, 1]
+    step = np.array([n, m])
+    path = [step]
+
+    # initialize boolean variables for stopping decoding
+    crit = True
+    backtracking_vectors = np.array([[-1, 0],[-1, -1],[0, -1]])
+
+  
+    while crit:
+        if step[0] == 0 or step[1] == 0:
+            crit = False
+
+        else:
+            backtracking_pointer = B[step[0], step[1]]
+            bt_vector = backtracking_vectors[backtracking_pointer,:]
+            step = np.copy(step) + bt_vector
+            path.append(step)
+
+    return np.array(path[::-1], dtype=int)
+
+
