@@ -103,6 +103,24 @@ def save_parangonada_csv(
         ("id", "U256"),
     ]
 
+    score_field_names = [
+        "onset_beat","duration_beat",
+        "onset_quarter","duration_quarter",
+        "onset_div","duration_div",
+        "pitch","voice","id"
+        ]
+    
+    performance_field_names =  [
+                    "onset_sec",
+                    "duration_sec",
+                    "pitch",
+                    "velocity",
+                    "track",
+                    "channel",
+                    "id"
+                ]
+
+
     farray = []
     notes = list(score_note_array["id"])
     if feature is not None:
@@ -133,38 +151,26 @@ def save_parangonada_csv(
             os.path.join(outdir, "ppart.csv"),
             # outdir + os.path.sep + "perf_note_array.csv",
             perf_note_array[
-                [
-                    "onset_sec",
-                    "duration_sec",
-                    "pitch",
-                    "velocity",
-                    "track",
-                    "channel",
-                    "id",
-                ]
+               performance_field_names
             ],
             fmt="%.20s",
             delimiter=",",
             header=",".join(
-                [
-                    "onset_sec",
-                    "duration_sec",
-                    "pitch",
-                    "velocity",
-                    "track",
-                    "channel",
-                    "id",
-                ]
+                performance_field_names
             ),
             comments="",
         )
         np.savetxt(
             os.path.join(outdir, "part.csv"),
             # outdir + os.path.sep + "score_note_array.csv",
-            score_note_array,
+            score_note_array[
+               score_field_names
+            ],
             fmt="%.20s",
             delimiter=",",
-            header=",".join(score_note_array.dtype.names),
+            header=",".join(
+                score_field_names
+                ),
             comments="",
         )
         np.savetxt(
