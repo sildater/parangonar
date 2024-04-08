@@ -324,7 +324,8 @@ class FlexDynamicTimeWarping(object):
         """
         path, D, B, S = flexdtw_forward_and_backward(pwD,
                                             self.directional_weights,
-                                            self.directions)
+                                            self.directions,
+                                            self.buffer)
         out = (path, )
         if return_matrices:
             out += (D, B, S,)
@@ -616,7 +617,8 @@ def flexdtw_forward_and_backward(pwD,
     S[:,0] = M_idx
     S[0,:] = -N_idx 
     if buffer > N - 2 or buffer > M - 2:
-        raise ValueError("buffer size needs to be smaller than matrix dimensions")
+        buffer = min((N - 2, M - 2))
+        # raise ValueError("buffer size needs to be smaller than matrix dimensions")
 
     # Compute the distance iteratively
     for i in range(1, M):
@@ -648,9 +650,12 @@ def flexdtw_forward_and_backward(pwD,
             S[i, j] = S[bestiprev, bestjprev]
 
     # get end point
-    endpoint_candidates_n = np.column_stack((np.arange(buffer, N - 1, dtype=np.int32), np.full(N - buffer - 1, M - 1, dtype=np.int32))) # right column
-    endpoint_candidates_m = np.column_stack((np.full(M - buffer - 1, N - 1, dtype=np.int32), np.arange(buffer, M - 1, dtype=np.int32))) # bottom row
-    ep_c = np.concatenate((endpoint_candidates_n, np.array([[N - 1, M - 1]], dtype=np.int32), endpoint_candidates_m))
+    endpoint_candidates_m = np.column_stack((np.full(N - buffer - 1, M - 1, dtype=np.int32), 
+                                             np.arange(buffer, N - 1, dtype=np.int32))) # bottom row
+    endpoint_candidates_n = np.column_stack((np.arange(buffer, M - 1, dtype=np.int32), 
+                                             np.full(M - buffer - 1, N - 1, dtype=np.int32))) # right column
+
+    ep_c = np.concatenate((endpoint_candidates_m, np.array([[M - 1, N - 1]], dtype=np.int32), endpoint_candidates_n))
     # endpoints_values = D[ep_c[:,0],ep_c[:,1]] / (np.sum(ep_c, axis = 1) - np.abs(S[ep_c[:,0],ep_c[:,1]]))
     endpoints_values = np.zeros(ep_c.shape[0])
     for idx, ep_c_cand in enumerate(ep_c):
