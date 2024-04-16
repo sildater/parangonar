@@ -1538,7 +1538,7 @@ class DualDTWNoteMatcher(object):
                 note_array_joined = np.lib.recfunctions.join_by("id", score_note_array, ornament_tags_array)
                 score_note_array = note_array_joined.data 
                 sort_idx = np.lexsort(
-                    (score_note_array["duration_div"], score_note_array["pitch"], score_note_array["onset_div"])
+                    (score_note_array["duration_div"], score_note_array["pitch"], score_note_array["onset_beat"])
                     )
                 score_note_array = score_note_array[sort_idx]
                 score_note_array_ornament = score_note_array[score_note_array["ornament"] == True]    
