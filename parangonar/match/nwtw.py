@@ -11,8 +11,6 @@ import numba
 from numba import jit
 
 
-
-
 class NWDistanceMatrix(object):
     """
     An object to hold the accumulated cost matrix for the
@@ -380,7 +378,7 @@ WNWTW = WeightedNeedlemanWunschTimeWarping
 
 class OriginalNeedlemanWunsch(object):
     """
-    Origianl Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
+    Original Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
     
         Parameters
     ----------
@@ -479,8 +477,6 @@ def onw_forward_and_backward(pwD,
         for j in range(1, N + 1):
             maxGain = -np.inf
             maxidx = -1
-            bestiprev = -1
-            bestjprev = -1
             for directionsidx, direction in enumerate(directions):
                 (istep, jstep) = direction
                 previ = i - istep
