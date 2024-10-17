@@ -209,7 +209,7 @@ sna_match = score_match.note_array()
 # show or save plot of note alignment
 pa.plot_alignment(pna_match,
                 sna_match,
-                alignment,s
+                alignment,
                 save_file = False)
 
 # or plot the performance and score as piano rolls given a reference: 
