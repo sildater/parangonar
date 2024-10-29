@@ -1573,3 +1573,17 @@ class DualDTWNoteMatcher(object):
 
 ################################### PRETRAINED MATCHERS ###################################
 
+class TheGlueNoteMatcher(object):
+    def __init__(self,
+                 type = "dtw"
+                 ):
+
+        pass
+
+
+    def __call__(self, 
+                 note_array_0,
+                 note_array_1):
+        
+        
+        pass
