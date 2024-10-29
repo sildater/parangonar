@@ -87,7 +87,7 @@ class AlignmentTransformer(nn.Module):
     
 # TheGlueNote
 
-class GlueNote(nn.Module):
+class TheGlueNote(nn.Module):
     """
     GlueNote non-causal transformer encoder
     with learned positional encoding
@@ -97,14 +97,14 @@ class GlueNote(nn.Module):
         self,
         device,
         token_number = 314,
-        position_number = 128,
-        dim_model = 256,
+        position_number = 512,
+        dim_model = 128,
         dim_feedforward = None,
         num_heads = 8,
-        num_decoder_layers = 6,
-        dropout_p = 0.1,
+        num_decoder_layers = 4,
+        dropout_p = 0.0,
         activation = nn.GELU(),
-        using_decoder = False
+        using_decoder = True
     ):
         super().__init__()
         self.device = device

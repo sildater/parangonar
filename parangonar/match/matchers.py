@@ -13,13 +13,17 @@ from scipy.special import binom
 
 from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
+from .. import THEGLUENOTE_CHECKPOINT
+
 
 from .preprocessors import (mend_note_alignments,
                             cut_note_arrays,
                             alignment_times_from_dtw,
                             note_per_ons_encoding)
 
-from .pretrained_models import (AlignmentTransformer)
+from .pretrained_models import (AlignmentTransformer,
+                                TheGlueNote)
+import torch
 
 
 ################################### SYMBOLIC MATCHERS ###################################
@@ -1574,12 +1578,18 @@ class DualDTWNoteMatcher(object):
 ################################### PRETRAINED MATCHERS ###################################
 
 class TheGlueNoteMatcher(object):
-    def __init__(self,
-                 type = "dtw"
-                 ):
+    def __init__(self):
 
-        pass
+        self.prepare_model()
 
+    def prepare_model(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        checkpoint = torch.load(THEGLUENOTE_CHECKPOINT, 
+                                map_location=torch.device(self.device))
+        self.model = TheGlueNote(device = self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.to(self.device)
+        self.model.eval()
 
     def __call__(self, 
                  note_array_0,
