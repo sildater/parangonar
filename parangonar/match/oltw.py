@@ -129,6 +129,8 @@ class OLTW(object):
         self.acc_dist_matrix = np.full((self.w, self.w), np.inf)
         self.acc_dist_matrix[0,:] = 0
         self.acc_len_matrix = np.zeros((self.w, self.w))
+        self.queue_non_empty = True
+        self.local_both_dist = np.zeros((self.w, self.w))
 
     @property
     def warping_path(self):  # [shape=(2, T)]
@@ -230,6 +232,64 @@ class OLTW(object):
                     new_acc[i, j] = compares[local_direction]
                     new_len_acc[i, j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
+    
+
+    def update_both_direction_new(self, 
+                                dist, 
+                                new_acc, 
+                                new_len_acc, 
+                                wx, 
+                                wy, 
+                                d):
+        
+        for j in range(wy - d, wy):
+            new_acc[0, j] = dist[0, j] * self.directional_weights[2] + new_acc[0, j - 1]
+            new_len_acc[0, j] = 1 + new_len_acc[0, j - 1]
+
+        for i in range(wx - d, wx):
+            new_acc[i, 0] = dist[i, 0] * self.directional_weights[0] + new_acc[i - 1, 0]
+            new_len_acc[i, 0] = 1 + new_len_acc[i - 1, 0]
+        
+        # first add the columns to the right
+        # do not go all the way to the corner
+            
+        for i in range(1, wx - d): 
+            for j in range(wy - d, wy):
+                local_dist = dist[i, j]
+                compares = [
+                    new_acc[i - 1, j] + local_dist * self.directional_weights[0],
+                    new_acc[i,  j - 1] + local_dist * self.directional_weights[2],
+                    new_acc[i - 1, j - 1] + local_dist * self.directional_weights[1],
+                ]
+                len_compares = [
+                    new_len_acc[i - 1,  j],
+                    new_len_acc[i, j - 1],
+                    new_len_acc[i - 1, j - 1],
+                ]
+                local_direction = np.argmin(compares)
+                new_acc[i, j] = compares[local_direction]
+                new_len_acc[i, j] = 1 + len_compares[local_direction]
+
+        # then add the rows at the bottom
+        for i in range(wx - d, wx):
+            for j in range(1, wy):
+                local_dist = dist[i, j]
+                compares = [
+                    new_acc[i - 1, j] + local_dist * self.directional_weights[0],
+                    new_acc[i,  j - 1] + local_dist * self.directional_weights[2],
+                    new_acc[i - 1, j - 1] + local_dist * self.directional_weights[1],
+                ]
+                len_compares = [
+                    new_len_acc[i - 1,  j],
+                    new_len_acc[i, j - 1],
+                    new_len_acc[i - 1, j - 1],
+                ]
+                local_direction = np.argmin(compares)
+                new_acc[i, j] = compares[local_direction]
+                new_len_acc[i, j] = 1 + len_compares[local_direction]
+
+        
+        return new_acc, new_len_acc
 
     def update_cost_matrix(self, direction):
         # local cost matrix
@@ -263,11 +323,21 @@ class OLTW(object):
             overlap_y = wy - d
             new_acc[:-d, :-d] = self.acc_dist_matrix[d:, -overlap_y:]
             new_len_acc[:-d, :-d] = self.acc_len_matrix[d:, -overlap_y:]
-            x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-            y_seg = self.input_features[y - wy : y]  # [wy, 12]
-            dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-            new_acc, new_len_acc = self.update_both_direction(
-                dist, new_acc, new_len_acc, wx, wy, d)
+
+            # old costly distance computation
+            # x_seg = self.reference_features[x - wx : x]  # [wx, 12]
+            # y_seg = self.input_features[y - wy : y]  # [wy, 12]
+            # dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
+            # new, compute only outer slice
+            x_seg = self.reference_features[x - wx : x - d]  # [wx - d]
+            y_seg = self.input_features[y - d : y]  # [d]
+            self.local_both_dist[:wx - d, -d:] = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)
+            x_seg = self.reference_features[x - d : x]  # [d]
+            y_seg = self.input_features[y - wy : y]  # [wy]
+            self.local_both_dist[wx - d:, :] = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)
+
+            new_acc, new_len_acc = self.update_both_direction_new(
+                self.local_both_dist, new_acc, new_len_acc, wx, wy, d)
         self.acc_dist_matrix = new_acc
         self.acc_len_matrix = new_len_acc
 
@@ -330,16 +400,19 @@ class OLTW(object):
         return next_direction
 
     def get_new_input(self):
-        input_feature = self.queue.get()
-        if len(input_feature) == 0:
-            print("empty queue")
-        else:
+        try:
+            input_feature = self.queue.get(block=False)
             self.input_features = np.vstack([self.input_features, input_feature])
             self.input_pointer += self.hop_size
 
+        except:
+            print("empty queue")
+            self.queue_non_empty = False
+
     def is_still_following(self):
         is_still_following = self.ref_pointer <= (self.N_ref - self.hop_size)
-        return is_still_following
+        return is_still_following and self.queue_non_empty
+
 
     def handle_direction(self, direction):
         # get fitting features/windows
@@ -360,7 +433,7 @@ class OLTW(object):
         self.handle_direction(direction)
         self.first_cost_matrix()
         self.select_candidate()
-        self.save_history()
+        self.add_candidate_to_path()
 
     def run(self, verbose=False):
         print("Start running OLTW")
@@ -374,6 +447,7 @@ class OLTW(object):
                 print("RECENT WARPING PATH \n", self.warping_path[:,-3:])
                 print("NEXT DIRECTION \n", direction)
                 print("*"*50)
+            print("RECENT WARPING PATH: ", self.warping_path[:,-1:])
             self.handle_direction(direction)
             self.update_cost_matrix(direction)
             self.select_candidate()

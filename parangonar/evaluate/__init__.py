@@ -314,13 +314,13 @@ def evaluate_score_following(
 
     """
 
-    _, stime_to_ptime_map_gt =   pt.utils.music.get_time_maps_from_alignment(
+    _, stime_to_ptime_map_gt =   pt.musicanalysis.performance_codec.get_time_maps_from_alignment(
                 performance_note_array, 
                 score_note_array, 
                 gt_alignment, 
                 remove_ornaments=True)
     
-    _, stime_to_ptime_map =   pt.utils.music.get_time_maps_from_alignment(
+    _, stime_to_ptime_map =   pt.musicanalysis.performance_codec.get_time_maps_from_alignment(
                 performance_note_array, 
                 score_note_array, 
                 alignment, 
@@ -361,7 +361,7 @@ def evaluate_score_following(
             if print_results:
                 print(
                     f"Mean asynchrony (ms): {mean_asynch * 1000:.2f}\nAsynchrony <= 25ms (%): {lt_25ms * 100:.1f}\n"
-                    f"Asynchrony <= 50ms (%): {lt_50ms * 100:.1f}\nAsyncrhony <= 100ms (%): {lt_100ms * 100:.1f}\n"
+                    f"Asynchrony <= 50ms (%): {lt_50ms * 100:.1f}\nAsynchrony <= 100ms (%): {lt_100ms * 100:.1f}\n"
                 )
             f.write(
                 f"{mean_asynch * 1000:.2f},{lt_25ms * 100:.1f},"

@@ -51,6 +51,17 @@ def invert_matrix(S,
         D -= D.min()
     return D  
 
+def dnw(vec1, vec2):
+    """
+    normalized and weighted distance for LNCO/LNSO features.
+    https://ieeexplore.ieee.org/abstract/document/6333860/
+    """
+    vec1_l1 = np.abs(vec1).sum()
+    vec2_l1 = np.abs(vec2).sum()
+    dn = np.abs(vec1 - vec2).sum() / (vec1_l1 + vec2_l1 + 1e-7) # L1 okay?
+    dampening_factor = ((vec1_l1 + vec2_l1 + 1e-7)/2)**(1/4) # safety eps not necessary
+    return dn * dampening_factor
+
 def cdist_local(arr1, arr2, metric):
     """
     compute array of pairwise distances between 
@@ -130,7 +141,7 @@ class WeightedDynamicTimeWarping(object):
         else:
             pwD = cdist(X, Y, self.metric)
 
-        out = self.from_distance_matrix(self, pwD,
+        out = self.from_distance_matrix(pwD,
                              return_matrices = return_matrices,
                              return_cost = return_cost)
         return out
@@ -298,7 +309,7 @@ class FlexDynamicTimeWarping(object):
         else:
             pwD = cdist(X, Y, self.metric)
 
-        out = self.from_distance_matrix(self, pwD,
+        out = self.from_distance_matrix(pwD,
                              return_matrices = return_matrices,
                              return_cost = return_cost)
         return out
@@ -791,3 +802,8 @@ def flexdtw_backtracking(D, B, S, buffer = 1):
     return np.array(path[::-1], dtype=int)
 
 
+if __name__ == "__main__":
+    A = np.array([[1,2,3,4,1,2,3,4,5,6]]).T
+    B = np.array([[1,2,3,4,5,6]]).T
+    dtwmatcher = WDTW()
+    p = dtwmatcher(A,B)
