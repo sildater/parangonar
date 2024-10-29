@@ -77,7 +77,6 @@ class NWDistanceMatrix(object):
                 cost_matrix[i, j] = self[i, j]
         return cost_matrix
 
-
 class NeedlemanWunsch(object):
     """
     Needleman-Wunsch algorithm for aligning sequences.
@@ -141,10 +140,8 @@ class NeedlemanWunsch(object):
         path.reverse()
         return np.array(path, dtype=int)
 
-
 # alias
 NW = NeedlemanWunsch
-
 
 class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     """
@@ -275,7 +272,6 @@ class WeightedNeedlemanWunschTimeWarping(object):
             out += (cost[-1,-1])
         return out
 
-    
 # @jit(nopython=True)
 def weighted_nwdtw_forward_and_backward(pwD, 
                                       directional_weights = np.array([1, 1, 1]),
@@ -317,7 +313,6 @@ def weighted_nwdtw_forward_and_backward(pwD,
     M = pwD.shape[0]
     N = pwD.shape[1]
 
-    
     # the NW distance matrix is initialized with INFINITY
     D = np.ones((M + 1, N + 1),dtype=float) * np.inf
     # Compute the borders of D
@@ -375,7 +370,6 @@ def weighted_nwdtw_forward_and_backward(pwD,
 # alias
 WNWTW = WeightedNeedlemanWunschTimeWarping
 
-
 class OriginalNeedlemanWunsch(object):
     """
     Original Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
@@ -422,7 +416,6 @@ class OriginalNeedlemanWunsch(object):
         if return_cost:
             out += (cost[-1,-1])
         return out
-
     
 # @jit(nopython=True)
 def onw_forward_and_backward(pwD, 
@@ -522,8 +515,6 @@ def onw_forward_and_backward(pwD,
 ONW = OriginalNeedlemanWunsch
 
 if __name__ == "__main__":
-
-
     A = np.array([[1,2,3,4,1,2,3,4,5,6]]).T
     B = np.array([[1,2,3,4,5,6]]).T
 
@@ -535,7 +526,7 @@ if __name__ == "__main__":
     #                                       np.array([]),
     #                                       np.array([[0, 0],[1, 0]]),
     #                                       np.array([[0, 0],[0, 1]])],
-    #              directional_weights = np.array([1, 1, 1]),
+    #              directional_weights = np.array([1, 2, 1, 3, 3]),
     #              gamma = 0.5)
 
     # allowing diagonal warping at any angle
@@ -553,3 +544,4 @@ if __name__ == "__main__":
                   gamma_penalty = -0.5)
 
     path, cost, back = matcher(A, B, return_matrices = True)
+    

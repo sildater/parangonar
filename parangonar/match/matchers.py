@@ -11,8 +11,8 @@ import time
 from itertools import combinations
 from scipy.special import binom
 
-from .dtw import DTW, DTWSL
-from .nwtw import NW_DTW, NW
+from ..dp.dtw import DTW, DTWSL
+from ..dp.nwtw import NW_DTW, NW
 
 from .preprocessors import (mend_note_alignments,
                             cut_note_arrays,
@@ -1570,4 +1570,6 @@ class DualDTWNoteMatcher(object):
                                             process_ornaments=process_ornaments) # TODO: document
         
         return global_alignment
+
+################################### PRETRAINED MATCHERS ###################################
 

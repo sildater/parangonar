@@ -2,10 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 This module contains dynamic time warping methods.
-
-
-
-
 """
 
 import numpy as np

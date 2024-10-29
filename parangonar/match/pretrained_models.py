@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.nn.modules.normalization import LayerNorm
+
 
 # ALIGNMENT TRANSFORMER
 
@@ -82,3 +84,93 @@ class AlignmentTransformer(nn.Module):
     
     def create_pad_mask(self, matrix: torch.tensor, pad_token: int = -1) -> torch.tensor:
         return (matrix == pad_token)
+    
+# TheGlueNote
+
+class GlueNote(nn.Module):
+    """
+    GlueNote non-causal transformer encoder
+    with learned positional encoding
+    """
+    # Constructor
+    def __init__(
+        self,
+        device,
+        token_number = 314,
+        position_number = 128,
+        dim_model = 256,
+        dim_feedforward = None,
+        num_heads = 8,
+        num_decoder_layers = 6,
+        dropout_p = 0.1,
+        activation = nn.GELU(),
+        using_decoder = False
+    ):
+        super().__init__()
+        self.device = device
+        self.token_number = token_number
+        self.position_number = position_number + 1 
+        self.dim_model = dim_model
+        self.activation = activation
+        if dim_feedforward is not None:
+            self.dim_feedforward = dim_feedforward
+        else: 
+            self.dim_feedforward = self.dim_model * 4
+        self.num_heads = num_heads
+        self.num_decoder_layers = num_decoder_layers
+        self.dropout_p = dropout_p
+        self.using_decoder = using_decoder
+        # LAYERS
+        self.positions = torch.arange(self.position_number * 2).to(self.device)
+        self.positional_encoder = nn.Embedding(self.position_number * 2,self.dim_model) 
+        self.embedding = nn.Embedding(self.token_number,self.dim_model) 
+        
+        # DECODER LAYERS
+        D_layers = TransformerEncoderLayer(self.dim_model, 
+                                            nhead = self.num_heads, 
+                                            dim_feedforward = self.dim_feedforward, 
+                                            dropout=self.dropout_p,
+                                            norm_first = True,
+                                            activation = self.activation)
+
+        self.layer_normalization= LayerNorm(self.dim_model)
+        self.layer_normalization_input = LayerNorm(self.dim_model)
+
+        self.transformerDECODER = TransformerEncoder(
+            encoder_layer = D_layers,
+            num_layers = num_decoder_layers,
+            norm = self.layer_normalization,
+            enable_nested_tensor=False
+        )
+
+        self.mlp1 = nn.Linear(self.dim_model,self.dim_feedforward)
+        self.mlp_activation = activation = self.activation
+        self.mlp2 = nn.Linear(self.dim_feedforward,self.dim_model)
+
+        self.embed_out = nn.Linear(self.dim_model,self.dim_model)
+        
+    def forward(self, src):
+        # # let's just only use pitch for now, no aggregation
+        # src = src[:,1::4]
+        src = self.embedding(src)
+        
+        # AGGREGATING 4 ATTRIBUTES
+        eshape = src.shape
+        src = torch.sum(src.reshape(eshape[0], -1, 4, eshape[-1]), dim=-2)
+        
+        # to obtain size (sequence length, batch_size, dim_model)
+        src = src.permute(1,0,2)
+        # POSITIONAL ENCODING
+        pos = self.positional_encoder(self.positions)
+        src += pos.unsqueeze(1)
+        # src = self.positional_encoder(src)
+        src = self.layer_normalization_input(src)
+        # Transformer blocks - Out size = (sequence length, batch_size, dim_model)
+        transformer_out = self.transformerDECODER(src=src)    
+        # mlp_out = self.mlp2(self.melp_activation(self.mlp1(transformer_out))) 
+        mlp_out = self.embed_out(transformer_out)
+        predictions = torch.einsum('ibk,jbk->bij', mlp_out[:self.position_number,:,:], mlp_out[self.position_number:,:,:])
+        if self.using_decoder:
+            return predictions, mlp_out
+        else:
+            return predictions

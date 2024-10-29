@@ -1,12 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-This module contains methods for note and sequence alignment.
-
+This module contains methods for note alignment.
 """
 
-from .dtw import DTW, DTWSL
-from .nwtw import NW_DTW, NW
 from .matchers import (AnchorPointNoteMatcher, 
                        AutomaticNoteMatcher,
                        CleanOrnamentMatcher,
