@@ -2,9 +2,9 @@ Parangonar
 ==========
 
 **Parangonar** is a Python package for note alignment of symbolic music. 
+**Parangonar** contains offline and online note alignment algorithms as well as task-agnostic dynamic programming sequence alignment algorithms.
+Note alignments produced py **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
-Note alignments produced py **Parangonar** can be visualized using the 
-web tool [Parangonda](https://sildater.github.io/parangonada/)
 
 
 Installation
@@ -26,46 +26,39 @@ There is a `getting_started.ipynb` notebook which covers the basic note alignmen
 To demonstrate **Parangonar** the contents of performance and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)) are loaded, which returns a score object, a performance objects, and an alignment list. A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth.
 
 
-Creation of Note Alignments
+Documentation: creation of note alignments
 ==========
 
 **Parangonar** contains implementations of note alignments algorithms:
 
-1. Automatic Note Matching: 
+1. Offline Note Matching: 
     - `AutomaticNoteMatcher`: 
         piano roll-based, hierarchical DTW and combinatiroial optimization for pitch-wise note distribution.
         requires scores and performances in the current implementation, but not necessarily.
-
     - `DualDTWNoteMatcher`: 
         symbolic note set-based DTW, pitch-wise onsetDTW, separate handling of ornamentations possible.
         requires scores and performances for sequence representation.
         Default and SOTA for standard score to performance matching.
-
     - `TheGlueNoteMatcher`:
         pre-trained neural network for note similarity, useful for large mismatches between versions.
         works on any two MIDI files.
-
-2. Anchor Point Alignment: 
     - `AnchorPointNoteMatcher`: 
         semi-automatic version of the `AutomaticNoteMatcher`, useful if annotations can be leveraged as anchor points. 
 
 
-3. Online / Realtime Alignment: 
+3. Online / Real-time Note Matching: 
     - `OnlineTransformerMatcher`::
         pre-trained neural network for local alignment decisions.
         post-processing by a tempo model.
-
     - `OnlinePureTransformerMatcher` 
         pre-trained neural network for local alignment decisions.
         no post-processing.
-
     - `TempoOLTWMatcher`: 
         tba.
-
     - `OLTWMatcher`:
         tba. 
 
-Dynamic Programming 
+Documentation: dynamic programming 
 ==========
 
 **Parangonar** contains implementations of (non-)standard dynamic programming sequence alignment algorithms:
@@ -87,7 +80,7 @@ Dynamic Programming
     - Tempo OLTW: path-wise tempo models
 
 
-Note Alignment Utilities
+Documentation: note alignment utilities
 ==========
 
 **Parangonar** contains several utilities around note matching:
@@ -104,7 +97,7 @@ Note Alignment Utilities
 
 3. File I/O for note alignments
 
-    Most I/O functions are handled by partitura. 
+    Most I/O functions are handled by [Partitura](https://github.com/CPJKU/partitura). 
 
     For [Parangonada](https://sildater.github.io/parangonada/):
     - partitura.io.importparangonada.load_parangonada_alignment
