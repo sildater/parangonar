@@ -9,8 +9,8 @@ from scipy.interpolate import interp1d
 
 from partitura.utils.music import (compute_pianoroll)
 
-from .dtw import DTW
-from .nwtw import NW_DTW, NW
+from ..dp.dtw import DTW
+from ..dp.nwtw import NW_DTW, NW
 
 
 ################################### HELPERS ###################################

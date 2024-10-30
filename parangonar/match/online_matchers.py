@@ -8,7 +8,6 @@ from scipy.interpolate import interp1d
 
 ################################### TEMPO MODELS ###################################
 
-
 class TempoModel(object):
     """
     Base class for synchronization models
@@ -79,7 +78,6 @@ class TempoModel(object):
             self.score_perf_map(score_onset - self.lookback))/self.lookback, 0.1, 10.0)
         self.counter += 1
 
-
 class DummyTempoModel(object):
 
 
@@ -131,9 +129,7 @@ class DummyTempoModel(object):
         ):
         self.counter += 1
 
-
 ################################### ONLINE MATCHERS ###################################
-
 
 class OnlineTransformerMatcher(object):
     def __init__(self,
@@ -301,10 +297,8 @@ class OnlineTransformerMatcher(object):
     def get_current_score_onset(self):
         return self._prev_score_onset
 
-
 def perf_tokenizer(pitch, dims = 7):
     return np.ones((1,dims), dtype = int) * (pitch - 20)
-
 
 def score_tokenizer(pitch_set, dims = 7):
     token = np.zeros((1,dims), dtype = int)
@@ -313,14 +307,11 @@ def score_tokenizer(pitch_set, dims = 7):
             token[0,no] = pitch - 20
     return token
 
-
 def perf_to_score_tokenizer(dims = 7):
     return np.ones((1,dims), dtype = int) *89
 
-
 def end_tokenizer(dims = 7, end_dims=1):
     return np.ones((end_dims,dims), dtype = int) *90
-
 
 def tokenize(score_segment, perf_segment, dims = 7):
     tokens = list()
@@ -336,7 +327,6 @@ def tokenize(score_segment, perf_segment, dims = 7):
     tokens.append(end_token)
 
     return np.row_stack(tokens)
-
 
 class OnlinePureTransformerMatcher(object):
     def __init__(self,
@@ -491,3 +481,8 @@ class OnlinePureTransformerMatcher(object):
     def __call__(self):
 
         return None
+
+################################### OLTW MATCHERS ###################################
+
+
+
