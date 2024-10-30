@@ -3,7 +3,7 @@ Parangonar
 
 **Parangonar** is a Python package for note alignment of symbolic music. 
 **Parangonar** contains offline and online note alignment algorithms as well as task-agnostic dynamic programming sequence alignment algorithms.
-Note alignments produced py **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
+Note alignments produced by **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
 
 
@@ -33,12 +33,12 @@ Documentation: creation of note alignments
 
 1. Offline Note Matching: 
     - `AutomaticNoteMatcher`: 
-        piano roll-based, hierarchical DTW and combinatiroial optimization for pitch-wise note distribution.
+        piano roll-based, hierarchical DTW and combinatorial optimization for pitch-wise note distribution.
         requires scores and performances in the current implementation, but not necessarily.
     - `DualDTWNoteMatcher`: 
         symbolic note set-based DTW, pitch-wise onsetDTW, separate handling of ornamentations possible.
         requires scores and performances for sequence representation.
-        Default and SOTA for standard score to performance matching.
+        **Default and SOTA** for standard score to performance matching.
     - `TheGlueNoteMatcher`:
         pre-trained neural network for note similarity, useful for large mismatches between versions.
         works on any two MIDI files.
