@@ -19,7 +19,7 @@ This will install the latest release of the package and will install all depende
 
 
 Getting Started
-==========
+-------
 
 There is a `getting_started.ipynb` notebook which covers the basic note alignment functions.
 
@@ -27,7 +27,7 @@ To demonstrate **Parangonar** the contents of performance and score alignment fi
 
 
 Documentation: creation of note alignments
-==========
+-------
 
 **Parangonar** contains implementations of note alignments algorithms:
 
@@ -59,7 +59,7 @@ Documentation: creation of note alignments
         tba. 
 
 Documentation: dynamic programming 
-==========
+-------
 
 **Parangonar** contains implementations of (non-)standard dynamic programming sequence alignment algorithms:
 
@@ -81,7 +81,7 @@ Documentation: dynamic programming
 
 
 Documentation: note alignment utilities
-==========
+-------
 
 **Parangonar** contains several utilities around note matching:
 
@@ -125,7 +125,7 @@ Documentation: note alignment utilities
 
 
 Publications
-=====
+-------
 
 Two publications are associated with models available in **Parangonar**.
 The anchor point-enhanced `AnchorPointNoteMatcher` and the automatic `AutomaticNoteMatcher` are this described in:
@@ -165,12 +165,12 @@ The pre-trained `TheGlueNoteMatcher` is described in:
 ```
 
 Acknowledgments
-=======
+-------
 
 This work is supported by the European Research Council (ERC) under the EU’s Horizon 2020 research & innovation programme, grant agreement No. 10101937 (”Wither Music?”).
 
 License
-=======
+-------
 
 The code in this package is licensed under the Apache 2.0 License. For details,
 please see the [LICENSE](LICENSE) file.
