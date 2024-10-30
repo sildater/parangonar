@@ -280,7 +280,3 @@ def get_input_to_ref_map(  note_array, # pitch, onset
         else:
             return onsets
         
-
-
-
-

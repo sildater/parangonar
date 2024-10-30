@@ -150,6 +150,7 @@ def traverse_the_alignment_graph(start_id,
         pass
         #print("done")
 
+
 ################################### SEGMENT CUTTING ###################################
 
 
@@ -202,8 +203,6 @@ def cut_note_arrays(performance_note_array,
         performance_note_arrays.append(performance_note_array[performance_window_mask])
 
     return score_note_arrays, performance_note_arrays
-
-
 
 
 ################################### SEGMENT MENDING ###################################
@@ -337,7 +336,6 @@ def mend_note_alignments(note_alignments,
             alignment.append({'label': 'insertion', 'performance_id': pnote_id})
 
     return alignment, score_alignment, performance_alignment
-
 
 
 ################################### NOTE ARRAY ###################################

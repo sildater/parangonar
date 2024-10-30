@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-This module
-evaluate note alignments symbolic music data.
+This module contains methods to visualize and
+evaluate note alignments of symbolic music data.
 """
 from typing import List
 import numpy as np

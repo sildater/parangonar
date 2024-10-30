@@ -1,3 +1,11 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains pretrained pytorch models.
+checkpoints in assets. 
+loaded in matchers and online_matchers.
+"""
+
 import torch
 import torch.nn as nn
 import numpy as np

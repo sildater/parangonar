@@ -1,3 +1,8 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains online note matcher classes.
+"""
 from .. import ALIGNMENT_TRANSFORMER_CHECKPOINT
 import numpy as np
 from collections import defaultdict
@@ -483,6 +488,3 @@ class OnlinePureTransformerMatcher(object):
         return None
 
 ################################### OLTW MATCHERS ###################################
-
-
-

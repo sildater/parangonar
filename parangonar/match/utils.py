@@ -1,4 +1,8 @@
-
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains alignment utilities.
+"""
 from partitura.utils.music import (ensure_notearray)
 
 from partitura.musicanalysis.performance_codec import ( 

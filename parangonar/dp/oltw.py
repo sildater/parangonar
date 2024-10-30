@@ -1,3 +1,9 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+This module contains On-Line Time Warping.
+"""
+
 import numpy as np
 import scipy
 from enum import IntEnum

@@ -1844,3 +1844,4 @@ class TheGlueNoteMatcher(object):
                         midi_1,
                         return_formatted_alignment = False)
         return alignment
+    
