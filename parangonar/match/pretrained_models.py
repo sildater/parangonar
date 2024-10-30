@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn.modules.normalization import LayerNorm
-
+import torch.nn.functional as F
 
 # ALIGNMENT TRANSFORMER
 
@@ -149,7 +149,7 @@ class TheGlueNote(nn.Module):
 
         self.embed_out = nn.Linear(self.dim_model,self.dim_model)
         
-    def forward(self, src):
+    def forward(self, src, return_confidence_matrix = False):
         # # let's just only use pitch for now, no aggregation
         # src = src[:,1::4]
         src = self.embedding(src)
@@ -169,8 +169,13 @@ class TheGlueNote(nn.Module):
         transformer_out = self.transformerDECODER(src=src)    
         # mlp_out = self.mlp2(self.melp_activation(self.mlp1(transformer_out))) 
         mlp_out = self.embed_out(transformer_out)
-        predictions = torch.einsum('ibk,jbk->bij', mlp_out[:self.position_number,:,:], mlp_out[self.position_number:,:,:])
-        if self.using_decoder:
-            return predictions, mlp_out
-        else:
-            return predictions
+        predictions = torch.einsum('ibk,jbk->bij', mlp_out[:self.position_number,:,:], mlp_out[self.position_number:,:,:])#
+
+        if return_confidence_matrix:
+            conf_matrix = F.softmax(predictions, 1) * F.softmax(predictions, 2)
+            return conf_matrix
+        else:    
+            if self.using_decoder:
+                return predictions, mlp_out
+            else:
+                return predictions

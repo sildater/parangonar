@@ -22,6 +22,9 @@ REQUIRED = [
     'torch',
     'matplotlib',
     'partitura>=1.1.0',
+    'symusic',
+    'scipy',
+    'miditok',
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))

@@ -6,6 +6,8 @@ This module contains full note matcher classes.
 import numpy as np
 from scipy.interpolate import interp1d
 from collections import defaultdict
+import miditok
+import symusic
 
 import time
 from itertools import combinations
@@ -15,7 +17,16 @@ from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
 from .. import THEGLUENOTE_CHECKPOINT
 
-
+from .gluenote_utils import (
+    get_shifted_and_stretched_and_agnostic_midis,
+    minimal_note_array_from_symusic,
+    note_array_to_symusic_score,
+    format_score_performance_alignment,
+    format_note_array_alignment,
+    DEFAULT_NOTE,
+    get_local_path_from_confidence_matrix,
+    get_input_to_ref_map
+)
 from .preprocessors import (mend_note_alignments,
                             cut_note_arrays,
                             alignment_times_from_dtw,
@@ -1225,6 +1236,113 @@ class CleanOrnamentMatcher(object):
         return note_alignments
 
 
+def get_note_matches_with_updating_map(
+                    note_array,# pitch, onset
+                     note_array_ref,# pitch, onset
+                     matched_onset_seqs,
+                     onset_threshold,
+                     unmatched_idx = 100000000):
+     
+    note_array_idx_range = np.arange(len(note_array))
+    note_array_ref_idx_range = np.arange(len(note_array_ref))
+
+    # Get symbolic note_alignments
+    note_alignments = list()
+    used_note_ids = set()
+    used_ref_note_ids = set()
+    unique_pitches, pitch_counts = np.unique(np.concatenate((note_array[:,0],note_array_ref[:,0]), axis= 0), return_counts = True)
+    pitch_by_quantity = np.argsort(pitch_counts)
+
+    for pitch in unique_pitches[pitch_by_quantity]:
+
+        input_to_ref_map = interp1d(matched_onset_seqs[:,0],
+                                    matched_onset_seqs[:,1],
+                                    kind = "linear",
+                                    fill_value = "extrapolate")
+
+        note_array_pitch_mask = note_array[:,0] == pitch
+        note_array_ref_pitch_mask = note_array_ref[:,0] == pitch
+        
+        note_array_onsets = note_array[note_array_pitch_mask,1]
+        note_array_ref_onsets = note_array_ref[note_array_ref_pitch_mask,1]
+
+        note_array_ids = note_array_idx_range[note_array_pitch_mask]
+        note_array_ref_ids = note_array_ref_idx_range[note_array_ref_pitch_mask]
+        
+        estimated_note_array_ref_onsets = input_to_ref_map(note_array_onsets)
+
+        
+
+        if  (note_array_ref_onsets.shape[0] > 1 and note_array_onsets.shape[0] > 1) or \
+            (note_array_ref_onsets.shape[0] > 1 and note_array_onsets.shape[0] == 1) or \
+            (note_array_ref_onsets.shape[0] == 1 and note_array_onsets.shape[0] > 1):
+            try:
+                ID_tuples = unique_alignments(estimated_note_array_ref_onsets, 
+                                              note_array_ref_onsets,
+                                              threshold=onset_threshold)
+            except:
+                import pdb; pdb.set_trace()
+        
+        elif note_array_ref_onsets.shape[0] == 1 and note_array_onsets.shape[0] == 1: 
+            if np.abs(estimated_note_array_ref_onsets[0] - note_array_ref_onsets[0]) < onset_threshold:
+                ID_tuples = [(0,0)]
+            else:
+                ID_tuples = []
+        else:
+            ID_tuples = []       
+        
+        for input_idx, ref_idx in ID_tuples:
+            note_alignments.append(
+                [note_array_ids[input_idx], note_array_ref_ids[ref_idx]]
+
+            )
+            used_note_ids.add(note_array_ids[input_idx])
+            used_ref_note_ids.add(note_array_ref_ids[ref_idx])
+        
+        if len(ID_tuples) > 0:
+            ID_tuples_numpy = np.array(ID_tuples)
+            new_matches = np.column_stack((note_array_onsets[ID_tuples_numpy[:,0]],note_array_ref_onsets[ID_tuples_numpy[:,1]]))
+            matched_onset_seqs = insert_matches_into_matched_seqs(matched_onset_seqs,
+                                                                new_matches)
+
+
+    # add unmatched notes
+    for note_idx in note_array_idx_range:
+        if note_idx not in used_note_ids:
+            note_alignments.append([note_idx, unmatched_idx])
+
+    for ref_idx in note_array_ref_idx_range:
+        if ref_idx not in used_ref_note_ids:
+            note_alignments.append([unmatched_idx, ref_idx])
+   
+
+    note_alignments = np.array(note_alignments)
+    note_alignments = note_alignments[np.argsort(note_alignments[:,0]),:]
+    return note_alignments
+
+
+def insert_matches_into_matched_seqs(matched_onset_seqs,
+                                     new_matches):
+    new_matched_onset_seqs = np.copy(matched_onset_seqs)
+
+    new_lines = list()
+    idx_to_delete = list()
+    for match in new_matches:
+        id_seq1 = np.where(matched_onset_seqs[:,0] == match[0])[0]
+        if len(id_seq1) > 0:
+           idx_to_delete.append(id_seq1[0])
+           new_lines.append(match)
+
+    if len(new_lines) > 0:
+        new_lines_numpy = np.array(new_lines)
+        deletion_mask = np.array(idx_to_delete)
+        new_matched_onset_seqs = np.delete(new_matched_onset_seqs, deletion_mask, axis=0)
+        new_matched_onset_seqs = np.concatenate((new_matched_onset_seqs, new_lines_numpy))
+        new_matched_onset_seqs = new_matched_onset_seqs[np.argsort(new_matched_onset_seqs[:,0])]
+
+    return new_matched_onset_seqs
+
+
 ################################### ONSET MATCHERS ###################################
 
 
@@ -1575,25 +1693,154 @@ class DualDTWNoteMatcher(object):
         
         return global_alignment
 
+
 ################################### PRETRAINED MATCHERS ###################################
+
 
 class TheGlueNoteMatcher(object):
     def __init__(self):
 
         self.prepare_model()
+        self.tokenizer = miditok.Structured()
+        self.unmatched_idx = 100000000
+        self.matching_threshold = 0.5,
 
     def prepare_model(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(THEGLUENOTE_CHECKPOINT, 
                                 map_location=torch.device(self.device))
         self.model = TheGlueNote(device = self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint['state_dict'])
         self.model.to(self.device)
         self.model.eval()
 
     def __call__(self, 
-                 note_array_0,
-                 note_array_1):
+                 score_note_array, 
+                 performance_note_array):
+        midi_score = note_array_to_symusic_score(score_note_array)
+        midi_performance = note_array_to_symusic_score(performance_note_array)
+        alignment = self.run_model_inference(
+                        midi_performance,
+                        midi_score,
+                        performance_note_array = performance_note_array,
+                        score_note_array_full = score_note_array,
+                        return_formatted_alignment = True
+                        )
+        return alignment
+    
+    def run_model_inference(
+        self,
+        performance_midi,
+        score_midi,
+        performance_note_array = None,
+        score_note_array_full = None,
+        return_formatted_alignment = False
+        ): 
         
+        alignment = self.get_dtw_alignment_from_model(
+                                encoder_model = self.model, 
+                                tokenizer = self.tokenizer,
+                                input_midi1 = score_midi, 
+                                input_midi2 = performance_midi,
+                                unmatched_idx = self.unmatched_idx)
         
-        pass
+        if return_formatted_alignment and score_note_array_full is not None and performance_note_array is not None:
+            alignment = format_score_performance_alignment(score_note_array_full,
+                                                                    performance_note_array,
+                                                                    alignment,
+                                                                    unmatched_idx = self.unmatched_idx)
+        return alignment
+
+    def get_dtw_alignment_from_model(
+                                self,
+                                encoder_model, 
+                                tokenizer,
+                                input_midi1, 
+                                input_midi2,
+                                unmatched_idx = 100000000):
+        # setup and preprocessing of files
+        sequence_length = encoder_model.position_number - 1
+        input_midi2, input_midi1 = get_shifted_and_stretched_and_agnostic_midis(input_midi2, input_midi1)
+        note_array = minimal_note_array_from_symusic(input_midi1)
+        note_array_ref = minimal_note_array_from_symusic(input_midi2)
+        tokens1 = tokenizer(input_midi1)
+        tokens2 = tokenizer(input_midi2)
+        sample = {"s1":np.array(tokens1[0].ids, dtype = int),
+                "s2":np.array(tokens2[0].ids, dtype = int)}
+        
+        no_notes_s1 = len(note_array)
+        no_notes_s2 = len(note_array_ref)
+        index_shift = int(sequence_length/2)
+        no_slices_s1 = no_notes_s1 // (index_shift) + 1
+        no_slices_s2 = no_notes_s2 // (index_shift) + 1
+        full_similarity_matrix = np.zeros((no_notes_s1, no_notes_s2))
+
+        # loop over windows
+        for i in range(no_slices_s1):
+            for j in range(no_slices_s2):
+                current_idx_1 = [i*index_shift, (i+2)*index_shift]
+                current_idx_2 = [j*index_shift, (j+2)*index_shift]
+
+                # pad and prepare the note sequences
+                s1 = sample["s1"][current_idx_1[0]*4:current_idx_1[1]*4]
+                s2 = sample["s2"][current_idx_2[0]*4:current_idx_2[1]*4]
+                s1_matrix_end = sequence_length
+                s2_matrix_end = sequence_length
+
+                if len(s1) < sequence_length * 4:
+                    # pad the sequence
+                    padding_len1 = sequence_length * 4 - len(s1)
+                    padding1 = np.array(DEFAULT_NOTE * int(padding_len1 / 4))#np.zeros(padding_len1)
+                    s1_matrix_end = int(len(s1) / 4)
+                    s1 = np.concatenate((s1,padding1)).astype(int)
+
+                if len(s2) < sequence_length * 4:
+                    # pad the sequence
+                    padding_len2 = sequence_length * 4 - len(s2)
+                    padding2 = np.array(DEFAULT_NOTE * int(padding_len2 / 4))#np.zeros(padding_len2)
+                    s2_matrix_end = int(len(s2) / 4)
+                    s2 = np.concatenate((s2,padding2)).astype(int)
+
+                s1 = np.concatenate((np.zeros(4), s1)).astype(int)
+                s2 = np.concatenate((np.zeros(4), s2)).astype(int)
+                sequences = torch.from_numpy(np.concatenate((s1,s2)).astype(int)).contiguous().unsqueeze(0)
+                
+                # call the encoder
+                sequences = sequences.to(encoder_model.device)
+                confidence_matrix = encoder_model(sequences, return_confidence_matrix = True)
+                confidence_matrix_segment = confidence_matrix[0,1:s1_matrix_end + 1,1:s2_matrix_end + 1].detach().cpu().numpy()
+                full_similarity_matrix[current_idx_1[0]:current_idx_1[1],current_idx_2[0]:current_idx_2[1]] += confidence_matrix_segment
+                
+        now = time.time()
+        (path, 
+        starting_path, ending_path, 
+        s1_exclusion_start, s1_exclusion_end) = get_local_path_from_confidence_matrix(full_similarity_matrix)
+        then = time.time()
+        print("DTW local path time: ", then - now)
+        print("PATH length:", len(path), full_similarity_matrix.shape)
+            
+        s1_to_s2_map = get_input_to_ref_map(note_array,
+                                            note_array_ref,
+                                            path,
+                                            return_callable = False)
+        
+        alignment = get_note_matches_with_updating_map(note_array,
+                                        note_array_ref,
+                                        s1_to_s2_map,
+                                        onset_threshold = 1000,
+                                        unmatched_idx = unmatched_idx)
+        
+        return alignment
+
+
+    def match_midi(self,
+                   midi_path_0,
+                   midi_path_1):
+        
+        midi_0 = symusic.Score(midi_path_0)
+        midi_1 = symusic.Score(midi_path_1)
+        alignment = self.run_model_inference(
+                        midi_0,
+                        midi_1,
+                        return_formatted_alignment = False)
+        return alignment
