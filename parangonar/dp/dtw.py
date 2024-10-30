@@ -230,7 +230,6 @@ class DynamicTimeWarpingSingleLoop(object):
 
        # Compute the pw distances and accumulated cost matrix
         dtwd_matrix = cdist_dtw_single_loop(X, Y, self.metric)
-        
         # dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
         dtwd_distance = dtwd_matrix[-1, -1]
 
@@ -423,7 +422,7 @@ def weighted_dtw_forward_and_backward(pwD,
 
     output_path = np.array(path, dtype=np.int32)[::-1]
     output_D = D[1:, 1:]
-    return  output_D, output_path
+    return  output_D, output_path[1:,:]
 
 def dtw_backtracking(dtwd):
     """
@@ -690,7 +689,7 @@ def flexdtw_forward_and_backward(pwD,
         # append next step to the path
         path.append(step)
     output_path = np.array(path, dtype = np.int32)[::-1]
-    return output_path, D, B, S
+    return output_path[1:,:], D, B, S
     # return 1,2,3,4
 
 def flexdtw_dmatrix_from_pairwise_dmatrix(pwD, 
