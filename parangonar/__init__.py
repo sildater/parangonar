@@ -21,8 +21,12 @@ from .match import (
     OnlineTransformerMatcher, 
     OnlinePureTransformerMatcher
     )
-from .evaluate import fscore_alignments, plot_alignment, plot_alignment_comparison
-
+from .evaluate import (
+    fscore_alignments, 
+    print_fscore_alignments,
+    plot_alignment, 
+    plot_alignment_comparison
+)
 __all__ = [
     "AnchorPointNoteMatcher",
     "AutomaticNoteMatcher",

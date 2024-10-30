@@ -52,6 +52,21 @@ def fscore_alignments(prediction: List[dict],
         return precision, recall, f_score
 
 
+def print_fscore_alignments(prediction: List[dict], 
+                            ground_truth: List[dict]):
+    print('------------------')
+    types = ['match','insertion', 'deletion']
+    for alignment_type in types:
+        precision, recall, f_score = fscore_alignments(prediction, 
+                                                        ground_truth, 
+                                                        alignment_type)
+        print('Evaluate ',alignment_type)
+        print('Precision: ',format(precision, '.3f'),
+            'Recall ',format(recall, '.3f'),
+            'F-Score ',format(f_score, '.3f'))
+        print('------------------')
+
+
 def plot_alignment(ppart_na, 
          part_na, 
          alignment, 

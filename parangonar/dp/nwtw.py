@@ -7,8 +7,6 @@ import numpy as np
 from collections import defaultdict
 from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import cdist
-import numba
-from numba import jit
 
 
 class NWDistanceMatrix(object):
@@ -272,7 +270,6 @@ class WeightedNeedlemanWunschTimeWarping(object):
             out += (cost[-1,-1])
         return out
 
-# @jit(nopython=True)
 def weighted_nwdtw_forward_and_backward(pwD, 
                                       directional_weights = np.array([1, 1, 1]),
                                       directions = np.array([[1, 0],[1, 1],[0, 1]]),
@@ -380,6 +377,8 @@ class OriginalNeedlemanWunsch(object):
         penalty value
     gamma_match: float
         matching value
+    gap_penalty: float
+        gap penalty value
     threshold: float
         threshold distance between match and penalty
     """
@@ -387,11 +386,13 @@ class OriginalNeedlemanWunsch(object):
                  metric = euclidean, 
                  gamma_penalty = -1.0,
                  gamma_match = 1.0,
+                 gap_penalty = -0.5,
                  threshold = 1.0,
                  smith_waterman = False):
         self.metric = metric
         self.gamma_penalty = gamma_penalty
         self.gamma_match = gamma_match
+        self.gap_penalty = gap_penalty
         self.threshold = threshold
         self.smith_waterman = smith_waterman
 
@@ -409,6 +410,7 @@ class OriginalNeedlemanWunsch(object):
                                             self.gamma_penalty,
                                             self.gamma_match,
                                             self.threshold,
+                                            self.gap_penalty,
                                             self.smith_waterman)
         out = (path,)
         if return_matrices:
@@ -417,11 +419,11 @@ class OriginalNeedlemanWunsch(object):
             out += (cost[-1,-1])
         return out
     
-# @jit(nopython=True)
 def onw_forward_and_backward(pwD, 
                             gamma_penalty = -1.0,
                             gamma_match = 1.0,
                             threshold = 1.0,
+                            gap_penalty = 0.5,
                             smith_waterman = False):
     """
     compute needleman-wunsch cost matrix
@@ -439,6 +441,10 @@ def onw_forward_and_backward(pwD,
         matching value
     threshold: float
         threshold distance between match and penalty
+    gap_penalty: float
+        gap penalty value
+    smith-waterman: bool
+        compute smith-waterman local alignment
 
     Returns
     -------
@@ -477,7 +483,7 @@ def onw_forward_and_backward(pwD,
                 if previ >= 0 and prevj >= 0: 
                     distanceGain = directional_distances[directionsidx] * (gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty)
                     prevGain = D[previ, prevj] 
-                    penaltyGain = directional_penalties[directionsidx] * gamma_penalty           
+                    penaltyGain = directional_penalties[directionsidx] * gap_penalty           
                     Gain = prevGain + penaltyGain + distanceGain              
                     if Gain > maxGain:
                         maxGain = Gain
@@ -488,10 +494,6 @@ def onw_forward_and_backward(pwD,
                 D[i, j] = maxGain
             B[i - 1, j - 1] = maxidx
 
-
-    print(D)
-    print(B)
-    # return (dtwd[1:, 1:])
     n = N - 1
     m = M - 1
     step = [m, n]
