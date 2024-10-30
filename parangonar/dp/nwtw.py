@@ -19,7 +19,8 @@ class NWDistanceMatrix(object):
     gamma : float
         Gap parameter (for initializing the matrix)
     """
-    def __init__(self, gamma = 0.1):
+
+    def __init__(self, gamma=0.1):
         self.gamma = float(gamma)
         self.val_dict = defaultdict(lambda: np.inf)
         self.indices_dict = dict()
@@ -28,8 +29,7 @@ class NWDistanceMatrix(object):
 
     @property
     def nw_distance(self):
-        """The total accumulated cost of alignment
-        """
+        """The total accumulated cost of alignment"""
         return self[self.xdim, self.ydim]
 
     def __getitem__(self, indices):
@@ -75,19 +75,17 @@ class NWDistanceMatrix(object):
                 cost_matrix[i, j] = self[i, j]
         return cost_matrix
 
+
 class NeedlemanWunsch(object):
     """
     Needleman-Wunsch algorithm for aligning sequences.
     """
-    def __init__(self, 
-                 metric = euclidean, 
-                 gamma = 0.1):
+
+    def __init__(self, metric=euclidean, gamma=0.1):
         self.metric = metric
         self.gamma = gamma
 
-    def __call__(self, X, Y, return_path=True,
-                 window=None,
-                 return_cost_matrix=False):
+    def __call__(self, X, Y, return_path=True, window=None, return_cost_matrix=False):
         X = X.astype(float)
         Y = Y.astype(float)
         len_X, len_Y = len(X), len(Y)
@@ -98,25 +96,25 @@ class NeedlemanWunsch(object):
         nw_matrix = NWDistanceMatrix(self.gamma)
 
         for i, j in window:
-            dt = self.metric(X[i-1], Y[j-1])
+            dt = self.metric(X[i - 1], Y[j - 1])
 
             nw_matrix[i, j] = min(
-                (nw_matrix[i-1, j] + self.gamma, (i-1, j), 2),
-                (nw_matrix[i, j-1] + self.gamma, (i, j-1), 1),
-                (nw_matrix[i-1, j-1] + dt, (i-1, j-1), 0),
-                key=lambda a: a[0]
+                (nw_matrix[i - 1, j] + self.gamma, (i - 1, j), 2),
+                (nw_matrix[i, j - 1] + self.gamma, (i, j - 1), 1),
+                (nw_matrix[i - 1, j - 1] + dt, (i - 1, j - 1), 0),
+                key=lambda a: a[0],
             )
 
         nw_distance = nw_matrix[len_X, len_Y]
 
-        out = (nw_distance, )
+        out = (nw_distance,)
 
         if return_path:
             path = self.backtracking(nw_matrix)
-            out += (path, )
+            out += (path,)
 
         if return_cost_matrix:
-            out += (nw_matrix, )
+            out += (nw_matrix,)
 
         return out
 
@@ -138,23 +136,20 @@ class NeedlemanWunsch(object):
         path.reverse()
         return np.array(path, dtype=int)
 
+
 # alias
 NW = NeedlemanWunsch
+
 
 class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     """
     Needleman-Wunsch Dynamic Time Warping
     """
-    def __init__(self, 
-                 metric = euclidean, 
-                 gamma = 0.1):
-        super().__init__(metric=metric,
-                         gamma=gamma)
 
-    def __call__(self, X, Y, return_path=True,
-                 window=None,
-                 return_cost_matrix=False):
+    def __init__(self, metric=euclidean, gamma=0.1):
+        super().__init__(metric=metric, gamma=gamma)
 
+    def __call__(self, X, Y, return_path=True, window=None, return_cost_matrix=False):
         X = X.astype(float)
         Y = Y.astype(float)
         len_X, len_Y = len(X), len(Y)
@@ -164,34 +159,44 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
 
         nw_matrix = NWDistanceMatrix(self.gamma)
 
-        pairwise_distance = defaultdict(lambda: float('inf'))
+        pairwise_distance = defaultdict(lambda: float("inf"))
 
         pairwise_distance[0, 0] = 0
 
         for i, j in window:
-            pairwise_distance[i, j] = self.metric(X[i-1], Y[j-1])
+            pairwise_distance[i, j] = self.metric(X[i - 1], Y[j - 1])
 
             nw_matrix[i, j] = min(
-                (nw_matrix[i-1, j] + self.gamma, (i-1, j), 2),
-                (nw_matrix[i, j-1] + self.gamma, (i, j-1), 1),
-                (nw_matrix[i-1, j-1] + pairwise_distance[i, j], (i-1, j-1), 0),
-                (nw_matrix[i-1, j-2] + pairwise_distance[i, j-1] +
-                 pairwise_distance[i, j], (i, j-1), 0),
-                (nw_matrix[i-2, j-1] + pairwise_distance[i-1, j] +
-                 pairwise_distance[i, j], (i-1, j), 0),
-                key=lambda a: a[0]
+                (nw_matrix[i - 1, j] + self.gamma, (i - 1, j), 2),
+                (nw_matrix[i, j - 1] + self.gamma, (i, j - 1), 1),
+                (nw_matrix[i - 1, j - 1] + pairwise_distance[i, j], (i - 1, j - 1), 0),
+                (
+                    nw_matrix[i - 1, j - 2]
+                    + pairwise_distance[i, j - 1]
+                    + pairwise_distance[i, j],
+                    (i, j - 1),
+                    0,
+                ),
+                (
+                    nw_matrix[i - 2, j - 1]
+                    + pairwise_distance[i - 1, j]
+                    + pairwise_distance[i, j],
+                    (i - 1, j),
+                    0,
+                ),
+                key=lambda a: a[0],
             )
 
         nw_distance = nw_matrix[len_X, len_Y]
 
-        out = (nw_distance, )
+        out = (nw_distance,)
 
         if return_path:
             path = self.backtracking(nw_matrix)
-            out += (path, )
+            out += (path,)
 
         if return_cost_matrix:
-            out += (nw_matrix, )
+            out += (nw_matrix,)
 
         return out
 
@@ -213,33 +218,36 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
         path.reverse()
         return np.array(path, dtype=int)
 
+
 # alias
 NW_DTW = NeedlemanWunschDynamicTimeWarping
+
 
 class WeightedNeedlemanWunschTimeWarping(object):
     """
     General Needleman-Wunsch Time Warping algorithm for aligning sequences.
-    
+
         Parameters
     ----------
     directional_weights: np.ndarray
         weights associated with each of the three possible steps
     directions : np.ndarray
         directions.
-    directional_distances: list 
-        for each direction, the pairwise distance idx which accumulate 
+    directional_distances: list
+        for each direction, the pairwise distance idx which accumulate
     directional_penalties: np.ndarray
         for each direction, the sum of penalites which accumulate
     """
-    def __init__(self, 
-                 directions = np.array([[1, 0],[1, 1],[0, 1]]),
-                 directional_penalties = np.array([1, 0, 1]),
-                 directional_distances = [np.array([]), 
-                                          np.array([[0, 0]]),
-                                          np.array([])],
-                 directional_weights = np.array([1, 1, 1]),
-                 metric = euclidean, 
-                 gamma = 1):
+
+    def __init__(
+        self,
+        directions=np.array([[1, 0], [1, 1], [0, 1]]),
+        directional_penalties=np.array([1, 0, 1]),
+        directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
+        directional_weights=np.array([1, 1, 1]),
+        metric=euclidean,
+        gamma=1,
+    ):
         self.metric = metric
         self.gamma = gamma
         self.directional_weights = directional_weights
@@ -247,37 +255,37 @@ class WeightedNeedlemanWunschTimeWarping(object):
         self.directional_penalties = directional_penalties
         self.directional_distances = directional_distances
 
-    def __call__(self, X, Y, 
-                 return_matrices=True,
-                 return_cost=False):
-        
+    def __call__(self, X, Y, return_matrices=True, return_cost=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
-        
-        #pairwise distances
-        pwD = cdist(X,Y,"euclidean")
 
-        cost, path, B = weighted_nwdtw_forward_and_backward(pwD,
-                                            self.directional_weights,
-                                            self.directions,
-                                            self.directional_penalties,
-                                            self.directional_distances,
-                                            self.gamma)
+        # pairwise distances
+        pwD = cdist(X, Y, "euclidean")
+
+        cost, path, B = weighted_nwdtw_forward_and_backward(
+            pwD,
+            self.directional_weights,
+            self.directions,
+            self.directional_penalties,
+            self.directional_distances,
+            self.gamma,
+        )
         out = (path,)
         if return_matrices:
             out += (cost, B)
         if return_cost:
-            out += (cost[-1,-1])
+            out += cost[-1, -1]
         return out
 
-def weighted_nwdtw_forward_and_backward(pwD, 
-                                      directional_weights = np.array([1, 1, 1]),
-                                      directions = np.array([[1, 0],[1, 1],[0, 1]]),
-                                      directional_penalties = np.array([1, 0, 1]),
-                                      directional_distances = [np.array([]), 
-                                                               np.array([[0, 0]]),
-                                                               np.array([])],
-                                      gamma = 1):
+
+def weighted_nwdtw_forward_and_backward(
+    pwD,
+    directional_weights=np.array([1, 1, 1]),
+    directions=np.array([[1, 0], [1, 1], [0, 1]]),
+    directional_penalties=np.array([1, 0, 1]),
+    directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
+    gamma=1,
+):
     """
     compute needleman-wunsch dynamic time warping cost matrix
     and backtracking path
@@ -292,8 +300,8 @@ def weighted_nwdtw_forward_and_backward(pwD,
         weights associated with each of the three possible steps
     directions : np.ndarray
         directions.
-    directional_distances: list 
-        for each direction, the pairwise distance idx which accumulate 
+    directional_distances: list
+        for each direction, the pairwise distance idx which accumulate
     directional_penalties: np.ndarray
         for each direction, the sum of penalites which accumulate
     gamma: float
@@ -311,13 +319,13 @@ def weighted_nwdtw_forward_and_backward(pwD,
     N = pwD.shape[1]
 
     # the NW distance matrix is initialized with INFINITY
-    D = np.ones((M + 1, N + 1),dtype=float) * np.inf
+    D = np.ones((M + 1, N + 1), dtype=float) * np.inf
     # Compute the borders of D
-    D[0,:] = np.arange(0, N + 1) * gamma
-    D[:,0] = np.arange(0, M + 1) * gamma
+    D[0, :] = np.arange(0, N + 1) * gamma
+    D[:, 0] = np.arange(0, M + 1) * gamma
     # Backtracking
-    B = np.ones((M, N),dtype=np.int8) * -1
-    
+    B = np.ones((M, N), dtype=np.int8) * -1
+
     # Compute the distance iteratively
     D[0, 0] = 0
     for i in range(1, M + 1):
@@ -330,17 +338,24 @@ def weighted_nwdtw_forward_and_backward(pwD,
                 (istep, jstep) = direction
                 previ = i - istep
                 prevj = j - jstep
-                if previ >= 0 and prevj >= 0: 
+                if previ >= 0 and prevj >= 0:
                     prevCost = D[previ, prevj]
-                    penaltyCost = directional_penalties[directionsidx] * gamma           
-                    distanceCost = np.sum([pwD[i - dis[0] - 1, j - dis[1] - 1] for dis in directional_distances[directionsidx]])
-                    cost = directional_weights[directionsidx] * (prevCost + penaltyCost + distanceCost)                    
+                    penaltyCost = directional_penalties[directionsidx] * gamma
+                    distanceCost = np.sum(
+                        [
+                            pwD[i - dis[0] - 1, j - dis[1] - 1]
+                            for dis in directional_distances[directionsidx]
+                        ]
+                    )
+                    cost = directional_weights[directionsidx] * (
+                        prevCost + penaltyCost + distanceCost
+                    )
                     if cost < mincost:
                         mincost = cost
                         minidx = directionsidx
                         bestiprev = previ
                         bestjprev = prevj
-                        
+
             D[i, j] = mincost
             B[i - 1, j - 1] = minidx
 
@@ -351,7 +366,6 @@ def weighted_nwdtw_forward_and_backward(pwD,
     path = [step]
     # initialize boolean variables for stopping decoding
     while n > 0 or m > 0:
-       
         backtracking_pointer = B[m, n]
         bt_vector = directions[backtracking_pointer]
         m -= bt_vector[0]
@@ -362,15 +376,17 @@ def weighted_nwdtw_forward_and_backward(pwD,
 
     output_path = np.array(path, dtype=np.int32)[::-1]
     output_D = D[1:, 1:]
-    return  output_D, output_path, B
+    return output_D, output_path, B
+
 
 # alias
 WNWTW = WeightedNeedlemanWunschTimeWarping
 
+
 class OriginalNeedlemanWunsch(object):
     """
     Original Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
-    
+
         Parameters
     ----------
     gamma_penalty: float
@@ -382,13 +398,16 @@ class OriginalNeedlemanWunsch(object):
     threshold: float
         threshold distance between match and penalty
     """
-    def __init__(self,
-                 metric = euclidean, 
-                 gamma_penalty = -1.0,
-                 gamma_match = 1.0,
-                 gap_penalty = -0.5,
-                 threshold = 1.0,
-                 smith_waterman = False):
+
+    def __init__(
+        self,
+        metric=euclidean,
+        gamma_penalty=-1.0,
+        gamma_match=1.0,
+        gap_penalty=-0.5,
+        threshold=1.0,
+        smith_waterman=False,
+    ):
         self.metric = metric
         self.gamma_penalty = gamma_penalty
         self.gamma_match = gamma_match
@@ -396,35 +415,37 @@ class OriginalNeedlemanWunsch(object):
         self.threshold = threshold
         self.smith_waterman = smith_waterman
 
-    def __call__(self, X, Y, 
-                 return_matrices=True,
-                 return_cost=False):
-        
+    def __call__(self, X, Y, return_matrices=True, return_cost=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
-        
-        #pairwise distances
-        pwD = cdist(X,Y,"euclidean")
 
-        cost, path, B = onw_forward_and_backward(pwD,
-                                            self.gamma_penalty,
-                                            self.gamma_match,
-                                            self.threshold,
-                                            self.gap_penalty,
-                                            self.smith_waterman)
+        # pairwise distances
+        pwD = cdist(X, Y, "euclidean")
+
+        cost, path, B = onw_forward_and_backward(
+            pwD,
+            self.gamma_penalty,
+            self.gamma_match,
+            self.threshold,
+            self.gap_penalty,
+            self.smith_waterman,
+        )
         out = (path,)
         if return_matrices:
             out += (cost, B)
         if return_cost:
-            out += (cost[-1,-1])
+            out += cost[-1, -1]
         return out
-    
-def onw_forward_and_backward(pwD, 
-                            gamma_penalty = -1.0,
-                            gamma_match = 1.0,
-                            threshold = 1.0,
-                            gap_penalty = 0.5,
-                            smith_waterman = False):
+
+
+def onw_forward_and_backward(
+    pwD,
+    gamma_penalty=-1.0,
+    gamma_match=1.0,
+    threshold=1.0,
+    gap_penalty=0.5,
+    smith_waterman=False,
+):
     """
     compute needleman-wunsch cost matrix
     and backtracking path
@@ -457,19 +478,18 @@ def onw_forward_and_backward(pwD,
     M = pwD.shape[0]
     N = pwD.shape[1]
 
-    
     # the NW distance matrix is initialized with zero
-    D = np.zeros((M + 1, N + 1),dtype=float)
+    D = np.zeros((M + 1, N + 1), dtype=float)
     # Compute the borders of D
     if not smith_waterman:
-        D[0,:] = np.arange(0, N + 1) * gamma_penalty
-        D[:,0] = np.arange(0, M + 1) * gamma_penalty
+        D[0, :] = np.arange(0, N + 1) * gamma_penalty
+        D[:, 0] = np.arange(0, M + 1) * gamma_penalty
     # Backtracking
-    B = np.ones((M, N),dtype=np.int8) * -1
+    B = np.ones((M, N), dtype=np.int8) * -1
 
-    directions = np.array([[1, 0],[1, 1],[0, 1]])
-    directional_penalties = np.array([1,0,1])
-    directional_distances = np.array([0,1,0])
+    directions = np.array([[1, 0], [1, 1], [0, 1]])
+    directional_penalties = np.array([1, 0, 1])
+    directional_distances = np.array([0, 1, 0])
     # Compute the distance iteratively
     D[0, 0] = 0
     for i in range(1, M + 1):
@@ -480,15 +500,17 @@ def onw_forward_and_backward(pwD,
                 (istep, jstep) = direction
                 previ = i - istep
                 prevj = j - jstep
-                if previ >= 0 and prevj >= 0: 
-                    distanceGain = directional_distances[directionsidx] * (gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty)
-                    prevGain = D[previ, prevj] 
-                    penaltyGain = directional_penalties[directionsidx] * gap_penalty           
-                    Gain = prevGain + penaltyGain + distanceGain              
+                if previ >= 0 and prevj >= 0:
+                    distanceGain = directional_distances[directionsidx] * (
+                        gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty
+                    )
+                    prevGain = D[previ, prevj]
+                    penaltyGain = directional_penalties[directionsidx] * gap_penalty
+                    Gain = prevGain + penaltyGain + distanceGain
                     if Gain > maxGain:
                         maxGain = Gain
                         maxidx = directionsidx
-            if smith_waterman:            
+            if smith_waterman:
                 D[i, j] = np.max((maxGain, 0))
             else:
                 D[i, j] = maxGain
@@ -500,7 +522,6 @@ def onw_forward_and_backward(pwD,
     path = [step]
     # initialize boolean variables for stopping decoding
     while n > 0 or m > 0:
-       
         backtracking_pointer = B[m, n]
         bt_vector = directions[backtracking_pointer]
         m -= bt_vector[0]
@@ -511,19 +532,20 @@ def onw_forward_and_backward(pwD,
 
     output_path = np.array(path, dtype=np.int32)[::-1]
     output_D = D[1:, 1:]
-    return  output_D, output_path, B
+    return output_D, output_path, B
+
 
 # alias
 ONW = OriginalNeedlemanWunsch
 
 if __name__ == "__main__":
-    A = np.array([[1,2,3,4,1,2,3,4,5,6]]).T
-    B = np.array([[1,2,3,4,5,6]]).T
+    A = np.array([[1, 2, 3, 4, 1, 2, 3, 4, 5, 6]]).T
+    B = np.array([[1, 2, 3, 4, 5, 6]]).T
 
-    # Like NWTW in Grachten 
+    # Like NWTW in Grachten
     # matcher = WNWTW(directions = np.array([[1, 0],[1, 1],[0, 1],[2, 1],[1, 2]]),
     #              directional_penalties = np.array([1, 0, 1, 0, 0]),
-    #              directional_distances = [np.array([]), 
+    #              directional_distances = [np.array([]),
     #                                       np.array([[0, 0]]),
     #                                       np.array([]),
     #                                       np.array([[0, 0],[1, 0]]),
@@ -534,7 +556,7 @@ if __name__ == "__main__":
     # allowing diagonal warping at any angle
     # matcher = WNWTW(directions = np.array([[1, 0],[1, 1],[0, 1],[1, 0],[0, 1]]),
     #              directional_penalties = np.array([1, 0, 1, 0, 0]),
-    #              directional_distances = [np.array([]), 
+    #              directional_distances = [np.array([]),
     #                                       np.array([[0, 0]]),
     #                                       np.array([]),
     #                                       np.array([[0, 0]]),
@@ -542,8 +564,6 @@ if __name__ == "__main__":
     #              directional_weights = np.array([1, 2, 1, 1, 1]),
     #              gamma = 0.5)
 
-    matcher = ONW(smith_waterman = True,
-                  gamma_penalty = -0.5)
+    matcher = ONW(smith_waterman=True, gamma_penalty=-0.5)
 
-    path, cost, back = matcher(A, B, return_matrices = True)
-    
+    path, cost, back = matcher(A, B, return_matrices=True)
