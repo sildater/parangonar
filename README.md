@@ -145,7 +145,7 @@ and the `AnchorPointNoteMatcher` is used in the creation of the [note-aligned (n
 The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTransformerMatcher` / `OnlinePureTransformerMatcher` are described in:
 
 ```
-@inproceedings{peter-2023,
+@inproceedings{peter-offline2023,
   title={Online Symbolic Music Alignment with Offline Reinforcement Learning},
   author={Peter, Silvan David},
   booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
@@ -156,7 +156,7 @@ The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTra
 The pre-trained `TheGlueNoteMatcher` is described in:
 
 ```
-@inproceedings{peter-2023,
+@inproceedings{peter-thegluenote2024,
   title={TheGlueNote: Learned Representations for Robust and Flexible Note Alignment},
   author={Peter, Silvan David and Widmer, Gerhard},
   booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
