@@ -31,7 +31,7 @@ Creation of Note Alignments
 
 **Parangonar** contains implementations of note alignments algorithms:
 
-1 - Automatic Note Matching: 
+1. Automatic Note Matching: 
     - `AutomaticNoteMatcher`: 
         piano roll-based, hierarchical DTW and combinatiroial optimization for pitch-wise note distribution.
         requires scores and performances in the current implementation, but not necessarily.
@@ -45,12 +45,12 @@ Creation of Note Alignments
         pre-trained neural network for note similarity, useful for large mismatches between versions.
         works on any two MIDI files.
 
-2 - Anchor Point Alignment: 
+2. Anchor Point Alignment: 
     - `AnchorPointNoteMatcher`: 
         semi-automatic version of the `AutomaticNoteMatcher`, useful if annotations can be leveraged as anchor points. 
 
 
-3 - Online / Realtime Alignment: 
+3. Online / Realtime Alignment: 
     - `OnlineTransformerMatcher`::
         pre-trained neural network for local alignment decisions.
         post-processing by a tempo model.
@@ -70,19 +70,19 @@ Dynamic Programming
 
 **Parangonar** contains implementations of (non-)standard dynamic programming sequence alignment algorithms:
 
-1 - DTW (multiple versions, using numpy/numba/jit)
+1. DTW (multiple versions, using numpy/numba/jit)
     - vanilla DTW
     - weightedDTW: generalized directions, weights, and penalites
     - FlexDTW: flexible start and end points, Bükey at al.
 
-2 - NWTW (multiple versions, using numpy/numba/jit)
+2. NWTW (multiple versions, using numpy/numba/jit)
     - Needleman-Wunsch: using distances on scalars, minimizing version
     - NWDTW: Needleman-Wunsch Time Warping, Grachten et al.
     - weightedNWDTW: generalized directions, weights, and penalites
     - original Needleman-Wunsch: using binary gamma on scalars, maximizing version
     - original Smith-Waterman: using binary gamma on scalars, maximizing version
 
-3 - OLTW:
+3. OLTW:
     - On-Line Time Warping: standard OLTW, Dixon et al.
     - Tempo OLTW: path-wise tempo models
 
@@ -92,17 +92,17 @@ Note Alignment Utilities
 
 **Parangonar** contains several utilities around note matching:
 
-1 - Alignment Visualization:
+1. Alignment Visualization:
     - parangonar.evaluate.plot_alignment 
     - parangonar.evaluate.plot_alignment_comparison
     - parangonar.evaluate.plot_alignment_mappings  
 
-2 - Alignment Evaluation
+2. Alignment Evaluation
     - parangonar.evaluate.fscore_alignments
     - parangonar.evaluate.fscore_alignments
     - parangonar.evaluate.fscore_alignments
 
-3 - File I/O for note alignments
+3. File I/O for note alignments
 
     Most I/O functions are handled by partitura. 
 
@@ -123,7 +123,7 @@ Note Alignment Utilities
     and a basic interface for saving parangonada-ready csv files is also available in parangonagar:
     - parangonar.match.save_parangonada_csv
 
-4 - Aligned Data
+4. Aligned Data
 
     These note-aligned datasets are publically available:
     - [Vienna 4x22](https://github.com/CPJKU/vienna4x22)
