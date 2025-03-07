@@ -75,7 +75,6 @@ class NWDistanceMatrix(object):
                 cost_matrix[i, j] = self[i, j]
         return cost_matrix
 
-
 class NeedlemanWunsch(object):
     """
     Needleman-Wunsch algorithm for aligning sequences.

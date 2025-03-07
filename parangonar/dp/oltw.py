@@ -355,20 +355,23 @@ class OLTW(object):
     def first_cost_matrix(self):
         # local cost matrix
         x, y = self.ref_pointer, self.input_pointer  # should be window, hop_size
-        wx, wy = x, y + 1  # append an extra column
+        wx, wy = x + 1, y + 1  # append an extra column
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
         new_acc[0, 0] = 0  # starting point in corner
-        new_len_acc = np.zeros((wx, wy))
-        x_seg = self.reference_features[x - wx : x]  # [wx, 12]
+        new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
+        new_len_acc[0, 0] = 0  # starting point in corner
+        x_seg = self.reference_features[0 : x]  # [wx, 12]
         y_seg = self.input_features[y - d : y]  # [d, 12]
+        dist_mat = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
         dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-        new_acc, new_len_acc = self.update_input_direction(
-            dist, new_acc, new_len_acc, wx, wy, d
+        dist_mat[1:,1:] = dist
+        new_acc, new_len_acc = self.update_both_direction_new(
+            dist_mat, new_acc, new_len_acc, wx, wy, d
         )
 
-        self.acc_dist_matrix = new_acc[:, 1:]
-        self.acc_len_matrix = new_len_acc[:, 1:]
+        self.acc_dist_matrix = new_acc[1:, 1:]
+        self.acc_len_matrix = new_len_acc[1:, 1:]
 
     def select_candidate(self):
         norm_x_edge = self.acc_dist_matrix[-1, :] / self.acc_len_matrix[-1, :]
@@ -383,10 +386,6 @@ class OLTW(object):
             self.candidate = np.array(
                 [min_idx - len(norm_x_edge), self.input_pointer - offset[1] - 1]
             )
-
-        # print("edge",cat)
-        # print("pointers:", self.ref_pointer, self.input_pointer, offset)
-        # print("cand",self.candidate, min_idx)
 
     def add_candidate_to_path(self):
         new_coordinate = np.expand_dims(
@@ -460,7 +459,6 @@ class OLTW(object):
                 print("RECENT WARPING PATH \n", self.warping_path[:, -3:])
                 print("NEXT DIRECTION \n", direction)
                 print("*" * 50)
-            print("RECENT WARPING PATH: ", self.warping_path[:, -1:])
             self.handle_direction(direction)
             self.update_cost_matrix(direction)
             self.select_candidate()
