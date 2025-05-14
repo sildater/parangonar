@@ -10,64 +10,11 @@ import numba
 from numba import jit
 
 # helpers and metrics
+from .metrics import (cdist_local, 
+                      element_of_set_metric)
 
 
-def invert_matrix(S, inversion="reciprocal", positive=False):
-    """
-    simple converter from similarity to distance matrix
-    and vice versa
-    """
-    if inversion == "reciprocal":
-        D = 1 / (S + 1e-4)
-    else:
-        D = -S
-    if positive:
-        D -= D.min()
-    return D
-
-
-def dnw(vec1, vec2):
-    """
-    normalized and weighted distance for LNCO/LNSO features.
-    https://ieeexplore.ieee.org/abstract/document/6333860/
-    """
-    vec1_l1 = np.abs(vec1).sum()
-    vec2_l1 = np.abs(vec2).sum()
-    dn = np.abs(vec1 - vec2).sum() / (vec1_l1 + vec2_l1 + 1e-7)  # L1 okay?
-    dampening_factor = ((vec1_l1 + vec2_l1 + 1e-7) / 2) ** (
-        1 / 4
-    )  # safety eps not necessary
-    return dn * dampening_factor
-
-
-def cdist_local(arr1, arr2, metric):
-    """
-    compute array of pairwise distances between
-    the elements of two arrays given a metric
-
-    Parameters
-    ----------
-    arr1: numpy nd array
-
-    arr2: numpy nd array
-
-    metric: callable
-        a metric function
-
-    Returns
-    -------
-
-    pdist_array: numpy 2d array
-        array of pairwise distances
-    """
-    pdist_array = np.ones((arr1.shape[0], arr2.shape[0])) * np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
-            pdist_array[i, j] = metric(arr1[i], arr2[j])
-    return pdist_array
-
-
-# DTW classes
+# DTW / DP classes
 
 
 class WeightedDynamicTimeWarping(object):

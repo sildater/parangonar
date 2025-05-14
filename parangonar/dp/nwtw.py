@@ -537,6 +537,10 @@ def onw_forward_and_backward(
 # alias
 ONW = OriginalNeedlemanWunsch
 
+
+
+
+
 if __name__ == "__main__":
     A = np.array([[1, 2, 3, 4, 1, 2, 3, 4, 5, 6]]).T
     B = np.array([[1, 2, 3, 4, 5, 6]]).T
