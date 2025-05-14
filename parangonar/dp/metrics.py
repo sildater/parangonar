@@ -4,6 +4,8 @@
 This module contains pairwise distance metrics and other DP helpers.
 """
 import numpy as np
+from numba import jit
+
 
 
 def element_of_metric(vec1, vec2):
@@ -83,3 +85,21 @@ def cdist_local(arr1, arr2, metric):
         for j in range(arr2.shape[0]):
             pdist_array[i, j] = metric(arr1[i], arr2[j])
     return pdist_array
+
+
+@jit(nopython=True)
+def bounded_recursion(prev_val, 
+              min_val = 0, 
+              max_val = 10, 
+              slope_at_min = 1):
+    """
+    a recursive function which when starting at min_val, 
+    grows to slope_at_min after one step,
+    then continues to grow and asymptotically reaches max_val
+    """
+    dv = max_val - min_val
+    exponential_decay_factor = (slope_at_min) / dv
+    normal_prev_val = (prev_val - min_val - dv) / (-dv)
+    normal_next_val = (1 - exponential_decay_factor) * normal_prev_val
+    next_val = -dv * normal_next_val + dv + min_val
+    return next_val

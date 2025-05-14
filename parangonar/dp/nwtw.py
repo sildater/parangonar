@@ -7,7 +7,11 @@ import numpy as np
 from collections import defaultdict
 from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import cdist
-
+from numba import jit
+# helpers and metrics
+from .metrics import (cdist_local, 
+                      element_of_set_metric,
+                      bounded_recursion)
 
 class NWDistanceMatrix(object):
     """
@@ -538,7 +542,162 @@ def onw_forward_and_backward(
 ONW = OriginalNeedlemanWunsch
 
 
+class BoundedSmithWaterman(object):
+    """
+    Bounded Smith-Waterman algorithm for aligning (sub-)sequences.
+    
+        Parameters
+    ----------
+    gamma_penalty: float
+        penalty value
+    gamma_match: float
+        matching value
+    threshold: float
+        threshold distance between match and penalty
+    """
+    def __init__(self,
+                 gamma_penalty = -1.0,
+                 gamma_match = 1.0,
+                 threshold = 1.0,
+                 directions = np.array([[1, 0],[1, 1],[0, 1]]),
+                 directional_penalties = np.array([0,0,0]),
+                 directional_distances = np.array([1,1,1]),
+                 gain_min_val = 0, 
+                 gain_max_val = 10, 
+                 gain_slope_at_min = 1
+                 ):
+        self.gamma_penalty = gamma_penalty
+        self.gamma_match = gamma_match
+        self.threshold = threshold
+        self.directions = directions
+        self.directional_penalties = directional_penalties
+        self.directional_distances = directional_distances
+        self.gain_min_val = gain_min_val
+        self.gain_max_val = gain_max_val
+        self.gain_slope_at_min = gain_slope_at_min
 
+    def __call__(self, X, Y):
+        X = np.asanyarray(X)
+        Y = np.asanyarray(Y)
+        
+        # pairwise distances
+        pwD = cdist_local(X,Y,element_of_set_metric)
+
+        cost, B = bsw_forward(pwD,
+                            self.gamma_penalty,
+                            self.gamma_match,
+                            self.threshold,
+                            self.directions,
+                            self.directional_penalties,
+                            self.directional_distances,
+                            self.gain_min_val,
+                            self.gain_max_val,
+                            self.gain_slope_at_min)
+        out = (cost, B)
+        return out
+    
+    def from_similarity_matrix(self,pwD):
+        cost, B = bsw_forward(pwD,
+                            self.gamma_penalty,
+                            self.gamma_match,
+                            self.threshold,
+                            self.directions,
+                            self.directional_penalties,
+                            self.directional_distances,
+                            self.gain_min_val,
+                            self.gain_max_val,
+                            self.gain_slope_at_min)
+        out = (cost, B)
+        return out
+    
+@jit(nopython=True)
+def bsw_forward(pwD, 
+                gamma_penalty = -1.0,
+                gamma_match = 1.0,
+                threshold = 1.0,
+                directions = np.array([[1, 0],[1, 1],[0, 1]]),
+                directional_penalties = np.array([0,0,0]),
+                directional_distances = np.array([1,1,1]),
+                gain_min_val = 0, 
+                gain_max_val = 10, 
+                gain_slope_at_min = 1):
+    """
+    compute needleman-wunsch cost matrix
+    and backtracking path
+    from weighted directions and
+    a pairwise distance matrix
+
+    Parameters
+    ----------
+    pwD : np.ndarray
+        Pairwise distance matrix (computed e.g., with `cdist`).
+    gamma_penalty: float
+        penalty value
+    gamma_match: float
+        matching value
+    threshold: float
+        threshold distance between match and penalty
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    path: np.ndarray
+        backtracked path
+    """
+    # Initialize arrays and helper variables
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+    # the SW distance matrix is initialized with zero
+    D = np.zeros((M + 1, N + 1),dtype=float)
+    # Backtracking
+    B = np.ones((M, N),dtype=np.int8) * -1
+    lower_bound = 0 
+    max_steps_below_1 = 20
+    # Compute the distance iteratively
+    D[0, 0] = 0
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            maxGain = -np.inf
+            maxidx = -1
+            maxPrevGain = -np.inf
+            gamma = (gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty)
+            for directionsidx, direction in enumerate(directions):
+                (istep, jstep) = direction
+                previ = i - istep
+                prevj = j - jstep
+                if previ >= 0 and prevj >= 0: 
+                    # match gain or loss scaled by distance weight accumulated for this direction
+                    distanceGain = directional_distances[directionsidx] * gamma
+                    prevGain = D[previ, prevj] 
+                    # penalties incured by this direction
+                    penaltyGain = directional_penalties[directionsidx] * gamma_penalty           
+                    Gain = prevGain + distanceGain + penaltyGain              
+                    if Gain > maxGain:
+                        maxGain = Gain
+                        maxidx = directionsidx
+                        maxPrevGain = prevGain
+
+            if maxGain - maxPrevGain >= 0:          
+                D[i, j] = bounded_recursion(maxPrevGain, 
+                                            min_val = gain_min_val, 
+                                            max_val = gain_max_val, 
+                                            slope_at_min = gain_slope_at_min)
+            else:
+
+                if maxPrevGain > lower_bound and maxGain < lower_bound:
+                    # don't move vertically more than ten steps without match
+                    # if maxPrevGain < 0.5 ** max_steps_below_1 and maxidx in [1,2]:
+                    #     D[i, j] = lower_bound
+                    # else:
+                    D[i, j] = maxPrevGain * 0.5
+                else:
+                    D[i, j] = max(maxGain, lower_bound)
+            B[i - 1, j - 1] = maxidx 
+
+
+    output_D = D[1:, 1:]
+    return  output_D, B
 
 
 if __name__ == "__main__":
