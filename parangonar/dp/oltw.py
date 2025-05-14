@@ -10,40 +10,8 @@ from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
 
-
-def element_of_metric(vec1, vec2):
-    """
-    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
-    """
-    return 2 - np.sum(vec2 == vec1)
-
-
-def cdist_local(arr1, arr2, metric):
-    """
-    compute array of pairwise distances between
-    the elements of two arrays given a metric
-
-    Parameters
-    ----------
-    arr1: numpy nd array
-
-    arr2: numpy nd array
-
-    metric: callable
-        a metric function
-
-    Returns
-    -------
-
-    pdist_array: numpy 2d array
-        array of pairwise distances
-    """
-    pdist_array = np.ones((arr1.shape[0], arr2.shape[0])) * np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
-            pdist_array[i, j] = metric(arr1[i], arr2[j])
-    return pdist_array
-
+from ..dp.metrics import (element_of_metric,
+                          cdist_local)
 
 class Direction(IntEnum):
     REF = 0

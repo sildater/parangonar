@@ -11,49 +11,7 @@ from queue import Queue
 from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
 import os
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-
-
-def tempo_and_pitch_metric(
-    pitch_set_s,
-    pitch_p,
-    onset_s,
-    onset_p,
-    prev_onset_s,
-    prev_onset_p,
-    tempo,  # sec / beat
-    time_weight=0.5,
-    tempo_factor=0.5,
-):
-    """
-    metric that combines
-    1) pitch set metric
-    2) onset deviation based on tempo
-
-    returns the distance and the tempo associated with it
-    """
-    # pitch stuff
-    if pitch_p in pitch_set_s:
-        pitch_dist = 0
-    else:
-        pitch_dist = 1
-
-    # onset stuff
-    estimated_onset = prev_onset_p + (onset_s - prev_onset_s) * tempo
-    onset_dist = abs(onset_p - estimated_onset) / tempo  # normalize offset by tempo4
-
-    # tempo stuff
-    if onset_s - prev_onset_s > 0:
-        current_tempo = (onset_p - prev_onset_p) / (onset_s - prev_onset_s)
-    else:
-        current_tempo = tempo + (onset_p - prev_onset_p)
-    exponential_average_tempo = (
-        tempo_factor * current_tempo + (1 - tempo_factor) * tempo
-    )
-
-    dist = pitch_dist + time_weight * onset_dist
-    return dist, exponential_average_tempo
+from ..dp.metrics import tempo_and_pitch_metric
 
 
 def accumulate_tester():
