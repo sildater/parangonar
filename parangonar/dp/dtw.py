@@ -5,8 +5,7 @@ This module contains dynamic time warping methods.
 """
 
 import numpy as np
-from scipy.spatial.distance import cdist
-import numba
+from scipy.spatial.distance import euclidean, cdist
 from numba import jit
 
 # helpers and metrics
@@ -27,6 +26,10 @@ class WeightedDynamicTimeWarping(object):
         weights associated with each of the three possible steps
     directions : double array
         directions.
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
 
     """
 
@@ -34,13 +37,13 @@ class WeightedDynamicTimeWarping(object):
         self,
         directional_weights=np.array([1, 1, 1]),
         directions=np.array([[1, 0], [1, 1], [0, 1]]),
-        metric="euclidean",
-        cdist_local=False,
+        metric=euclidean,
+        cdist_fun=cdist,
     ):
         self.directional_weights = directional_weights
         self.directions = directions
         self.metric = metric
-        self.cdist_local = cdist_local
+        self.cdist_fun = cdist_fun
 
     def __call__(self, X, Y, return_matrices=False, return_cost=False):
         """
@@ -64,10 +67,7 @@ class WeightedDynamicTimeWarping(object):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
-        if self.cdist_local:
-            pwD = cdist_local(X, Y, self.metric)
-        else:
-            pwD = cdist(X, Y, self.metric)
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         out = self.from_distance_matrix(
             pwD, return_matrices=return_matrices, return_cost=return_cost
@@ -110,22 +110,29 @@ WDTW = WeightedDynamicTimeWarping
 class DynamicTimeWarping(object):
     """
     pure python vanilla Dynamic Time Warping
+
+    Parameters
+    ----------
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     """
 
-    def __init__(self, metric="euclidean", cdist_local=False):
+    def __init__(self, 
+                 metric=euclidean, 
+                 cdist_fun=cdist
+                 ):
         self.metric = metric
-        self.cdist_local = cdist_local
+        self.cdist_fun = cdist_fun
 
     def __call__(self, X, Y, return_path=True, return_cost_matrix=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
-        if self.cdist_local:
-            D = cdist_local(X, Y, self.metric)
-        else:
-            D = cdist(X, Y, self.metric)
+        pwD = self.cdist_fun(X, Y, self.metric)
         # Compute accumulated cost matrix
-        dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
+        dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(pwD)
         dtwd_distance = dtwd_matrix[-1, -1]
 
         # Output
@@ -147,6 +154,11 @@ DTW = DynamicTimeWarping
 class DynamicTimeWarpingSingleLoop(object):
     """
     pure python vanilla Dynamic Time Warping
+
+    Parameters
+    ----------
+    metric: callable
+        the pairwise distance metric to be used between the input
     """
 
     def __init__(self, metric=element_of_set_metric):
@@ -187,7 +199,10 @@ class FlexDynamicTimeWarping(object):
         directions.
     buffer: int
         buffer zone for flexible path end point
-
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     """
 
     def __init__(
@@ -195,14 +210,14 @@ class FlexDynamicTimeWarping(object):
         directional_weights=np.array([1, 1, 1]),
         directions=np.array([[1, 0], [1, 1], [0, 1]]),
         buffer=1,
-        metric="euclidean",
-        cdist_local=False,
+        metric=euclidean,
+        cdist_fun=cdist,
     ):
         self.directional_weights = directional_weights
         self.directions = directions
         self.buffer = buffer
         self.metric = metric
-        self.cdist_local = cdist_local
+        self.cdist_fun = cdist_fun
 
     def __call__(self, X, Y, return_matrices=False, return_cost=False):
         """
@@ -227,10 +242,7 @@ class FlexDynamicTimeWarping(object):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
-        if self.cdist_local:
-            pwD = cdist_local(X, Y, self.metric)
-        else:
-            pwD = cdist(X, Y, self.metric)
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         out = self.from_distance_matrix(
             pwD, return_matrices=return_matrices, return_cost=return_cost

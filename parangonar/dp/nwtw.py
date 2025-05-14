@@ -5,8 +5,7 @@ Implementation of Needleman Wunsch and derived algorithms
 """
 import numpy as np
 from collections import defaultdict
-from scipy.spatial.distance import euclidean
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import euclidean, cdist
 from numba import jit
 # helpers and metrics
 from .metrics import (cdist_local, 
@@ -399,7 +398,7 @@ class OriginalNeedlemanWunsch(object):
     """
     Original Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
 
-        Parameters
+    Parameters
     ----------
     metric: callable
         the pairwise distance metric to be used between the input
@@ -632,8 +631,8 @@ class BoundedSmithWaterman(object):
                             self.gain_slope_at_min)
         out = (cost, B)
         return out
-  
-    
+
+
 @jit(nopython=True)
 def bsw_forward(pwD, 
                 gamma_penalty = -1.0,
