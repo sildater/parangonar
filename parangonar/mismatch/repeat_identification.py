@@ -239,10 +239,9 @@ class RepeatIdentifier(object):
                 partial_path_id, partial_path = pp_val
                 plt.plot(partial_path[:,1], partial_path[:,0], c = colors[pp_no%3])
                 plt.text(partial_path[0,1], partial_path[0,0], partial_path_id, c = colors[pp_no%3], fontsize=12)
-            plt.savefig(performance + "_" + path_string + "_cost.png")
+            plt.savefig(performance + "_" + path_string + "_.png")
             plt.close()
         path_gains[path_gain] = path_string
 
         return found_path, found_path_object
-    
     

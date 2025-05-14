@@ -149,7 +149,9 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     Needleman-Wunsch Dynamic Time Warping as introduced by Grachten et al.
     """
 
-    def __init__(self, metric=euclidean, gamma=0.1):
+    def __init__(self, 
+                 metric=euclidean, 
+                 gamma=0.1):
         super().__init__(metric=metric, gamma=gamma)
 
     def __call__(self, X, Y, return_path=True, window=None, return_cost_matrix=False):
@@ -240,6 +242,10 @@ class WeightedNeedlemanWunschTimeWarping(object):
         for each direction, the pairwise distance idx which accumulate
     directional_penalties: np.ndarray
         for each direction, the sum of penalites which accumulate
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     """
 
     def __init__(
@@ -249,21 +255,24 @@ class WeightedNeedlemanWunschTimeWarping(object):
         directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
         directional_weights=np.array([1, 1, 1]),
         metric=euclidean,
+        cdist_fun=cdist,
         gamma=1,
     ):
         self.metric = metric
+        self.cdist_fun = cdist_fun
         self.gamma = gamma
         self.directional_weights = directional_weights
         self.directions = directions
         self.directional_penalties = directional_penalties
         self.directional_distances = directional_distances
+        
 
     def __call__(self, X, Y, return_matrices=True, return_cost=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
 
         # pairwise distances
-        pwD = cdist(X, Y, "euclidean")
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         cost, path, B = weighted_nwdtw_forward_and_backward(
             pwD,
@@ -392,6 +401,10 @@ class OriginalNeedlemanWunsch(object):
 
         Parameters
     ----------
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     gamma_penalty: float
         penalty value
     gamma_match: float
@@ -405,6 +418,7 @@ class OriginalNeedlemanWunsch(object):
     def __init__(
         self,
         metric=euclidean,
+        cdist_fun=cdist,
         gamma_penalty=-1.0,
         gamma_match=1.0,
         gap_penalty=-0.5,
@@ -412,6 +426,7 @@ class OriginalNeedlemanWunsch(object):
         smith_waterman=False,
     ):
         self.metric = metric
+        self.cdist_fun = cdist_fun
         self.gamma_penalty = gamma_penalty
         self.gamma_match = gamma_match
         self.gap_penalty = gap_penalty
@@ -423,7 +438,7 @@ class OriginalNeedlemanWunsch(object):
         Y = np.asanyarray(Y, dtype=float)
 
         # pairwise distances
-        pwD = cdist(X, Y, "euclidean")
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         cost, path, B = onw_forward_and_backward(
             pwD,
@@ -554,11 +569,17 @@ class BoundedSmithWaterman(object):
         matching value
     threshold: float
         threshold distance between match and penalty
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     """
     def __init__(self,
                  gamma_penalty = -1.0,
                  gamma_match = 1.0,
                  threshold = 1.0,
+                 metric=element_of_set_metric,
+                 cdist_fun=cdist_local,
                  directions = np.array([[1, 0],[1, 1],[0, 1]]),
                  directional_penalties = np.array([0,0,0]),
                  directional_distances = np.array([1,1,1]),
@@ -566,6 +587,8 @@ class BoundedSmithWaterman(object):
                  gain_max_val = 10, 
                  gain_slope_at_min = 1
                  ):
+        self.metric = metric
+        self.cdist_fun = cdist_fun
         self.gamma_penalty = gamma_penalty
         self.gamma_match = gamma_match
         self.threshold = threshold
@@ -581,7 +604,7 @@ class BoundedSmithWaterman(object):
         Y = np.asanyarray(Y)
         
         # pairwise distances
-        pwD = cdist_local(X,Y,element_of_set_metric)
+        pwD = self.cdist_fun(X,Y,self.metric)
 
         cost, B = bsw_forward(pwD,
                             self.gamma_penalty,
@@ -609,6 +632,7 @@ class BoundedSmithWaterman(object):
                             self.gain_slope_at_min)
         out = (cost, B)
         return out
+  
     
 @jit(nopython=True)
 def bsw_forward(pwD, 
