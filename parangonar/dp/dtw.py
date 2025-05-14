@@ -12,30 +12,6 @@ from numba import jit
 # helpers and metrics
 
 
-def element_of_metric(vec1, vec2):
-    """
-    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
-    """
-    return 1 - np.sum(vec2 == vec1)
-
-
-def element_of_set_metric(element_, set_):
-    """
-    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
-    """
-    if element_ in set_:
-        return 0.0
-    else:
-        return 1.0
-
-
-def l2(vec1, vec2):
-    """
-    l2 metric between vec1 and vec2
-    """
-    return np.sqrt(np.sum((vec2 - vec1) ** 2))
-
-
 def invert_matrix(S, inversion="reciprocal", positive=False):
     """
     simple converter from similarity to distance matrix

@@ -142,7 +142,7 @@ NW = NeedlemanWunsch
 
 class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     """
-    Needleman-Wunsch Dynamic Time Warping
+    Needleman-Wunsch Dynamic Time Warping as introduced by Grachten et al.
     """
 
     def __init__(self, metric=euclidean, gamma=0.1):
