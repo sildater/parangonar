@@ -144,3 +144,51 @@ def tempo_and_pitch_metric(
 
     dist = pitch_dist + time_weight * onset_dist
     return dist, exponential_average_tempo
+
+
+def onset_pitch_duration_metric(
+    pitch_s,
+    pitch_p,
+    onset_s,
+    onset_p,
+    prev_onset_s,
+    prev_onset_p,
+    duration_s,
+    duration_p,
+    tempo,  # sec / beat
+    weights=np.array([1,1,1]), # onset, dur, pitch
+    tempo_factor=0.5,
+):
+    """
+    metric that combines
+    1) pitch set metric
+    2) onset deviation based on tempo
+    3) duration
+
+    returns the distance and the tempo associated with it
+    """
+    # pitch stuff
+    if pitch_p == pitch_s:
+        pitch_dist = 0
+    else:
+        pitch_dist = 1
+
+    # onset stuff
+    estimated_onset = prev_onset_p + (onset_s - prev_onset_s) * tempo
+    onset_dist = abs(onset_p - estimated_onset) / tempo  # normalize offset by tempo4
+
+    # duration stuff
+    estimated_duration = duration_s * tempo
+    duration_dist = abs(np.log(duration_p/estimated_duration)) # abs log of duration ratio
+
+    # tempo stuff
+    if onset_s - prev_onset_s > 0:
+        current_tempo = (onset_p - prev_onset_p) / (onset_s - prev_onset_s)
+    else:
+        current_tempo = tempo + (onset_p - prev_onset_p)
+    exponential_average_tempo = (
+        tempo_factor * current_tempo + (1 - tempo_factor) * tempo
+    )
+
+    dist = weights.dot(np.array([onset_dist,duration_dist,pitch_dist]))
+    return dist, exponential_average_tempo

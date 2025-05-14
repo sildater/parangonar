@@ -10,7 +10,8 @@ from numba import jit
 # helpers and metrics
 from .metrics import (cdist_local, 
                       element_of_set_metric,
-                      bounded_recursion)
+                      bounded_recursion,
+                      onset_pitch_duration_metric)
 
 class NWDistanceMatrix(object):
     """
@@ -721,6 +722,144 @@ def bsw_forward(pwD,
 
     output_D = D[1:, 1:]
     return  output_D, B
+
+
+
+class SubPartDynamicProgramming(object):
+    """
+    Monophonic Subpart Alignment with Dynamic Programming.
+
+    Parameters
+    ----------
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+    """
+
+    def __init__(
+        self,
+        directional_weights=np.array([1, 1]),
+        directions=np.array([[1, 0], [1, 1]])
+    ):
+        self.directional_weights = directional_weights
+        self.directions = directions
+
+    def __call__(self, X, Y):
+        """
+        Parameters
+        ----------
+        X : np.ndarray
+            performance note array.
+        Y : np.ndarray
+            score note array.
+        """
+
+        out = subpart_DP_forward_and_backward(
+            X, Y,
+            self.directional_weights, self.directions
+        )
+        return out
+
+def subpart_DP_forward_and_backward(
+    pna, sna,
+    directional_weights=np.array([1, 1]),
+    directions=np.array([[1, 0], [1, 1]]),
+):
+    """
+    Parameters
+    ----------
+    pna : np.ndarray
+        performance note array.
+    sna : np.ndarray
+        score note array.
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    path: np.ndarray
+        backtracked path
+    """
+    # some weighting hyperparams
+    weights = np.array([1,0.5,2]) # onset, dur, pitch
+    tempo_factor = 0.1 # moving average recursion
+    # Initialize arrays and helper variables
+    M = pna.shape[0]
+    N = sna.shape[0]
+    
+    # the cost vector is initialized with INFINITY
+    C = np.ones((N + 1), dtype=float) * np.inf
+    C[0] = 0
+    # cost matrix just for debugging
+    D = np.ones((M, N), dtype=float) * np.inf
+    # guess the initial tempo from the whole length
+    init_tempo = (max(pna["onset_sec"]) - min(pna["onset_sec"])) / (max(sna["onset_beat"]) - min(sna["onset_beat"]))  
+    # Tempo vector in [sec / beat]
+    T = np.full((N + 1), init_tempo, dtype=float)
+    # performance index of the score 
+    perf_P = np.zeros(N+1, dtype=int)
+    # backtracking
+    B = np.ones((M, N), dtype=int) * -1
+
+    # extend the inputs with a dummy start
+    dummy_pna = np.copy(pna[0:1])
+    dummy_pna["onset_sec"] -= init_tempo
+    pna = np.concatenate((dummy_pna,pna))
+    dummy_sna = np.copy(sna[0:1])
+    dummy_sna["onset_beat"] -= 1
+    sna = np.concatenate((dummy_sna,sna))
+
+    # Compute the cost iteratively
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            for directionsidx, direction in enumerate(directions):
+                (istep, jstep) = direction
+                prevtempo = T[j - 1] # tempo at last score index
+                prev_perf_idx = perf_P[j - 1]
+                local_dist, new_tempo = onset_pitch_duration_metric(
+                    pitch_s=sna[j]["pitch"],
+                    pitch_p=pna[i]["pitch"],
+                    onset_s=sna[j]["onset_beat"],
+                    onset_p=pna[i]["onset_sec"],
+                    prev_onset_s=sna[j-1]["onset_beat"],
+                    prev_onset_p=pna[prev_perf_idx]["onset_sec"],
+                    duration_s = sna[j]["duration_beat"],
+                    duration_p = pna[i]["duration_sec"],
+                    tempo=prevtempo,  # sec / beat
+                    weights=weights,
+                    tempo_factor=tempo_factor
+                )
+                cost = C[j-1] + local_dist * directional_weights[directionsidx]
+                if cost < C[j]:
+                    C[j] = cost
+                    T[j] = new_tempo
+                    perf_P[j] = i
+            
+            # store the index of the performance note to backtrack to
+            B[i-1, j-1] = perf_P[j - 1] - 1
+            # store a global cost matrix, for debugging
+            D[i-1, j-1] = C[j]
+
+    n = N - 1
+    m = perf_P[N] - 1
+    step = [m, n]
+    path = [step]
+    for sna_step in range(N-1):
+        backtracking_perf_idx = B[m, n]
+        m = backtracking_perf_idx
+        n -= 1
+        step = [m, n]
+        path.append(step)
+
+    path = np.array(path, dtype=np.int32)[::-1]
+    output_path = path[:,0]
+    # ppath = perf_P[1:] - 1
+    return C, output_path, D, B
 
 
 if __name__ == "__main__":
