@@ -731,19 +731,19 @@ class SubPartDynamicProgramming(object):
 
     Parameters
     ----------
-    directional_weights: np.ndarray
-        weights associated with each of the three possible steps
-    directions : double array
-        directions.
+    weights : np.ndarray
+        three weights associated with onset, dur, pitch distances
+    tempo_factor : float
+        moving average recursion factor for tempo update
     """
 
     def __init__(
         self,
-        directional_weights=np.array([1, 1]),
-        directions=np.array([[1, 0], [1, 1]])
+        weights = np.array([1,0.5,2]),
+        tempo_factor = 0.1
     ):
-        self.directional_weights = directional_weights
-        self.directions = directions
+        self.weights = weights
+        self.tempo_factor = tempo_factor
 
     def __call__(self, X, Y):
         """
@@ -755,16 +755,15 @@ class SubPartDynamicProgramming(object):
             score note array.
         """
 
-        out = subpart_DP_forward_and_backward(
-            X, Y,
-            self.directional_weights, self.directions
-        )
+        out = subpart_DP_forward_and_backward(X, Y, 
+                                              self.weights, 
+                                              self.tempo_factor)
         return out
 
 def subpart_DP_forward_and_backward(
-    pna, sna,
-    directional_weights=np.array([1, 1]),
-    directions=np.array([[1, 0], [1, 1]]),
+    pna, sna, 
+    weights = np.array([1,0.5,2]),
+    tempo_factor = 0.1
 ):
     """
     Parameters
@@ -773,10 +772,10 @@ def subpart_DP_forward_and_backward(
         performance note array.
     sna : np.ndarray
         score note array.
-    directional_weights: np.ndarray
-        weights associated with each of the three possible steps
-    directions : double array
-        directions.
+    weights : np.ndarray
+        three weights associated with onset, dur, pitch distances
+    tempo_factor : float
+        moving average recursion factor for tempo update
 
     Returns
     -------
@@ -785,9 +784,7 @@ def subpart_DP_forward_and_backward(
     path: np.ndarray
         backtracked path
     """
-    # some weighting hyperparams
-    weights = np.array([1,0.5,2]) # onset, dur, pitch
-    tempo_factor = 0.1 # moving average recursion
+
     # Initialize arrays and helper variables
     M = pna.shape[0]
     N = sna.shape[0]
@@ -817,28 +814,27 @@ def subpart_DP_forward_and_backward(
     # Compute the cost iteratively
     for i in range(1, M + 1):
         for j in range(1, N + 1):
-            for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
-                prevtempo = T[j - 1] # tempo at last score index
-                prev_perf_idx = perf_P[j - 1]
-                local_dist, new_tempo = onset_pitch_duration_metric(
-                    pitch_s=sna[j]["pitch"],
-                    pitch_p=pna[i]["pitch"],
-                    onset_s=sna[j]["onset_beat"],
-                    onset_p=pna[i]["onset_sec"],
-                    prev_onset_s=sna[j-1]["onset_beat"],
-                    prev_onset_p=pna[prev_perf_idx]["onset_sec"],
-                    duration_s = sna[j]["duration_beat"],
-                    duration_p = pna[i]["duration_sec"],
-                    tempo=prevtempo,  # sec / beat
-                    weights=weights,
-                    tempo_factor=tempo_factor
-                )
-                cost = C[j-1] + local_dist * directional_weights[directionsidx]
-                if cost < C[j]:
-                    C[j] = cost
-                    T[j] = new_tempo
-                    perf_P[j] = i
+            
+            prevtempo = T[j - 1] # tempo at last score index
+            prev_perf_idx = perf_P[j - 1]
+            local_dist, new_tempo = onset_pitch_duration_metric(
+                pitch_s=sna[j]["pitch"],
+                pitch_p=pna[i]["pitch"],
+                onset_s=sna[j]["onset_beat"],
+                onset_p=pna[i]["onset_sec"],
+                prev_onset_s=sna[j-1]["onset_beat"],
+                prev_onset_p=pna[prev_perf_idx]["onset_sec"],
+                duration_s = sna[j]["duration_beat"],
+                duration_p = pna[i]["duration_sec"],
+                tempo=prevtempo,  # sec / beat
+                weights=weights,
+                tempo_factor=tempo_factor
+            )
+            cost = C[j-1] + local_dist
+            if cost < C[j]:
+                C[j] = cost
+                T[j] = new_tempo
+                perf_P[j] = i
             
             # store the index of the performance note to backtrack to
             B[i-1, j-1] = perf_P[j - 1] - 1
