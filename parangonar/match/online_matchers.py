@@ -10,6 +10,9 @@ from .pretrained_models import AlignmentTransformer
 import torch
 from .matchers import na_within
 from scipy.interpolate import interp1d
+from .online_matchers import T_OLTW, OLTW
+from queue import Queue
+
 
 ################################### TEMPO MODELS ###################################
 
@@ -558,5 +561,56 @@ class OnlinePureTransformerMatcher(object):
 
 
 ################################### OLTW MATCHERS ###################################
+
+
+
+class TOLTWMatcher(object):
+    def __init__(self, 
+                 score_note_array):
+        self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+        features_s = self.prepare_score(self.score_note_array_full)
+        self.queue = Queue()
+        # best parameters according to https://arxiv.org/abs/2505.05078v1
+        self.tracker = T_OLTW(reference_features=features_s, 
+                            queue=self.queue, 
+                            hop_size = 1,
+                            window_size = 40,
+                            max_run_count = 10,
+                            init_tempo = 1,
+                            tempo_factor = 0.1,
+                            time_weight = 2.0,
+                            directional_weights = np.array([2., 1., 1.]))
+
+    def prepare_score(self, s_array):
+        features = list()
+        unique_onsets = np.unique(s_array["onset_beat"])
+        # create pitch set representation
+        for onset in unique_onsets:
+            features.append([onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])])
+        return features
+
+    def prepare_performance(self, p_array, func=None):
+        features = list()
+        for note in p_array:
+            features.append([note["onset_sec"], note["pitch"]])
+        return features
+
+    def offline(self, performance_note_array, func=None):
+        features_p = self.prepare_performance(performance_note_array, func)
+        for feature in features_p:
+            self.queue.put([feature])
+        tracking_path = self.tracker.run()
+
+        predicted_perf_times = np.array([features_p[i][0] for i in p[1]])
+        predicted_score_times = np.array([features_s[i][0] for i in p[0]])
+
+    def online(self, performance_note_onset_pitch, debug=False):
+        pass
+
+    def add_note_alignment(self, perf_id, score_id, perf_onset=None, score_onset=None):
+        pass
+
+    def __call__(self):
+        return None
 
 
