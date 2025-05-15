@@ -5,7 +5,8 @@ utilities for the thegluenote
 """
 import numpy as np
 from symusic import Score, Note, Track
-from ..dp.dtw import invert_matrix, WDTW
+from ..dp.dtw import WDTW
+from ..dp.metrics import invert_matrix
 from collections import defaultdict
 from scipy.interpolate import interp1d
 
