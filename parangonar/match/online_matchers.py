@@ -10,7 +10,7 @@ from .pretrained_models import AlignmentTransformer
 import torch
 from .matchers import na_within
 from scipy.interpolate import interp1d
-from .online_matchers import T_OLTW, OLTW
+from ..dp.t_oltw import T_OLTW
 from queue import Queue
 
 
@@ -632,6 +632,29 @@ class TOLTWMatcher(object):
                     self.add_note_alignment(
                         perf_note["id"], best_note["id"]
                     )
+
+        # create output alignment list
+        note_alignments = list()
+        for s_ID, p_ID in self.alignment:
+            note_alignments.append(
+                {"label": "match", "score_id": s_ID, "performance_id": p_ID}
+            )
+        # add unmatched notes
+        for score_note in self.score_note_array_full:
+            if score_note["id"] not in self._snote_aligned:
+                note_alignments.append(
+                    {"label": "deletion", "score_id": score_note["id"]}
+                )
+
+        for performance_note in performance_note_array:
+            if performance_note["id"] not in self._pnote_aligned:
+                note_alignments.append(
+                    {"label": "insertion", "performance_id": performance_note["id"]}
+                )
+
+        return note_alignments
+
+        
 
     def add_note_alignment(self, perf_id, score_id):
         self.alignment.append((score_id, perf_id))

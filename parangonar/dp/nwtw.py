@@ -723,7 +723,8 @@ def bsw_forward(pwD,
     output_D = D[1:, 1:]
     return  output_D, B
 
-
+# alias
+BSW = BoundedSmithWaterman
 
 class SubPartDynamicProgramming(object):
     """

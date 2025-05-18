@@ -19,7 +19,11 @@ from .match import (
     DualDTWNoteMatcher,
     TheGlueNoteMatcher,
 )
-from .match import OnlineTransformerMatcher, OnlinePureTransformerMatcher
+from .match import (
+    OnlineTransformerMatcher, 
+    OnlinePureTransformerMatcher,
+    TOLTWMatcher
+)
 from .evaluate import (
     fscore_alignments,
     print_fscore_alignments,
@@ -33,7 +37,9 @@ __all__ = [
     "DualDTWNoteMatcher",
     "TheGlueNoteMatcher",
     "OnlineTransformerMatcher",
-    "OnlinePureTransformerMatcher" "fscore_alignments",
+    "OnlinePureTransformerMatcher",
+    "TOLTWMatcher"
+    "fscore_alignments",
     "plot_alignment_comparison",
     "plot_alignment",
 ]

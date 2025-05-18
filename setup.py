@@ -22,7 +22,6 @@ REQUIRED = [
     "matplotlib",
     "partitura>=1.1.0",
     "symusic",
-    "scipy",
     "miditok",
 ]
 
