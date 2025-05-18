@@ -568,10 +568,12 @@ class TOLTWMatcher(object):
     def __init__(self, 
                  score_note_array):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
-        features_s = self.prepare_score(self.score_note_array_full)
+        self.features_s = self.prepare_score(self.score_note_array_full)
+        self.features_p = None
+        self.performance_note_array = None
         self.queue = Queue()
         # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = T_OLTW(reference_features=features_s, 
+        self.tracker = T_OLTW(reference_features=self.features_s, 
                             queue=self.queue, 
                             hop_size = 1,
                             window_size = 40,
@@ -580,37 +582,65 @@ class TOLTWMatcher(object):
                             tempo_factor = 0.1,
                             time_weight = 2.0,
                             directional_weights = np.array([2., 1., 1.]))
+        # alignment collectors
+        self._snote_aligned = set()
+        self._pnote_aligned = set()
+        self.alignment = []
 
     def prepare_score(self, s_array):
         features = list()
         unique_onsets = np.unique(s_array["onset_beat"])
+        self.unique_onsets = unique_onsets
         # create pitch set representation
         for onset in unique_onsets:
             features.append([onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])])
+        # score by pitch representation
+        self.score_by_pitch = defaultdict(list)
+        unique_pitches = np.unique(self.score_note_array_full["pitch"])
+        for pitch in unique_pitches:
+            self.score_by_pitch[pitch] = self.score_note_array_full[
+                self.score_note_array_full["pitch"] == pitch
+            ]
         return features
 
-    def prepare_performance(self, p_array, func=None):
+    def prepare_performance(self, performance_note_array):
+        self.performance_note_array = performance_note_array
         features = list()
-        for note in p_array:
+        for note in performance_note_array:
             features.append([note["onset_sec"], note["pitch"]])
         return features
 
-    def offline(self, performance_note_array, func=None):
-        features_p = self.prepare_performance(performance_note_array, func)
-        for feature in features_p:
+    def offline(self, performance_note_array):
+        tracking_path = self(performance_note_array)
+        # process tracking path into alignment
+        path_perf_notes = self.performance_note_array[tracking_path[1]]
+        predicted_score_times = self.unique_onsets[tracking_path[0]]
+
+        for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
+            if perf_note["id"] not in self._pnote_aligned:
+                p_pitch = perf_note["pitch"]
+                possible_score_notes = self.score_by_pitch[p_pitch]
+                possible_score_notes = na_within(
+                    possible_score_notes,
+                    "onset_beat",
+                    pred_score_onset,
+                    pred_score_onset,
+                    exclusion_ids=self._snote_aligned,
+                )
+                if len(possible_score_notes) > 0:
+                    best_note = possible_score_notes[0]
+                    self.add_note_alignment(
+                        perf_note["id"], best_note["id"]
+                    )
+
+    def add_note_alignment(self, perf_id, score_id):
+        self.alignment.append((score_id, perf_id))
+        self._snote_aligned.add(score_id)
+        self._pnote_aligned.add(perf_id)
+
+    def __call__(self, performance_note_array):
+        self.features_p = self.prepare_performance(performance_note_array)
+        for feature in self.features_p:
             self.queue.put([feature])
         tracking_path = self.tracker.run()
-
-        predicted_perf_times = np.array([features_p[i][0] for i in p[1]])
-        predicted_score_times = np.array([features_s[i][0] for i in p[0]])
-
-    def online(self, performance_note_onset_pitch, debug=False):
-        pass
-
-    def add_note_alignment(self, perf_id, score_id, perf_onset=None, score_onset=None):
-        pass
-
-    def __call__(self):
-        return None
-
-
+        return tracking_path
