@@ -7,3 +7,5 @@ e.g.:
 - matching a monophonic voice to a full performance
 """
 
+from repeat_identification import RepeatIdentifier
+from subpart import SubPartMatcher

@@ -26,13 +26,15 @@ from .match import (
     OLTWMatcher
 )
 from .mismatch import (
-    RepeatIdentifier
+    RepeatIdentifier,
+    SubPartMatcher
 )
 from .evaluate import (
     fscore_alignments,
     print_fscore_alignments,
     plot_alignment,
     plot_alignment_comparison,
+    save_pianoprecision_csv
 )
 
 __all__ = [
