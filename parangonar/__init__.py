@@ -48,4 +48,5 @@ __all__ = [
     "fscore_alignments",
     "plot_alignment_comparison",
     "plot_alignment",
+    "save_pianoprecision_csv"
 ]
