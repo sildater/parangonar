@@ -4,13 +4,15 @@
 This module contains On-Line Time Warping.
 """
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 import scipy
 from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
 
-from ..dp.metrics import (element_of_metric,
+from ..dp.metrics import (element_of_set_metric_se,
                           cdist_local)
 
 class Direction(IntEnum):
@@ -59,14 +61,13 @@ class OLTW(object):
     def __init__(
         self,
         reference_features=None,
-        input_feature_shape=None,
         queue=None,
         window_size=10,  # shape of the acc cost matric
         max_run_count=100,  # maximal number of steps
         hop_size=1,  # number of seq items that get added at step
         directional_weights=np.array([1, 1, 1]),  # down, diag, right
-        cdist_fun=cdist,
-        cdist_metric="euclidean",
+        cdist_fun=cdist_local,
+        cdist_metric=element_of_set_metric_se,
         **kwargs,
     ):
         self.queue = queue
@@ -74,7 +75,7 @@ class OLTW(object):
         self.cdist_metric = cdist_metric
         self.directional_weights = directional_weights
         if reference_features is not None:
-            self.set_feature_arrays(reference_features, input_feature_shape)
+            self.set_feature_arrays(reference_features)
         else:
             self.reference_features = None
             self.N_ref = None
@@ -86,16 +87,12 @@ class OLTW(object):
 
     def set_feature_arrays(
         self,
-        reference_features,
-        input_feature_shape=None,
+        reference_features
     ):
         self.reference_features = reference_features
-        self.N_ref = self.reference_features.shape[0]
-        if input_feature_shape is not None:
-            self.input_features = np.empty((0, input_feature_shape))
-        else:
-            self.input_features = np.empty((0, self.reference_features.shape[1]))
-
+        self.N_ref = len(reference_features)
+        self.input_features = list()
+    
     def initialize(self):
         self.ref_pointer = 0
         self.input_pointer = 0
@@ -225,7 +222,6 @@ class OLTW(object):
 
         # first add the columns to the right
         # do not go all the way to the corner
-
         for i in range(1, wx - d):
             for j in range(wy - d, wy):
                 local_dist = dist[i, j]
@@ -269,15 +265,15 @@ class OLTW(object):
         wx, wy = min(self.w, x), min(self.w, y)
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
-        # new_acc[0,0] = 0
         new_len_acc = np.zeros((wx, wy))
 
         if direction is Direction.REF:
             new_acc[:-d, :] = self.acc_dist_matrix[d:]
             new_len_acc[:-d, :] = self.acc_len_matrix[d:]
-            x_seg = self.reference_features[x - d : x]  # [d, 12]
-            y_seg = self.input_features[y - wy : y]  # [wy, 12]
+            x_seg = self.reference_features[x - d : x]  # [d, feature_dim]
+            y_seg = self.input_features[y - wy : y]  # [wy, feature_dim]
             dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
+            dist
             new_acc, new_len_acc = self.update_ref_direction(
                 dist, new_acc, new_len_acc, wx, wy, d
             )
@@ -286,8 +282,8 @@ class OLTW(object):
             overlap_y = wy - d
             new_acc[:, :-d] = self.acc_dist_matrix[:, -overlap_y:]
             new_len_acc[:, :-d] = self.acc_len_matrix[:, -overlap_y:]
-            x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-            y_seg = self.input_features[y - d : y]  # [d, 12]
+            x_seg = self.reference_features[x - wx : x]  # [wx, feature_dim]
+            y_seg = self.input_features[y - d : y]  # [d, feature_dim]
             dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
             new_acc, new_len_acc = self.update_input_direction(
                 dist, new_acc, new_len_acc, wx, wy, d
@@ -298,11 +294,6 @@ class OLTW(object):
             new_acc[:-d, :-d] = self.acc_dist_matrix[d:, -overlap_y:]
             new_len_acc[:-d, :-d] = self.acc_len_matrix[d:, -overlap_y:]
 
-            # old costly distance computation
-            # x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-            # y_seg = self.input_features[y - wy : y]  # [wy, 12]
-            # dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-            # new, compute only outer slice
             x_seg = self.reference_features[x - wx : x - d]  # [wx - d]
             y_seg = self.input_features[y - d : y]  # [d]
             self.local_both_dist[: wx - d, -d:] = self.cdist_fun(
@@ -329,8 +320,8 @@ class OLTW(object):
         new_acc[0, 0] = 0  # starting point in corner
         new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
         new_len_acc[0, 0] = 0  # starting point in corner
-        x_seg = self.reference_features[0 : x]  # [wx, 12]
-        y_seg = self.input_features[y - d : y]  # [d, 12]
+        x_seg = self.reference_features[0 : x]  # [wx, feature_dim]
+        y_seg = self.input_features[y - d : y]  # [d, feature_dim]
         dist_mat = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
         dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
         dist_mat[1:,1:] = dist
@@ -345,7 +336,6 @@ class OLTW(object):
         norm_x_edge = self.acc_dist_matrix[-1, :] / self.acc_len_matrix[-1, :]
         norm_y_edge = self.acc_dist_matrix[:, -1] / self.acc_len_matrix[:, -1]
         cat = np.concatenate((norm_x_edge, norm_y_edge))
-
         min_idx = np.argmin(cat)
         offset = self.offset()
         if min_idx < len(norm_x_edge):
@@ -383,7 +373,7 @@ class OLTW(object):
     def get_new_input(self):
         try:
             input_feature = self.queue.get(block=False)
-            self.input_features = np.vstack([self.input_features, input_feature])
+            self.input_features += input_feature
             self.input_pointer += self.hop_size
 
         except:
@@ -440,18 +430,11 @@ if __name__ == "__main__":
     REPEATS = 3
     HOP_SIZE = 1
     WINDOW_SIZE = 3
-    # r = np.row_stack([np.arange(RANGE_L).reshape(-1,1) for k in range(REPEATS)]).astype(float)
-    # t = np.row_stack([np.roll(np.arange(RANGE_L),0,0).reshape(-1,1) for k in range(REPEATS)]).astype(float)
-    # t +=0.5
-    # r = np.arange(40).reshape(-1,4)
-    # t = np.arange(40).reshape(-1,1)
 
     r = np.row_stack([np.arange(3).reshape(-1, 3) for k in range(10)])
     t = np.row_stack([np.arange(3).reshape(-1, 1) for k in range(10)])
 
     queue = Queue()
-    # for tt in range((RANGE_L * REPEATS) // HOP_SIZE):
-    #     queue.put(t[tt*HOP_SIZE: (tt+1)*HOP_SIZE,:])
     for tt in range(40):
         queue.put(t[tt : tt + 1, :])
 
@@ -464,7 +447,7 @@ if __name__ == "__main__":
         max_run_count=4,
         directional_weights=np.array([1.05, 1.1, 1]),
         cdist_fun=cdist_local,
-        cdist_metric=element_of_metric,
+        cdist_metric=element_of_set_metric_se,
     )
     p = o.run()
     print("path \n", p)

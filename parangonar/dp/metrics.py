@@ -17,7 +17,16 @@ def element_of_metric(vec1, vec2):
 
 def element_of_set_metric(element_, set_):
     """
-    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
+    metric that evaluates occurence of an element in a set
+    """
+    if element_ in set_:
+        return 0.0
+    else:
+        return 1.0
+    
+def element_of_set_metric_se(set_, element_):
+    """
+    metric that evaluates occurence of an element in a set
     """
     if element_ in set_:
         return 0.0
@@ -80,11 +89,15 @@ def cdist_local(arr1, arr2, metric):
     pdist_array: numpy 2d array
         array of pairwise distances
     """
-    pdist_array = np.ones((arr1.shape[0], arr2.shape[0])) * np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
+    l1 = len(arr1)
+    l2 = len(arr2)
+    pdist_array = np.ones((l1, l2)) * np.inf
+    for i in range(l1):
+        for j in range(l2):
             pdist_array[i, j] = metric(arr1[i], arr2[j])
     return pdist_array
+
+
 
 
 @jit(nopython=True)

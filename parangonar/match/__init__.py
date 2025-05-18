@@ -17,7 +17,8 @@ from .matchers import (
 from .online_matchers import (
     OnlineTransformerMatcher, 
     OnlinePureTransformerMatcher,
-    TOLTWMatcher
+    TOLTWMatcher,
+    OLTWMatcher
 )
 from .utils import node_array, save_parangonada_csv
 from .pretrained_models import AlignmentTransformer, TheGlueNote

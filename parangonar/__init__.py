@@ -22,7 +22,11 @@ from .match import (
 from .match import (
     OnlineTransformerMatcher, 
     OnlinePureTransformerMatcher,
-    TOLTWMatcher
+    TOLTWMatcher,
+    OLTWMatcher
+)
+from .mismatch import (
+    RepeatIdentifier
 )
 from .evaluate import (
     fscore_alignments,

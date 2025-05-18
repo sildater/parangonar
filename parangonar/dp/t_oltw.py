@@ -5,12 +5,8 @@ This module contains TempoOLTW.
 """
 
 import numpy as np
-import scipy
 from enum import IntEnum
 from queue import Queue
-from scipy.spatial.distance import cdist
-import matplotlib.pyplot as plt
-import os
 from ..dp.metrics import tempo_and_pitch_metric
 
 
