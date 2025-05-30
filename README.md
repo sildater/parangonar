@@ -1,7 +1,7 @@
 Parangonar
 ==========
 
-**Parangonar** is a Python package for note alignment of symbolic music. 
+**Parangonar** is a Python package for note alignment and of symbolic music. 
 **Parangonar** contains offline and online note alignment algorithms as well as task-agnostic dynamic programming sequence alignment algorithms.
 Note alignments produced by **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
@@ -26,7 +26,7 @@ There is a `getting_started.ipynb` notebook which covers the basic note alignmen
 To demonstrate **Parangonar** the contents of performance and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)) are loaded, which returns a score object, a performance objects, and an alignment list. A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth.
 
 
-Documentation: creation of note alignments
+Documentation: Creation of Note Alignments
 -------
 
 **Parangonar** contains implementations of note alignments algorithms:
@@ -46,7 +46,7 @@ Documentation: creation of note alignments
         semi-automatic version of the `AutomaticNoteMatcher`, useful if annotations can be leveraged as anchor points. 
 
 
-3. Online / Real-time Note Matching: 
+2. Online / Real-time Note Matching: 
     - `OnlineTransformerMatcher`::
         pre-trained neural network for local alignment decisions.
         post-processing by a tempo model.
@@ -54,11 +54,20 @@ Documentation: creation of note alignments
         pre-trained neural network for local alignment decisions.
         no post-processing.
     - `TempoOLTWMatcher`: 
-        tba.
+        symbolic dynamic programming akin to Online Time Warping
+        based on a tempo and pitch-based metric
     - `OLTWMatcher`:
-        tba. 
+        symbolic dynamic programming akin to Online Time Warping
+        based on a pitch-based metric 
 
-Documentation: dynamic programming 
+3. Mismatching (cases other than one-to-one matching): 
+    - `RepeatIdentifier`::
+        automatically infer the repeat structure of a MIDI performance
+    - `SubPartMatcher` 
+        note matcher which matches a monophonic voice from the score
+        to a performance.
+
+Documentation: Dynamic Programming Algorithms
 -------
 
 **Parangonar** contains implementations of (non-)standard dynamic programming sequence alignment algorithms:
@@ -74,6 +83,7 @@ Documentation: dynamic programming
     - weightedNWDTW: generalized directions, weights, and penalites
     - original Needleman-Wunsch: using binary gamma on scalars, maximizing version
     - original Smith-Waterman: using binary gamma on scalars, maximizing version
+    - BoundedSmithWaterman: local sequence alignment with bounded gain
 
 3. OLTW:
     - On-Line Time Warping: standard OLTW, Dixon et al.
@@ -81,7 +91,7 @@ Documentation: dynamic programming
 
 
 
-Documentation: note alignment utilities
+Documentation: Note Alignment Utilities
 -------
 
 **Parangonar** contains several utilities around note matching:
@@ -128,42 +138,7 @@ Documentation: note alignment utilities
 Publications
 -------
 
-Two publications are associated with models available in **Parangonar**.
-The anchor point-enhanced `AnchorPointNoteMatcher` and the automatic `AutomaticNoteMatcher` are this described in:
-
-```
-@article{nasap-dataset,
- title = {Automatic Note-Level Score-to-Performance Alignments in the ASAP Dataset},
- author = {Peter, Silvan David and Cancino-Chacón, Carlos Eduardo and Foscarin, Francesco and McLeod, Andrew Philip and Henkel, Florian and Karystinaios, Emmanouil and Widmer, Gerhard},
- doi = {10.5334/tismir.149},
- journal = {Transactions of the International Society for Music Information Retrieval {(TISMIR)}},
- year = {2023}
-}
-```
-
-and the `AnchorPointNoteMatcher` is used in the creation of the [note-aligned (n)ASAP Dataset](https://github.com/CPJKU/asap-dataset).
-
-The improved automatic `DualDTWNoteMatcher` and the online / realtime `OnlineTransformerMatcher` / `OnlinePureTransformerMatcher` are described in:
-
-```
-@inproceedings{peter-offline2023,
-  title={Online Symbolic Music Alignment with Offline Reinforcement Learning},
-  author={Peter, Silvan David},
-  booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
-  year={2023}
-}
-```
-
-The pre-trained `TheGlueNoteMatcher` is described in:
-
-```
-@inproceedings{peter-thegluenote2024,
-  title={TheGlueNote: Learned Representations for Robust and Flexible Note Alignment},
-  author={Peter, Silvan David and Widmer, Gerhard},
-  booktitle={International Society for Music Information Retrieval Conference {(ISMIR)}},
-  year={2024}
-}
-```
+Several publications are associated with models available in **Parangonar**, you find a list in the `refs.md` file. Please to them for detailed algorithm descritions and evaluation and cite the relevant ones if you use parangonar for a publication.
 
 Acknowledgments
 -------
