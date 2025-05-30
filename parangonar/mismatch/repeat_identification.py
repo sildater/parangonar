@@ -191,9 +191,9 @@ class RepeatIdentifier(object):
         Parameters
         ----------
         score: object
-            path to a score
-        performance : obect
-            path to a performance
+            a score object
+        performance : object
+            a performance object
         """
 
         part, unique_onsets, score_pitches_at_onsets = self.prepare_score(score)
