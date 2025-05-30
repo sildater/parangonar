@@ -27,9 +27,9 @@ class RepeatIdentifier(object):
                                        gain_max_val = 10)
 
 
-    def prepare_score(self, score_path):
+    def prepare_score(self, score):
         # score representation
-        score = pt.load_musicxml(score_path)
+        # score = pt.load_musicxml(score_path)
         part = pt.score.merge_parts(score.parts)
         score_note_array = part.note_array()
         unique_onsets = np.unique(score_note_array["onset_beat"])
@@ -39,8 +39,8 @@ class RepeatIdentifier(object):
             score_pitches_at_onsets.append(set(score_note_array[score_note_array["onset_beat"] == onset]["pitch"]))
         return part, unique_onsets, score_pitches_at_onsets
 
-    def prepare_performance(self, perf_path):
-        perf = pt.load_performance_midi(perf_path)
+    def prepare_performance(self, perf):
+        # perf = pt.load_performance_midi(perf_path)
         # performance representation
         perf_note_array = perf.note_array()
         perf_pitches = perf_note_array["pitch"]
@@ -190,9 +190,9 @@ class RepeatIdentifier(object):
         """
         Parameters
         ----------
-        score: str
+        score: object
             path to a score
-        performance : str
+        performance : obect
             path to a performance
         """
 

@@ -14,7 +14,7 @@ import partitura as pt
 from copy import copy
 
 RNG = np.random.RandomState(1984)
-from tests import MATCH_FILES
+from tests import MATCH_FILES, P_FILES, S_FILES
 
 
 class TestMismatch(unittest.TestCase):
@@ -23,11 +23,15 @@ class TestMismatch(unittest.TestCase):
         cls.perf_match, cls.alignment, cls.score_match = pt.load_match(
             filename=MATCH_FILES[0], create_score=True
         )
-        
+        cls.perf_mid = pt.load_performance_midi(P_FILES[0])
+        cls.score_xml = pt.load_musicxml(S_FILES[0])
 
     def test_repeat_identification(self, **kwargs):
-        
-        self.assertTrue(True)
+
+        ri = RepeatIdentifier()
+        found_path, _ = ri(self.score_xml,self.perf_mid)
+        true_path = "AABBCCDEDFAB"
+        self.assertTrue(true_path == found_path)
 
     def test_subpart_alignment(self, **kwargs):
         # create a subpart
