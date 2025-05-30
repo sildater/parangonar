@@ -55,15 +55,15 @@ Documentation: Creation of Note Alignments
         no post-processing.
     - `TempoOLTWMatcher`: 
         symbolic dynamic programming akin to Online Time Warping
-        based on a tempo and pitch-based metric
+        based on a tempo and pitch-based metric.
     - `OLTWMatcher`:
         symbolic dynamic programming akin to Online Time Warping
-        based on a pitch-based metric 
+        based on a pitch-based metric.
 
 3. Mismatching (cases other than one-to-one matching): 
-    - `RepeatIdentifier`::
-        automatically infer the repeat structure of a MIDI performance
-    - `SubPartMatcher` 
+    - `RepeatIdentifier`:
+        automatically infer the repeat structure of a MIDI performance.
+    - `SubPartMatcher`: 
         note matcher which matches a monophonic voice from the score
         to a performance.
 
