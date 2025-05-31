@@ -34,7 +34,8 @@ from .evaluate import (
     print_fscore_alignments,
     plot_alignment,
     plot_alignment_comparison,
-    save_pianoprecision_csv
+    save_pianoprecision_csv,
+    save_sonic_visualizer_csvs
 )
 
 __all__ = [
