@@ -116,6 +116,9 @@ Documentation: Note Alignment Utilities
     - partitura.io.exportparangonada.save_parangonada_alignment
     - partitura.io.exportparangonada.save_parangonada_csv
 
+    and a basic interface for saving parangonada-ready csv files is also available in parangonagar:
+    - parangonar.match.save_parangonada_csv
+
     For [(n)ASAP alignments](https://github.com/CPJKU/asap-dataset)
     - partitura.io.importparangonada.load_alignment_from_ASAP
     - partitura.io.exportparangonada.save_alignment_for_ASAP
@@ -124,8 +127,9 @@ Documentation: Note Alignment Utilities
     - partitura.io.importmatch.load_match
     - partitura.io.exportmatch.save_match
 
-    and a basic interface for saving parangonada-ready csv files is also available in parangonagar:
-    - parangonar.match.save_parangonada_csv
+    For [Piano Precision](https://github.com/yucongj/piano-precision) and [Sonic Visualizer](https://www.sonicvisualiser.org/)
+    - parangonar.save_piano_precision_csv
+    - parangonar.save_sonic_visualizer_csvs
 
 4. Aligned Data
 

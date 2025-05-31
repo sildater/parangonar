@@ -18,7 +18,7 @@ from partitura.utils.generic import interp1d
 
 
 
-def save_pianoprecision_csv(
+def save_piano_precision_csv(
     performance,
     spart,
     alignment,
@@ -39,9 +39,9 @@ def save_pianoprecision_csv(
     """
     
     pp_list = convert_alignment_to_list(alignment, spart, performance)
-    export_pianoprecision_to_csv(pp_list, out)
+    export_piano_precision_to_csv(pp_list, out)
 
-def export_pianoprecision_to_csv(pp_list, 
+def export_piano_precision_to_csv(pp_list, 
                                  out = "scorealignment.csv"):
     with open(out, mode="w", newline="") as file:
         writer = csv.writer(file)
