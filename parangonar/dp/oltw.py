@@ -31,9 +31,8 @@ class OLTW(object):
 
     Parameters
     ----------
-    reference_features : np.ndarray
-        A 2D array with dimensions (`T(n_timesteps)`, `F(n_features)`) containing the
-        features of the reference the input is going to be aligned to.
+    reference_features : list
+        list of reference features
 
     queue : Queue
         A queue for storing the input features, which shares the same object as the audio stream.
@@ -356,6 +355,8 @@ class OLTW(object):
             next_direction = Direction.INPUT
         elif self.run_count > self.max_run_count:
             next_direction = self.previous_direction.toggle()
+        elif (self.ref_pointer > (self.N_ref - self.hop_size)):
+            next_direction = Direction.INPUT
         else:
             offset = self.offset()
             x0, y0 = offset[0], offset[1]
@@ -381,7 +382,7 @@ class OLTW(object):
             self.queue_non_empty = False
 
     def is_still_following(self):
-        is_still_following = self.ref_pointer <= (self.N_ref - self.hop_size)
+        is_still_following = self.ref_pointer <= self.N_ref
         return is_still_following and self.queue_non_empty
 
     def handle_direction(self, direction):
@@ -406,10 +407,16 @@ class OLTW(object):
         self.add_candidate_to_path()
 
     def run(self, verbose=False):
-        print("Start running OLTW")
+        if verbose:
+            print("Start running OLTW")
         self.initialize()
         self.handle_first_input()
+        direction = self.select_next_direction()
+        self.handle_direction(direction)
         while self.is_still_following():
+            self.update_cost_matrix(direction)
+            self.select_candidate()
+            self.add_candidate_to_path()
             direction = self.select_next_direction()
             if verbose:
                 print("ACC DIST \n", self.acc_dist_matrix)
@@ -418,10 +425,8 @@ class OLTW(object):
                 print("NEXT DIRECTION \n", direction)
                 print("*" * 50)
             self.handle_direction(direction)
-            self.update_cost_matrix(direction)
-            self.select_candidate()
-            self.add_candidate_to_path()
-        print("... and we're done.")
+        if verbose:
+            print("... and we're done.")
         return self.warping_path
 
 
@@ -431,12 +436,12 @@ if __name__ == "__main__":
     HOP_SIZE = 1
     WINDOW_SIZE = 3
 
-    r = np.row_stack([np.arange(3).reshape(-1, 3) for k in range(10)])
-    t = np.row_stack([np.arange(3).reshape(-1, 1) for k in range(10)])
+    r = [set(np.arange(k,k+3)) for k in range(4)]
+    t = [k for k in range(7)]
 
     queue = Queue()
-    for tt in range(40):
-        queue.put(t[tt : tt + 1, :])
+    for tt in t:
+        queue.put([tt])
 
     o = OLTW(
         reference_features=r,
@@ -444,10 +449,10 @@ if __name__ == "__main__":
         queue=queue,
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
-        max_run_count=4,
+        max_run_count=3,
         directional_weights=np.array([1.05, 1.1, 1]),
         cdist_fun=cdist_local,
         cdist_metric=element_of_set_metric_se,
     )
-    p = o.run()
-    print("path \n", p)
+    # p = o.run(verbose = True)
+    # print("path \n", p)

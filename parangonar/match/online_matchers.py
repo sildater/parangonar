@@ -615,7 +615,6 @@ class TOLTWMatcher(object):
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
         predicted_score_times = self.unique_onsets[tracking_path[0]]
-
         for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
             if perf_note["id"] not in self._pnote_aligned:
                 p_pitch = perf_note["pitch"]
@@ -714,12 +713,11 @@ class OLTWMatcher(object):
 
     def offline(self, performance_note_array):
         tracking_path = self(performance_note_array)
-        print(tracking_path)
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
         predicted_score_times = self.unique_onsets[tracking_path[0]]
-
         for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
+            
             if perf_note["id"] not in self._pnote_aligned:
                 p_pitch = perf_note["pitch"]
                 possible_score_notes = self.score_by_pitch[p_pitch]

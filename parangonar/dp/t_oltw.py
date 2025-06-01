@@ -35,7 +35,6 @@ def accumulate_tester():
 
     for i in range(1, M + 1):
         for j in range(1, N + 1):
-            print("+" * 50)
             mincost = np.inf
             besttempo = init_tempo
             for directionsidx, direction in enumerate(directions):
@@ -63,12 +62,6 @@ def accumulate_tester():
                     time_weight=0.5,
                     tempo_factor=0.1,
                 )
-                print("*" * 20)
-                print(i, j)
-                print(previ, prevj)
-                print("onsets s p", score[j - 1][0], perf[i - 1][0])
-                print("pitches s p", score[j - 1][1], perf[i - 1][1])
-                print(dist, tempo)
 
                 if previ >= 0 and prevj >= 0:
                     cost = D[previ, prevj] + dist
@@ -334,12 +327,6 @@ class T_OLTW(object):
                             time_weight=self.time_weight,
                             tempo_factor=self.tempo_factor,
                         )
-                        # print("*"*20)
-                        # print(i, j)
-                        # print(previ, prevj)
-                        # print("onsets s p", score[j-1][0], perf[i-1][0])
-                        # print("pitches s p", score[j-1][1], perf[i-1][1])
-                        # print(dist, tempo)
 
                         cost = (
                             new_acc[previ, update_y0 + prevj]
@@ -524,8 +511,6 @@ class T_OLTW(object):
         self.input_features.insert(0, self.input_features[0])
         x_seg = self.reference_features[x - wx : x + 1]  # [wx + 1]
         y_seg = self.input_features[y - d : y + 1]  # [d + 1]
-        # print("score at start:", x_seg)
-        # print("perf at start:", y_seg)
 
         new_acc, new_len_acc, new_tempo_acc = self.update_input_direction(
             new_tempo_acc, new_acc, new_len_acc, wx, wy, d, x_seg, y_seg
@@ -549,10 +534,6 @@ class T_OLTW(object):
                 [min_idx - len(norm_x_edge), self.input_pointer - offset[1] - 1]
             )
 
-        # print("edge",cat)
-        # print("pointers:", self.ref_pointer, self.input_pointer, offset)
-        # print("cand",self.candidate, min_idx)
-
     def add_candidate_to_path(self):
         new_coordinate = np.expand_dims(
             self.offset() + self.candidate, axis=1
@@ -560,10 +541,12 @@ class T_OLTW(object):
         self.wp = np.concatenate((self.wp, new_coordinate), axis=1)
 
     def select_next_direction(self):
-        if self.input_pointer < self.w:
+        if (self.input_pointer < self.w):
             next_direction = Direction.INPUT
         elif self.run_count > self.max_run_count:
             next_direction = self.previous_direction.toggle()
+        elif (self.ref_pointer > (self.N_ref - self.hop_size)):
+            next_direction = Direction.INPUT
         else:
             offset = self.offset()
             x0, y0 = offset[0], offset[1]
@@ -589,7 +572,7 @@ class T_OLTW(object):
             self.queue_non_empty = False
 
     def is_still_following(self):
-        is_still_following = self.ref_pointer <= (self.N_ref - self.hop_size)
+        is_still_following = self.ref_pointer <= self.N_ref
         return is_still_following and self.queue_non_empty
 
     def handle_direction(self, direction):
@@ -614,10 +597,17 @@ class T_OLTW(object):
         self.add_candidate_to_path()
 
     def run(self, verbose=False):
-        print("Start running OLTW")
+        if verbose:
+            print("Start running OLTW")
         self.initialize()
         self.handle_first_input()
+        direction = self.select_next_direction()
+        self.handle_direction(direction)
         while self.is_still_following():
+            self.update_cost_matrix(direction)
+            self.select_candidate()
+            self.add_candidate_to_path()
+            # select direction and 
             direction = self.select_next_direction()
             if verbose:
                 print("ACC DIST \n", self.acc_dist_matrix)
@@ -628,12 +618,13 @@ class T_OLTW(object):
                     self.warping_path[:, -3:],
                 )
                 print("NEXT DIRECTION \n", direction)
+                print("RUN COUNT\n", self.run_count)
                 print("*" * 50)
             self.handle_direction(direction)
-            self.update_cost_matrix(direction)
-            self.select_candidate()
-            self.add_candidate_to_path()
-        print("... and we're done.")
+
+
+        if verbose:
+            print("... and we're done.")
         return self.warping_path
 
 
@@ -656,7 +647,7 @@ def testfeatures_t_oltw():
         [4, 3],
         [4.02, 4],
         [6, 4],
-        [6.01, 3],
+        [6.01, 3]
     ]
     return score, perf
 
@@ -678,13 +669,13 @@ if __name__ == "__main__":
         queue=queue,
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
-        max_run_count=4,
+        max_run_count=8,
         init_tempo=2,
         tempo_factor=0.1,
         time_weight=0.1,
         directional_weights=np.array([1.0, 1.0, 1.0]),
     )
-    # p = o.run()
+    # p = o.run(verbose = True)
     # print("path \n", p)
 
     # D, T = accumulate_tester()
