@@ -16,7 +16,8 @@ class RepeatIdentifier(object):
     
     """
 
-    def __init__(self):
+    def __init__(self, 
+                 max_number_of_paths = 100000):
         self.directions =  np.array([[1,1],[1,0]])
         self.dists = np.array([1,1])
         self.matcher = BoundedSmithWaterman(threshold = 0.5,
@@ -25,6 +26,7 @@ class RepeatIdentifier(object):
                                        directions = self.directions,
                                        directional_distances = self.dists,
                                        gain_max_val = 10)
+        self.max_number_of_paths = max_number_of_paths
 
 
     def prepare_score(self, score):
@@ -48,8 +50,7 @@ class RepeatIdentifier(object):
     
     def extract_segments(self, part, 
                         unique_onsets,
-                        verbose = False,
-                        max_number_of_paths = 100000):
+                        verbose = False):
         if verbose:
             print("*"*20)
             print("SEGMENTS")
@@ -69,7 +70,7 @@ class RepeatIdentifier(object):
             segment_onset_idx[seg_id] = np.arange(len(unique_onsets))[onset_mask[0]]
             segment_onsets[seg_id] = unique_onsets[onset_mask[0]]
 
-        if len(paths) > max_number_of_paths:
+        if len(paths) > self.max_number_of_paths:
             pt.score.add_segments(part, force_new = True)
             max_paths_w_leap = pt.score.get_paths(part, 
                                     no_repeats= False, 
