@@ -7,7 +7,6 @@ import numpy as np
 from numba import jit
 
 
-
 def element_of_metric(vec1, vec2):
     """
     metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
@@ -23,7 +22,8 @@ def element_of_set_metric(element_, set_):
         return 0.0
     else:
         return 1.0
-    
+
+
 def element_of_set_metric_se(set_, element_):
     """
     metric that evaluates occurence of an element in a set
@@ -98,15 +98,10 @@ def cdist_local(arr1, arr2, metric):
     return pdist_array
 
 
-
-
 @jit(nopython=True)
-def bounded_recursion(prev_val, 
-              min_val = 0, 
-              max_val = 10, 
-              slope_at_min = 1):
+def bounded_recursion(prev_val, min_val=0, max_val=10, slope_at_min=1):
     """
-    a recursive function which when starting at min_val, 
+    a recursive function which when starting at min_val,
     grows to slope_at_min after one step,
     then continues to grow and asymptotically reaches max_val
     """
@@ -169,7 +164,7 @@ def onset_pitch_duration_metric(
     duration_s,
     duration_p,
     tempo,  # sec / beat
-    weights=np.array([1,1,1]), # onset, dur, pitch
+    weights=np.array([1, 1, 1]),  # onset, dur, pitch
     tempo_factor=0.5,
 ):
     """
@@ -192,7 +187,9 @@ def onset_pitch_duration_metric(
 
     # duration stuff
     estimated_duration = duration_s * tempo
-    duration_dist = abs(np.log(duration_p/estimated_duration)) # abs log of duration ratio
+    duration_dist = abs(
+        np.log(duration_p / estimated_duration)
+    )  # abs log of duration ratio
 
     # tempo stuff
     if onset_s - prev_onset_s > 0:
@@ -203,5 +200,5 @@ def onset_pitch_duration_metric(
         tempo_factor * current_tempo + (1 - tempo_factor) * tempo
     )
 
-    dist = weights.dot(np.array([onset_dist,duration_dist,pitch_dist]))
+    dist = weights.dot(np.array([onset_dist, duration_dist, pitch_dist]))
     return dist, exponential_average_tempo

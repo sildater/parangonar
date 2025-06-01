@@ -15,10 +15,10 @@ from .matchers import (
     get_score_to_perf_map,
 )
 from .online_matchers import (
-    OnlineTransformerMatcher, 
+    OnlineTransformerMatcher,
     OnlinePureTransformerMatcher,
     TOLTWMatcher,
-    OLTWMatcher
+    OLTWMatcher,
 )
 from .utils import node_array, save_parangonada_csv
 from .pretrained_models import AlignmentTransformer, TheGlueNote

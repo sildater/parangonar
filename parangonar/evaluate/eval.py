@@ -10,6 +10,7 @@ import numpy as np
 import partitura as pt
 import os
 
+
 def fscore_alignments(
     prediction: List[dict],
     ground_truth: List[dict],

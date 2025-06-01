@@ -99,5 +99,6 @@ class TestNoteAlignment(unittest.TestCase):
         _, _, f_score = fscore_alignments(pred_alignment, self.alignment, "match")
         self.assertTrue(f_score > 0.96)
 
+
 if __name__ == "__main__":
     unittest.main()

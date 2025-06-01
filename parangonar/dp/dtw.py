@@ -9,8 +9,7 @@ from scipy.spatial.distance import euclidean, cdist
 from numba import jit
 
 # helpers and metrics
-from .metrics import (cdist_local, 
-                      element_of_set_metric)
+from .metrics import cdist_local, element_of_set_metric
 
 
 # DTW / DP classes
@@ -119,10 +118,7 @@ class DynamicTimeWarping(object):
         the pairwise distance to be used (scipy cdist or local cdist)
     """
 
-    def __init__(self, 
-                 metric=euclidean, 
-                 cdist_fun=cdist
-                 ):
+    def __init__(self, metric=euclidean, cdist_fun=cdist):
         self.metric = metric
         self.cdist_fun = cdist_fun
 

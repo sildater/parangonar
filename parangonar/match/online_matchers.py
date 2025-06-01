@@ -565,23 +565,24 @@ class OnlinePureTransformerMatcher(object):
 
 
 class TOLTWMatcher(object):
-    def __init__(self, 
-                 score_note_array):
+    def __init__(self, score_note_array):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
         self.performance_note_array = None
         self.queue = Queue()
         # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = T_OLTW(reference_features=self.features_s, 
-                            queue=self.queue, 
-                            hop_size = 1,
-                            window_size = 40,
-                            max_run_count = 10,
-                            init_tempo = 1,
-                            tempo_factor = 0.1,
-                            time_weight = 2.0,
-                            directional_weights = np.array([2., 1., 1.]))
+        self.tracker = T_OLTW(
+            reference_features=self.features_s,
+            queue=self.queue,
+            hop_size=1,
+            window_size=40,
+            max_run_count=10,
+            init_tempo=1,
+            tempo_factor=0.1,
+            time_weight=2.0,
+            directional_weights=np.array([2.0, 1.0, 1.0]),
+        )
         # alignment collectors
         self._snote_aligned = set()
         self._pnote_aligned = set()
@@ -593,7 +594,9 @@ class TOLTWMatcher(object):
         self.unique_onsets = unique_onsets
         # create pitch set representation
         for onset in unique_onsets:
-            features.append([onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])])
+            features.append(
+                [onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])]
+            )
         # score by pitch representation
         self.score_by_pitch = defaultdict(list)
         unique_pitches = np.unique(self.score_note_array_full["pitch"])
@@ -628,9 +631,7 @@ class TOLTWMatcher(object):
                 )
                 if len(possible_score_notes) > 0:
                     best_note = possible_score_notes[0]
-                    self.add_note_alignment(
-                        perf_note["id"], best_note["id"]
-                    )
+                    self.add_note_alignment(perf_note["id"], best_note["id"])
 
         # create output alignment list
         note_alignments = list()
@@ -653,8 +654,6 @@ class TOLTWMatcher(object):
 
         return note_alignments
 
-        
-
     def add_note_alignment(self, perf_id, score_id):
         self.alignment.append((score_id, perf_id))
         self._snote_aligned.add(score_id)
@@ -669,20 +668,21 @@ class TOLTWMatcher(object):
 
 
 class OLTWMatcher(object):
-    def __init__(self, 
-                 score_note_array):
+    def __init__(self, score_note_array):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
         self.performance_note_array = None
         self.queue = Queue()
         # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = OLTW(reference_features=self.features_s, 
-                            queue=self.queue, 
-                            hop_size = 1,
-                            window_size = 5,
-                            max_run_count = 10,
-                            directional_weights = np.array([1., 1., 1.]))
+        self.tracker = OLTW(
+            reference_features=self.features_s,
+            queue=self.queue,
+            hop_size=1,
+            window_size=5,
+            max_run_count=10,
+            directional_weights=np.array([1.0, 1.0, 1.0]),
+        )
         # alignment collectors
         self._snote_aligned = set()
         self._pnote_aligned = set()
@@ -717,7 +717,6 @@ class OLTWMatcher(object):
         path_perf_notes = self.performance_note_array[tracking_path[1]]
         predicted_score_times = self.unique_onsets[tracking_path[0]]
         for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
-            
             if perf_note["id"] not in self._pnote_aligned:
                 p_pitch = perf_note["pitch"]
                 possible_score_notes = self.score_by_pitch[p_pitch]
@@ -730,9 +729,7 @@ class OLTWMatcher(object):
                 )
                 if len(possible_score_notes) > 0:
                     best_note = possible_score_notes[0]
-                    self.add_note_alignment(
-                        perf_note["id"], best_note["id"]
-                    )
+                    self.add_note_alignment(perf_note["id"], best_note["id"])
 
         # create output alignment list
         note_alignments = list()

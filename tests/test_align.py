@@ -8,6 +8,7 @@ import numpy as np
 from parangonar.dp.dtw import DTW, WDTW, DTWSL, FDTW
 from parangonar.dp.nwtw import NW_DTW, NW, WNWTW, ONW, BSW
 from scipy.spatial.distance import euclidean
+
 RNG = np.random.RandomState(1984)
 
 array1 = np.array([[0, 1, 2, 3, 6]]).T
@@ -27,7 +28,7 @@ class TestDTWAlignment(unittest.TestCase):
         self.assertTrue(np.all(result_dtw == path))
 
     def test_DTWSL_align(self, **kwargs):
-        vanillaDTWSL = DTWSL(metric = euclidean)
+        vanillaDTWSL = DTWSL(metric=euclidean)
         _, path = vanillaDTWSL(array1, array2, return_path=True)
         self.assertTrue(np.all(result_dtw == path))
 

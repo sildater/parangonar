@@ -541,11 +541,11 @@ class T_OLTW(object):
         self.wp = np.concatenate((self.wp, new_coordinate), axis=1)
 
     def select_next_direction(self):
-        if (self.input_pointer < self.w):
+        if self.input_pointer < self.w:
             next_direction = Direction.INPUT
         elif self.run_count > self.max_run_count:
             next_direction = self.previous_direction.toggle()
-        elif (self.ref_pointer > (self.N_ref - self.hop_size)):
+        elif self.ref_pointer > (self.N_ref - self.hop_size):
             next_direction = Direction.INPUT
         else:
             offset = self.offset()
@@ -607,7 +607,7 @@ class T_OLTW(object):
             self.update_cost_matrix(direction)
             self.select_candidate()
             self.add_candidate_to_path()
-            # select direction and 
+            # select direction and
             direction = self.select_next_direction()
             if verbose:
                 print("ACC DIST \n", self.acc_dist_matrix)
@@ -621,7 +621,6 @@ class T_OLTW(object):
                 print("RUN COUNT\n", self.run_count)
                 print("*" * 50)
             self.handle_direction(direction)
-
 
         if verbose:
             print("... and we're done.")
@@ -639,16 +638,7 @@ def testfeatures_t_oltw():
         [6, {3, 4}],
         [7, {3, 4}],
     ]
-    perf = [
-        [0, 1],
-        [0.1, 2],
-        [2, 3],
-        [2.1, 4],
-        [4, 3],
-        [4.02, 4],
-        [6, 4],
-        [6.01, 3]
-    ]
+    perf = [[0, 1], [0.1, 2], [2, 3], [2.1, 4], [4, 3], [4.02, 4], [6, 4], [6.01, 3]]
     return score, perf
 
 

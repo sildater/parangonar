@@ -12,8 +12,8 @@ from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
 
-from ..dp.metrics import (element_of_set_metric_se,
-                          cdist_local)
+from ..dp.metrics import element_of_set_metric_se, cdist_local
+
 
 class Direction(IntEnum):
     REF = 0
@@ -84,14 +84,11 @@ class OLTW(object):
         self.hop_size = hop_size
         self.initialize()
 
-    def set_feature_arrays(
-        self,
-        reference_features
-    ):
+    def set_feature_arrays(self, reference_features):
         self.reference_features = reference_features
         self.N_ref = len(reference_features)
         self.input_features = list()
-    
+
     def initialize(self):
         self.ref_pointer = 0
         self.input_pointer = 0
@@ -317,13 +314,13 @@ class OLTW(object):
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
         new_acc[0, 0] = 0  # starting point in corner
-        new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
+        new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
         new_len_acc[0, 0] = 0  # starting point in corner
-        x_seg = self.reference_features[0 : x]  # [wx, feature_dim]
+        x_seg = self.reference_features[0:x]  # [wx, feature_dim]
         y_seg = self.input_features[y - d : y]  # [d, feature_dim]
-        dist_mat = np.full((wx, wy), np.inf, dtype=np.float32)# np.zeros((wx, wy))
+        dist_mat = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
         dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-        dist_mat[1:,1:] = dist
+        dist_mat[1:, 1:] = dist
         new_acc, new_len_acc = self.update_both_direction_new(
             dist_mat, new_acc, new_len_acc, wx, wy, d
         )
@@ -355,7 +352,7 @@ class OLTW(object):
             next_direction = Direction.INPUT
         elif self.run_count > self.max_run_count:
             next_direction = self.previous_direction.toggle()
-        elif (self.ref_pointer > (self.N_ref - self.hop_size)):
+        elif self.ref_pointer > (self.N_ref - self.hop_size):
             next_direction = Direction.INPUT
         else:
             offset = self.offset()
@@ -436,7 +433,7 @@ if __name__ == "__main__":
     HOP_SIZE = 1
     WINDOW_SIZE = 3
 
-    r = [set(np.arange(k,k+3)) for k in range(4)]
+    r = [set(np.arange(k, k + 3)) for k in range(4)]
     t = [k for k in range(7)]
 
     queue = Queue()
