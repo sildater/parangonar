@@ -20,9 +20,10 @@ REQUIRED = [
     "scipy",
     "torch",
     "matplotlib",
-    "partitura>=1.1.0",
+    "partitura>=1.6.0",
     "symusic",
     "miditok",
+    "numba"
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))
