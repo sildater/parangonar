@@ -12,6 +12,8 @@ from parangonar import (
     AnchorPointNoteMatcher,
     OnlinePureTransformerMatcher,
     OnlineTransformerMatcher,
+    TOLTWMatcher,
+    OLTWMatcher,
     fscore_alignments,
 )
 from parangonar.match import node_array
@@ -80,6 +82,22 @@ class TestNoteAlignment(unittest.TestCase):
         pred_alignment = matcher.offline(pna_match)
         _, _, f_score = fscore_alignments(pred_alignment, self.alignment, "match")
         self.assertTrue(f_score == 1.0)
+
+    def test_TOLTWMatcher_align(self, **kwargs):
+        pna_match = self.perf_match.note_array()
+        sna_match = self.score_match.note_array()
+        matcher = TOLTWMatcher(sna_match)
+        pred_alignment = matcher.offline(pna_match)
+        _, _, f_score = fscore_alignments(pred_alignment, self.alignment, "match")
+        self.assertTrue(f_score > 0.99)
+
+    def test_OLTWMatcher_align(self, **kwargs):
+        pna_match = self.perf_match.note_array()
+        sna_match = self.score_match.note_array()
+        matcher = OLTWMatcher(sna_match)
+        pred_alignment = matcher.offline(pna_match)
+        _, _, f_score = fscore_alignments(pred_alignment, self.alignment, "match")
+        self.assertTrue(f_score > 0.96)
 
 
 if __name__ == "__main__":

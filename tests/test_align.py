@@ -5,8 +5,9 @@ This module includes tests for alignment utilities.
 """
 import unittest
 import numpy as np
-from parangonar.dp.dtw import DTW, WDTW, DTWSL, FDTW, l2
-from parangonar.dp.nwtw import NW_DTW, NW, WNWTW, ONW
+from parangonar.dp.dtw import DTW, WDTW, DTWSL, FDTW
+from parangonar.dp.nwtw import NW_DTW, NW, WNWTW, ONW, BSW
+from scipy.spatial.distance import euclidean
 
 RNG = np.random.RandomState(1984)
 
@@ -27,7 +28,7 @@ class TestDTWAlignment(unittest.TestCase):
         self.assertTrue(np.all(result_dtw == path))
 
     def test_DTWSL_align(self, **kwargs):
-        vanillaDTWSL = DTWSL(metric=l2)
+        vanillaDTWSL = DTWSL(metric=euclidean)
         _, path = vanillaDTWSL(array1, array2, return_path=True)
         self.assertTrue(np.all(result_dtw == path))
 
@@ -62,6 +63,12 @@ class TestNWDTWAlignment(unittest.TestCase):
         originalNW = ONW()
         path = originalNW(array1, array2)[0]
         self.assertTrue(np.all(result_wnw == path))
+
+    # def test_BSW_align(self, **kwargs):
+    #     matcher = BSW()
+    #     path = matcher(array1, array2)[1]
+    #     print(path)
+    #     self.assertTrue(np.all(result_wnw == path))
 
 
 if __name__ == "__main__":

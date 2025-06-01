@@ -5,8 +5,16 @@ Implementation of Needleman Wunsch and derived algorithms
 """
 import numpy as np
 from collections import defaultdict
-from scipy.spatial.distance import euclidean
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import euclidean, cdist
+from numba import jit
+
+# helpers and metrics
+from .metrics import (
+    cdist_local,
+    element_of_set_metric,
+    bounded_recursion,
+    onset_pitch_duration_metric,
+)
 
 
 class NWDistanceMatrix(object):
@@ -143,7 +151,7 @@ NW = NeedlemanWunsch
 
 class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     """
-    Needleman-Wunsch Dynamic Time Warping
+    Needleman-Wunsch Dynamic Time Warping as introduced by Grachten et al.
     """
 
     def __init__(self, metric=euclidean, gamma=0.1):
@@ -237,6 +245,10 @@ class WeightedNeedlemanWunschTimeWarping(object):
         for each direction, the pairwise distance idx which accumulate
     directional_penalties: np.ndarray
         for each direction, the sum of penalites which accumulate
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     """
 
     def __init__(
@@ -246,9 +258,11 @@ class WeightedNeedlemanWunschTimeWarping(object):
         directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
         directional_weights=np.array([1, 1, 1]),
         metric=euclidean,
+        cdist_fun=cdist,
         gamma=1,
     ):
         self.metric = metric
+        self.cdist_fun = cdist_fun
         self.gamma = gamma
         self.directional_weights = directional_weights
         self.directions = directions
@@ -260,7 +274,7 @@ class WeightedNeedlemanWunschTimeWarping(object):
         Y = np.asanyarray(Y, dtype=float)
 
         # pairwise distances
-        pwD = cdist(X, Y, "euclidean")
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         cost, path, B = weighted_nwdtw_forward_and_backward(
             pwD,
@@ -387,8 +401,12 @@ class OriginalNeedlemanWunsch(object):
     """
     Original Needleman-Wunsch (and Smith-Waterman) algorithm for aligning (sub-)sequences.
 
-        Parameters
+    Parameters
     ----------
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
     gamma_penalty: float
         penalty value
     gamma_match: float
@@ -402,6 +420,7 @@ class OriginalNeedlemanWunsch(object):
     def __init__(
         self,
         metric=euclidean,
+        cdist_fun=cdist,
         gamma_penalty=-1.0,
         gamma_match=1.0,
         gap_penalty=-0.5,
@@ -409,6 +428,7 @@ class OriginalNeedlemanWunsch(object):
         smith_waterman=False,
     ):
         self.metric = metric
+        self.cdist_fun = cdist_fun
         self.gamma_penalty = gamma_penalty
         self.gamma_match = gamma_match
         self.gap_penalty = gap_penalty
@@ -420,7 +440,7 @@ class OriginalNeedlemanWunsch(object):
         Y = np.asanyarray(Y, dtype=float)
 
         # pairwise distances
-        pwD = cdist(X, Y, "euclidean")
+        pwD = self.cdist_fun(X, Y, self.metric)
 
         cost, path, B = onw_forward_and_backward(
             pwD,
@@ -537,6 +557,313 @@ def onw_forward_and_backward(
 
 # alias
 ONW = OriginalNeedlemanWunsch
+
+
+class BoundedSmithWaterman(object):
+    """
+    Bounded Smith-Waterman algorithm for aligning (sub-)sequences.
+
+        Parameters
+    ----------
+    gamma_penalty: float
+        penalty value
+    gamma_match: float
+        matching value
+    threshold: float
+        threshold distance between match and penalty
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
+    """
+
+    def __init__(
+        self,
+        gamma_penalty=-1.0,
+        gamma_match=1.0,
+        threshold=1.0,
+        metric=element_of_set_metric,
+        cdist_fun=cdist_local,
+        directions=np.array([[1, 0], [1, 1], [0, 1]]),
+        directional_penalties=np.array([0, 0, 0]),
+        directional_distances=np.array([1, 1, 1]),
+        gain_min_val=0,
+        gain_max_val=10,
+        gain_slope_at_min=1,
+    ):
+        self.metric = metric
+        self.cdist_fun = cdist_fun
+        self.gamma_penalty = gamma_penalty
+        self.gamma_match = gamma_match
+        self.threshold = threshold
+        self.directions = directions
+        self.directional_penalties = directional_penalties
+        self.directional_distances = directional_distances
+        self.gain_min_val = gain_min_val
+        self.gain_max_val = gain_max_val
+        self.gain_slope_at_min = gain_slope_at_min
+
+    def __call__(self, X, Y):
+        X = np.asanyarray(X)
+        Y = np.asanyarray(Y)
+
+        # pairwise distances
+        pwD = self.cdist_fun(X, Y, self.metric)
+
+        cost, B = bsw_forward(
+            pwD,
+            self.gamma_penalty,
+            self.gamma_match,
+            self.threshold,
+            self.directions,
+            self.directional_penalties,
+            self.directional_distances,
+            self.gain_min_val,
+            self.gain_max_val,
+            self.gain_slope_at_min,
+        )
+        out = (cost, B)
+        return out
+
+    def from_similarity_matrix(self, pwD):
+        cost, B = bsw_forward(
+            pwD,
+            self.gamma_penalty,
+            self.gamma_match,
+            self.threshold,
+            self.directions,
+            self.directional_penalties,
+            self.directional_distances,
+            self.gain_min_val,
+            self.gain_max_val,
+            self.gain_slope_at_min,
+        )
+        out = (cost, B)
+        return out
+
+
+@jit(nopython=True)
+def bsw_forward(
+    pwD,
+    gamma_penalty=-1.0,
+    gamma_match=1.0,
+    threshold=1.0,
+    directions=np.array([[1, 0], [1, 1], [0, 1]]),
+    directional_penalties=np.array([0, 0, 0]),
+    directional_distances=np.array([1, 1, 1]),
+    gain_min_val=0,
+    gain_max_val=10,
+    gain_slope_at_min=1,
+):
+    """
+    compute needleman-wunsch cost matrix
+    and backtracking path
+    from weighted directions and
+    a pairwise distance matrix
+
+    Parameters
+    ----------
+    pwD : np.ndarray
+        Pairwise distance matrix (computed e.g., with `cdist`).
+    gamma_penalty: float
+        penalty value
+    gamma_match: float
+        matching value
+    threshold: float
+        threshold distance between match and penalty
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    path: np.ndarray
+        backtracked path
+    """
+    # Initialize arrays and helper variables
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+    # the SW distance matrix is initialized with zero
+    D = np.zeros((M + 1, N + 1), dtype=float)
+    # Backtracking
+    B = np.ones((M, N), dtype=np.int8) * -1
+    lower_bound = 0
+    max_steps_below_1 = 20
+    # Compute the distance iteratively
+    D[0, 0] = 0
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            maxGain = -np.inf
+            maxidx = -1
+            maxPrevGain = -np.inf
+            gamma = gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty
+            for directionsidx, direction in enumerate(directions):
+                (istep, jstep) = direction
+                previ = i - istep
+                prevj = j - jstep
+                if previ >= 0 and prevj >= 0:
+                    # match gain or loss scaled by distance weight accumulated for this direction
+                    distanceGain = directional_distances[directionsidx] * gamma
+                    prevGain = D[previ, prevj]
+                    # penalties incured by this direction
+                    penaltyGain = directional_penalties[directionsidx] * gamma_penalty
+                    Gain = prevGain + distanceGain + penaltyGain
+                    if Gain > maxGain:
+                        maxGain = Gain
+                        maxidx = directionsidx
+                        maxPrevGain = prevGain
+
+            if maxGain - maxPrevGain >= 0:
+                D[i, j] = bounded_recursion(
+                    maxPrevGain,
+                    min_val=gain_min_val,
+                    max_val=gain_max_val,
+                    slope_at_min=gain_slope_at_min,
+                )
+            else:
+                if maxPrevGain > lower_bound and maxGain < lower_bound:
+                    # don't move vertically more than ten steps without match
+                    # if maxPrevGain < 0.5 ** max_steps_below_1 and maxidx in [1,2]:
+                    #     D[i, j] = lower_bound
+                    # else:
+                    D[i, j] = maxPrevGain * 0.5
+                else:
+                    D[i, j] = max(maxGain, lower_bound)
+            B[i - 1, j - 1] = maxidx
+
+    output_D = D[1:, 1:]
+    return output_D, B
+
+
+# alias
+BSW = BoundedSmithWaterman
+
+
+class SubPartDynamicProgramming(object):
+    """
+    Monophonic Subpart Alignment with Dynamic Programming.
+
+    Parameters
+    ----------
+    weights : np.ndarray
+        three weights associated with onset, dur, pitch distances
+    tempo_factor : float
+        moving average recursion factor for tempo update
+    """
+
+    def __init__(self, weights=np.array([1, 0.5, 2]), tempo_factor=0.1):
+        self.weights = weights
+        self.tempo_factor = tempo_factor
+
+    def __call__(self, X, Y):
+        """
+        Parameters
+        ----------
+        X : np.ndarray
+            performance note array.
+        Y : np.ndarray
+            score note array.
+        """
+
+        out = subpart_DP_forward_and_backward(X, Y, self.weights, self.tempo_factor)
+        return out
+
+
+def subpart_DP_forward_and_backward(
+    pna, sna, weights=np.array([1, 0.5, 2]), tempo_factor=0.1
+):
+    """
+    Parameters
+    ----------
+    pna : np.ndarray
+        performance note array.
+    sna : np.ndarray
+        score note array.
+    weights : np.ndarray
+        three weights associated with onset, dur, pitch distances
+    tempo_factor : float
+        moving average recursion factor for tempo update
+
+    Returns
+    -------
+    dtwd : np.ndarray
+        Accumulated cost matrix
+    path: np.ndarray
+        backtracked path
+    """
+
+    # Initialize arrays and helper variables
+    M = pna.shape[0]
+    N = sna.shape[0]
+
+    # the cost vector is initialized with INFINITY
+    C = np.ones((N + 1), dtype=float) * np.inf
+    C[0] = 0
+    # cost matrix just for debugging
+    D = np.ones((M, N), dtype=float) * np.inf
+    # guess the initial tempo from the whole length
+    init_tempo = (max(pna["onset_sec"]) - min(pna["onset_sec"])) / (
+        max(sna["onset_beat"]) - min(sna["onset_beat"])
+    )
+    # Tempo vector in [sec / beat]
+    T = np.full((N + 1), init_tempo, dtype=float)
+    # performance index of the score
+    perf_P = np.zeros(N + 1, dtype=int)
+    # backtracking
+    B = np.ones((M, N), dtype=int) * -1
+
+    # extend the inputs with a dummy start
+    dummy_pna = np.copy(pna[0:1])
+    dummy_pna["onset_sec"] -= init_tempo
+    pna = np.concatenate((dummy_pna, pna))
+    dummy_sna = np.copy(sna[0:1])
+    dummy_sna["onset_beat"] -= 1
+    sna = np.concatenate((dummy_sna, sna))
+
+    # Compute the cost iteratively
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+            prevtempo = T[j - 1]  # tempo at last score index
+            prev_perf_idx = perf_P[j - 1]
+            local_dist, new_tempo = onset_pitch_duration_metric(
+                pitch_s=sna[j]["pitch"],
+                pitch_p=pna[i]["pitch"],
+                onset_s=sna[j]["onset_beat"],
+                onset_p=pna[i]["onset_sec"],
+                prev_onset_s=sna[j - 1]["onset_beat"],
+                prev_onset_p=pna[prev_perf_idx]["onset_sec"],
+                duration_s=sna[j]["duration_beat"],
+                duration_p=pna[i]["duration_sec"],
+                tempo=prevtempo,  # sec / beat
+                weights=weights,
+                tempo_factor=tempo_factor,
+            )
+            cost = C[j - 1] + local_dist
+            if cost < C[j]:
+                C[j] = cost
+                T[j] = new_tempo
+                perf_P[j] = i
+
+            # store the index of the performance note to backtrack to
+            B[i - 1, j - 1] = perf_P[j - 1] - 1
+            # store a global cost matrix, for debugging
+            D[i - 1, j - 1] = C[j]
+
+    n = N - 1
+    m = perf_P[N] - 1
+    step = [m, n]
+    path = [step]
+    for sna_step in range(N - 1):
+        backtracking_perf_idx = B[m, n]
+        m = backtracking_perf_idx
+        n -= 1
+        step = [m, n]
+        path.append(step)
+
+    path = np.array(path, dtype=np.int32)[::-1]
+    output_path = path[:, 0]
+    # ppath = perf_P[1:] - 1
+    return C, output_path, D, B
+
 
 if __name__ == "__main__":
     A = np.array([[1, 2, 3, 4, 1, 2, 3, 4, 5, 6]]).T

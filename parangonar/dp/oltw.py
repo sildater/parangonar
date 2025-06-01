@@ -4,45 +4,15 @@
 This module contains On-Line Time Warping.
 """
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 import scipy
 from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
 
-
-def element_of_metric(vec1, vec2):
-    """
-    metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
-    """
-    return 2 - np.sum(vec2 == vec1)
-
-
-def cdist_local(arr1, arr2, metric):
-    """
-    compute array of pairwise distances between
-    the elements of two arrays given a metric
-
-    Parameters
-    ----------
-    arr1: numpy nd array
-
-    arr2: numpy nd array
-
-    metric: callable
-        a metric function
-
-    Returns
-    -------
-
-    pdist_array: numpy 2d array
-        array of pairwise distances
-    """
-    pdist_array = np.ones((arr1.shape[0], arr2.shape[0])) * np.inf
-    for i in range(arr1.shape[0]):
-        for j in range(arr2.shape[0]):
-            pdist_array[i, j] = metric(arr1[i], arr2[j])
-    return pdist_array
+from ..dp.metrics import element_of_set_metric_se, cdist_local
 
 
 class Direction(IntEnum):
@@ -61,9 +31,8 @@ class OLTW(object):
 
     Parameters
     ----------
-    reference_features : np.ndarray
-        A 2D array with dimensions (`T(n_timesteps)`, `F(n_features)`) containing the
-        features of the reference the input is going to be aligned to.
+    reference_features : list
+        list of reference features
 
     queue : Queue
         A queue for storing the input features, which shares the same object as the audio stream.
@@ -91,14 +60,13 @@ class OLTW(object):
     def __init__(
         self,
         reference_features=None,
-        input_feature_shape=None,
         queue=None,
         window_size=10,  # shape of the acc cost matric
         max_run_count=100,  # maximal number of steps
         hop_size=1,  # number of seq items that get added at step
         directional_weights=np.array([1, 1, 1]),  # down, diag, right
-        cdist_fun=cdist,
-        cdist_metric="euclidean",
+        cdist_fun=cdist_local,
+        cdist_metric=element_of_set_metric_se,
         **kwargs,
     ):
         self.queue = queue
@@ -106,7 +74,7 @@ class OLTW(object):
         self.cdist_metric = cdist_metric
         self.directional_weights = directional_weights
         if reference_features is not None:
-            self.set_feature_arrays(reference_features, input_feature_shape)
+            self.set_feature_arrays(reference_features)
         else:
             self.reference_features = None
             self.N_ref = None
@@ -116,17 +84,10 @@ class OLTW(object):
         self.hop_size = hop_size
         self.initialize()
 
-    def set_feature_arrays(
-        self,
-        reference_features,
-        input_feature_shape=None,
-    ):
+    def set_feature_arrays(self, reference_features):
         self.reference_features = reference_features
-        self.N_ref = self.reference_features.shape[0]
-        if input_feature_shape is not None:
-            self.input_features = np.empty((0, input_feature_shape))
-        else:
-            self.input_features = np.empty((0, self.reference_features.shape[1]))
+        self.N_ref = len(reference_features)
+        self.input_features = list()
 
     def initialize(self):
         self.ref_pointer = 0
@@ -257,7 +218,6 @@ class OLTW(object):
 
         # first add the columns to the right
         # do not go all the way to the corner
-
         for i in range(1, wx - d):
             for j in range(wy - d, wy):
                 local_dist = dist[i, j]
@@ -301,15 +261,15 @@ class OLTW(object):
         wx, wy = min(self.w, x), min(self.w, y)
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
-        # new_acc[0,0] = 0
         new_len_acc = np.zeros((wx, wy))
 
         if direction is Direction.REF:
             new_acc[:-d, :] = self.acc_dist_matrix[d:]
             new_len_acc[:-d, :] = self.acc_len_matrix[d:]
-            x_seg = self.reference_features[x - d : x]  # [d, 12]
-            y_seg = self.input_features[y - wy : y]  # [wy, 12]
+            x_seg = self.reference_features[x - d : x]  # [d, feature_dim]
+            y_seg = self.input_features[y - wy : y]  # [wy, feature_dim]
             dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
+            dist
             new_acc, new_len_acc = self.update_ref_direction(
                 dist, new_acc, new_len_acc, wx, wy, d
             )
@@ -318,8 +278,8 @@ class OLTW(object):
             overlap_y = wy - d
             new_acc[:, :-d] = self.acc_dist_matrix[:, -overlap_y:]
             new_len_acc[:, :-d] = self.acc_len_matrix[:, -overlap_y:]
-            x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-            y_seg = self.input_features[y - d : y]  # [d, 12]
+            x_seg = self.reference_features[x - wx : x]  # [wx, feature_dim]
+            y_seg = self.input_features[y - d : y]  # [d, feature_dim]
             dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
             new_acc, new_len_acc = self.update_input_direction(
                 dist, new_acc, new_len_acc, wx, wy, d
@@ -330,11 +290,6 @@ class OLTW(object):
             new_acc[:-d, :-d] = self.acc_dist_matrix[d:, -overlap_y:]
             new_len_acc[:-d, :-d] = self.acc_len_matrix[d:, -overlap_y:]
 
-            # old costly distance computation
-            # x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-            # y_seg = self.input_features[y - wy : y]  # [wy, 12]
-            # dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-            # new, compute only outer slice
             x_seg = self.reference_features[x - wx : x - d]  # [wx - d]
             y_seg = self.input_features[y - d : y]  # [d]
             self.local_both_dist[: wx - d, -d:] = self.cdist_fun(
@@ -355,26 +310,28 @@ class OLTW(object):
     def first_cost_matrix(self):
         # local cost matrix
         x, y = self.ref_pointer, self.input_pointer  # should be window, hop_size
-        wx, wy = x, y + 1  # append an extra column
+        wx, wy = x + 1, y + 1  # append an extra column
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
         new_acc[0, 0] = 0  # starting point in corner
-        new_len_acc = np.zeros((wx, wy))
-        x_seg = self.reference_features[x - wx : x]  # [wx, 12]
-        y_seg = self.input_features[y - d : y]  # [d, 12]
+        new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
+        new_len_acc[0, 0] = 0  # starting point in corner
+        x_seg = self.reference_features[0:x]  # [wx, feature_dim]
+        y_seg = self.input_features[y - d : y]  # [d, feature_dim]
+        dist_mat = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
         dist = self.cdist_fun(x_seg, y_seg, metric=self.cdist_metric)  # [wx, d]
-        new_acc, new_len_acc = self.update_input_direction(
-            dist, new_acc, new_len_acc, wx, wy, d
+        dist_mat[1:, 1:] = dist
+        new_acc, new_len_acc = self.update_both_direction_new(
+            dist_mat, new_acc, new_len_acc, wx, wy, d
         )
 
-        self.acc_dist_matrix = new_acc[:, 1:]
-        self.acc_len_matrix = new_len_acc[:, 1:]
+        self.acc_dist_matrix = new_acc[1:, 1:]
+        self.acc_len_matrix = new_len_acc[1:, 1:]
 
     def select_candidate(self):
         norm_x_edge = self.acc_dist_matrix[-1, :] / self.acc_len_matrix[-1, :]
         norm_y_edge = self.acc_dist_matrix[:, -1] / self.acc_len_matrix[:, -1]
         cat = np.concatenate((norm_x_edge, norm_y_edge))
-
         min_idx = np.argmin(cat)
         offset = self.offset()
         if min_idx < len(norm_x_edge):
@@ -383,10 +340,6 @@ class OLTW(object):
             self.candidate = np.array(
                 [min_idx - len(norm_x_edge), self.input_pointer - offset[1] - 1]
             )
-
-        # print("edge",cat)
-        # print("pointers:", self.ref_pointer, self.input_pointer, offset)
-        # print("cand",self.candidate, min_idx)
 
     def add_candidate_to_path(self):
         new_coordinate = np.expand_dims(
@@ -399,6 +352,8 @@ class OLTW(object):
             next_direction = Direction.INPUT
         elif self.run_count > self.max_run_count:
             next_direction = self.previous_direction.toggle()
+        elif self.ref_pointer > (self.N_ref - self.hop_size):
+            next_direction = Direction.INPUT
         else:
             offset = self.offset()
             x0, y0 = offset[0], offset[1]
@@ -416,7 +371,7 @@ class OLTW(object):
     def get_new_input(self):
         try:
             input_feature = self.queue.get(block=False)
-            self.input_features = np.vstack([self.input_features, input_feature])
+            self.input_features += input_feature
             self.input_pointer += self.hop_size
 
         except:
@@ -424,7 +379,7 @@ class OLTW(object):
             self.queue_non_empty = False
 
     def is_still_following(self):
-        is_still_following = self.ref_pointer <= (self.N_ref - self.hop_size)
+        is_still_following = self.ref_pointer <= self.N_ref
         return is_still_following and self.queue_non_empty
 
     def handle_direction(self, direction):
@@ -449,10 +404,16 @@ class OLTW(object):
         self.add_candidate_to_path()
 
     def run(self, verbose=False):
-        print("Start running OLTW")
+        if verbose:
+            print("Start running OLTW")
         self.initialize()
         self.handle_first_input()
+        direction = self.select_next_direction()
+        self.handle_direction(direction)
         while self.is_still_following():
+            self.update_cost_matrix(direction)
+            self.select_candidate()
+            self.add_candidate_to_path()
             direction = self.select_next_direction()
             if verbose:
                 print("ACC DIST \n", self.acc_dist_matrix)
@@ -460,12 +421,9 @@ class OLTW(object):
                 print("RECENT WARPING PATH \n", self.warping_path[:, -3:])
                 print("NEXT DIRECTION \n", direction)
                 print("*" * 50)
-            print("RECENT WARPING PATH: ", self.warping_path[:, -1:])
             self.handle_direction(direction)
-            self.update_cost_matrix(direction)
-            self.select_candidate()
-            self.add_candidate_to_path()
-        print("... and we're done.")
+        if verbose:
+            print("... and we're done.")
         return self.warping_path
 
 
@@ -474,20 +432,13 @@ if __name__ == "__main__":
     REPEATS = 3
     HOP_SIZE = 1
     WINDOW_SIZE = 3
-    # r = np.row_stack([np.arange(RANGE_L).reshape(-1,1) for k in range(REPEATS)]).astype(float)
-    # t = np.row_stack([np.roll(np.arange(RANGE_L),0,0).reshape(-1,1) for k in range(REPEATS)]).astype(float)
-    # t +=0.5
-    # r = np.arange(40).reshape(-1,4)
-    # t = np.arange(40).reshape(-1,1)
 
-    r = np.row_stack([np.arange(3).reshape(-1, 3) for k in range(10)])
-    t = np.row_stack([np.arange(3).reshape(-1, 1) for k in range(10)])
+    r = [set(np.arange(k, k + 3)) for k in range(4)]
+    t = [k for k in range(7)]
 
     queue = Queue()
-    # for tt in range((RANGE_L * REPEATS) // HOP_SIZE):
-    #     queue.put(t[tt*HOP_SIZE: (tt+1)*HOP_SIZE,:])
-    for tt in range(40):
-        queue.put(t[tt : tt + 1, :])
+    for tt in t:
+        queue.put([tt])
 
     o = OLTW(
         reference_features=r,
@@ -495,10 +446,10 @@ if __name__ == "__main__":
         queue=queue,
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
-        max_run_count=4,
+        max_run_count=3,
         directional_weights=np.array([1.05, 1.1, 1]),
         cdist_fun=cdist_local,
-        cdist_metric=element_of_metric,
+        cdist_metric=element_of_set_metric_se,
     )
-    p = o.run()
-    print("path \n", p)
+    # p = o.run(verbose = True)
+    # print("path \n", p)

@@ -19,12 +19,20 @@ from .match import (
     DualDTWNoteMatcher,
     TheGlueNoteMatcher,
 )
-from .match import OnlineTransformerMatcher, OnlinePureTransformerMatcher
+from .match import (
+    OnlineTransformerMatcher,
+    OnlinePureTransformerMatcher,
+    TOLTWMatcher,
+    OLTWMatcher,
+)
+from .mismatch import RepeatIdentifier, SubPartMatcher
 from .evaluate import (
     fscore_alignments,
     print_fscore_alignments,
     plot_alignment,
     plot_alignment_comparison,
+    save_piano_precision_csv,
+    save_sonic_visualizer_csvs,
 )
 
 __all__ = [
@@ -33,7 +41,9 @@ __all__ = [
     "DualDTWNoteMatcher",
     "TheGlueNoteMatcher",
     "OnlineTransformerMatcher",
-    "OnlinePureTransformerMatcher" "fscore_alignments",
+    "OnlinePureTransformerMatcher",
+    "TOLTWMatcher" "fscore_alignments",
     "plot_alignment_comparison",
     "plot_alignment",
+    "save_pianoprecision_csv",
 ]

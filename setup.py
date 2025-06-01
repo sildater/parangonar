@@ -12,7 +12,7 @@ KEYWORDS = "match alignment midi performance score"
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = "Silvan Peter, Carlos Cancino-Chacón, Florian Henkel"
 REQUIRES_PYTHON = ">=3.7"
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -22,7 +22,6 @@ REQUIRED = [
     "matplotlib",
     "partitura>=1.1.0",
     "symusic",
-    "scipy",
     "miditok",
 ]
 
