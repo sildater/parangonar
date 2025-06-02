@@ -1,5 +1,5 @@
 Several publications are associated with models available in **Parangonar**.
-Please to them for detailed algorithm descritions and evaluation and cite them if you use parangonar for a publication.
+Please refer to them for detailed algorithm descritions and evaluation and cite them if you use parangonar for a publication.
 
 The anchor point-enhanced `AnchorPointNoteMatcher` and the automatic `AutomaticNoteMatcher` are this described in:
 
