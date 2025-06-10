@@ -244,6 +244,5 @@ class RepeatIdentifier(object):
                 )
             plt.savefig(plot + "_" + found_path + "_.png")
             plt.close()
-        
 
         return found_path, found_path_object

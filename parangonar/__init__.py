@@ -33,7 +33,7 @@ from .evaluate import (
     plot_alignment_comparison,
     save_piano_precision_csv,
     save_sonic_visualizer_csvs,
-    save_maps
+    save_maps,
 )
 
 __all__ = [
@@ -50,5 +50,5 @@ __all__ = [
     "plot_alignment",
     "save_piano_precision_csv",
     "save_sonic_visualizer_csvs",
-    "save_maps"
+    "save_maps",
 ]

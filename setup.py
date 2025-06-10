@@ -23,7 +23,7 @@ REQUIRED = [
     "partitura>=1.6.0",
     "symusic",
     "miditok",
-    "numba"
+    "numba",
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))
