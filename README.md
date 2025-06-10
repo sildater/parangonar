@@ -108,7 +108,7 @@ Documentation: Note Alignment Utilities
 
 3. File I/O for note alignments
 
-    Most I/O functions are handled by [Partitura](https://github.com/CPJKU/partitura). 
+    Most I/O functions are handled by [Partitura](https://github.com/CPJKU/partitura) as well as by Parangonar. 
 
     For [Parangonada](https://sildater.github.io/parangonada/):
     - partitura.io.importparangonada.load_parangonada_alignment
@@ -131,10 +131,13 @@ Documentation: Note Alignment Utilities
     - parangonar.save_piano_precision_csv
     - parangonar.save_sonic_visualizer_csvs
 
+    For the MAPS JSON format:
+    - parangonar.save_maps
+
 4. Aligned Data
 
     These note-aligned datasets are publically available:
-    - [Vienna 4x22](https://github.com/CPJKU/vienna4x22)
+    - [Vienna 4x22](https://cpjku.github.io/docs/match/)
     - [(n)ASAP note alignments](https://github.com/CPJKU/asap-dataset)
     - [Batik Dataset](https://github.com/huispaty/batik_plays_mozart)
 

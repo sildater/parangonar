@@ -33,6 +33,7 @@ from .evaluate import (
     plot_alignment_comparison,
     save_piano_precision_csv,
     save_sonic_visualizer_csvs,
+    save_maps
 )
 
 __all__ = [
@@ -44,7 +45,10 @@ __all__ = [
     "OnlinePureTransformerMatcher",
     "TOLTWMatcher",
     "fscore_alignments",
+    "print_fscore_alignments",
     "plot_alignment_comparison",
     "plot_alignment",
-    "save_pianoprecision_csv",
+    "save_piano_precision_csv",
+    "save_sonic_visualizer_csvs",
+    "save_maps"
 ]

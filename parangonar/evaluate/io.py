@@ -15,7 +15,9 @@ import csv
 from pathlib import Path
 import numpy.lib.recfunctions as rfn
 from partitura.utils.generic import interp1d
-
+import json
+from json import encoder
+encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 def save_piano_precision_csv(performance, spart, alignment, out="scorealignment.csv"):
     """
@@ -397,3 +399,39 @@ def save_sonic_visualizer_csvs(
     )
 
     save_notes_for_sonic_visualiser(merged_note_array, out_dir / Path("notes.csv"))
+
+
+def save_maps(
+    performance,
+    score_part,
+    alignment,
+    out="maps.json"
+):
+    """
+    save alignment as MAPS JSON file
+
+    Parameters
+    ----------
+    performance : object
+        a performance object
+    score_part: object
+        a score part object
+    alignment: list
+        note alignment list of dicts
+    """
+    merged_note_array = compute_snote_pnote_array(performance, score_part, alignment)
+    sorting_idx = merged_note_array["onset_sec"].argsort()
+    out_list = list()
+    for ordering_idx, snotepnote in enumerate(merged_note_array[sorting_idx]):
+        out_list.append({
+            'xml_id': str(snotepnote["id"]),
+            'obs_mean_onset': round(float(snotepnote["onset_sec"]),3),
+            'velocity': int(snotepnote["velocity"]),
+            'obs_num': ordering_idx + 1
+        })
+
+    with open(out, 'w', encoding='utf-8') as f:
+        json.dump(out_list, f, indent=4)
+
+
+
