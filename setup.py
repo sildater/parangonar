@@ -12,7 +12,7 @@ KEYWORDS = "match alignment midi performance score"
 URL = "https://github.com/sildater/parangonar"
 AUTHOR = "Silvan Peter, Carlos Cancino-Chacón, Florian Henkel"
 REQUIRES_PYTHON = ">=3.7"
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -20,9 +20,10 @@ REQUIRED = [
     "scipy",
     "torch",
     "matplotlib",
-    "partitura>=1.1.0",
+    "partitura>=1.6.0",
     "symusic",
     "miditok",
+    "numba",
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -56,6 +57,8 @@ setup(
     package_data={
         "parangonar": [
             "assets/mozart_k265_var1.match",
+            "assets/alignment_transformer_checkpoint.pt",
+            "assets/thegluenote_small_checkpoint.pt",
         ]
     },
     install_requires=REQUIRED,
