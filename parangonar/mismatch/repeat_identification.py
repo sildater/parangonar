@@ -222,17 +222,17 @@ class RepeatIdentifier(object):
             path_gain, full_path, full_path_list = self.compute_path_gain(
                 cost, path, backtracking, segment_onset_idx, directions=self.directions
             )
-            path_gains[path_gain] = (path_string, path)
+            path_gains[path_gain] = (path_string, path, full_path_list)
 
         max_gain = max([k for k in path_gains.keys()])
-        found_path, found_path_object = path_gains[max_gain]
+        found_path, found_path_object, found_full_path_list = path_gains[max_gain]
         if verbose:
             print("best fitting path: ", found_path)
 
         if plot:
             colors = ["r", "g", "b"]
             plt.imshow(cost, aspect="auto")
-            for pp_no, pp_val in enumerate(full_path_list):
+            for pp_no, pp_val in enumerate(found_full_path_list):
                 partial_path_id, partial_path = pp_val
                 plt.plot(partial_path[:, 1], partial_path[:, 0], c=colors[pp_no % 3])
                 plt.text(
@@ -242,8 +242,8 @@ class RepeatIdentifier(object):
                     c=colors[pp_no % 3],
                     fontsize=12,
                 )
-            plt.savefig(performance + "_" + path_string + "_.png")
+            plt.savefig(plot + "_" + found_path + "_.png")
             plt.close()
-        path_gains[path_gain] = path_string
+        
 
         return found_path, found_path_object

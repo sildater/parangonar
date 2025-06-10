@@ -57,6 +57,8 @@ setup(
     package_data={
         "parangonar": [
             "assets/mozart_k265_var1.match",
+            "assets/alignment_transformer_checkpoint.pt",
+            "assets/thegluenote_small_checkpoint.pt",
         ]
     },
     install_requires=REQUIRED,
