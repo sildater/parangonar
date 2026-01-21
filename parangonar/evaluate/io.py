@@ -247,6 +247,9 @@ def compute_snote_pnote_array(performance, score_part, alignment):
     merged_ = np.lib.recfunctions.join_by(
         "id", score_f, performance_f, jointype="inner"
     ).data
+
+    sorting_idx = merged_["onset_sec"].argsort()
+    merged_ = merged_[sorting_idx]
     return merged_
 
 
@@ -327,7 +330,7 @@ def save_expression_features_for_sonic_visualiser(
 
     if beatwise:
         onset_merged_array = compute_onsetwise_snote_pnote_array(merged_note_array)
-        stime_to_ptime_map = stime_to_ptime_map = interp1d(
+        stime_to_ptime_map = interp1d(
             y=onset_merged_array["onset_sec"],
             x=onset_merged_array["onset_beat"],
             bounds_error=False,
@@ -379,7 +382,7 @@ def save_sonic_visualizer_csvs(
     """
     out_dir = Path(out_dir)
     merged_note_array = compute_snote_pnote_array(performance, score_part, alignment)
-
+    
     save_expression_features_for_sonic_visualiser(
         merged_note_array,
         out_dir=out_dir,

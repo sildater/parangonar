@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parangonar"
+version = "3.2.0"
+description = "Music Alignment"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.7"
+keywords = ["match", "alignment", "midi", "performance", "score"]
+license = { text = "Apache-2.0" }
+
+authors = [
+  { name = "Silvan Peter" }
+]
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "torch",
+  "matplotlib",
+  "partitura>=1.6.0",
+  "symusic",
+  "miditok",
+  "numba",
+]
+
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/sildater/parangonar"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+parangonar = [
+  "assets/mozart_k265_var1.match",
+  "assets/alignment_transformer_checkpoint.pt",
+  "assets/thegluenote_small_checkpoint.pt",
+]
