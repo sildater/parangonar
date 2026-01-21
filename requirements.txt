@@ -5,3 +5,4 @@ torch
 matplotlib>=3.7.5
 miditok>=3.0.3
 symusic
+numba
