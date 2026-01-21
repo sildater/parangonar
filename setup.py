@@ -10,7 +10,7 @@ NAME = "parangonar"
 DESCRIPTION = "Symbolic music alignment"
 KEYWORDS = "match alignment midi performance score"
 URL = "https://github.com/sildater/parangonar"
-AUTHOR = "Silvan Peter, Carlos Cancino-Chacón, Florian Henkel"
+AUTHOR = "as"
 REQUIRES_PYTHON = ">=3.7"
 VERSION = "3.1.0"
 
