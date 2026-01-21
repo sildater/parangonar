@@ -51,6 +51,7 @@ from .evaluate import (
     save_piano_precision_csv,
     save_sonic_visualizer_csvs,
     save_maps,
+    match_midis
 )
 
 __all__ = [
@@ -68,4 +69,5 @@ __all__ = [
     "save_piano_precision_csv",
     "save_sonic_visualizer_csvs",
     "save_maps",
+    "match_midis"
 ]

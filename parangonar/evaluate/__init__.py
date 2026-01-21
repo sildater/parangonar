@@ -13,3 +13,4 @@ from .eval import (
     evaluate_score_following,
 )
 from .plot import plot_alignment, plot_alignment_comparison, plot_alignment_mappings
+from .simple import match_midis
