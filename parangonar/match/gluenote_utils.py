@@ -3,6 +3,7 @@
 """
 utilities for the thegluenote
 """
+from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 import numpy as np
 from symusic import Score, Note, Track
 from ..dp.dtw import WDTW
@@ -19,8 +20,11 @@ DEFAULT_NOTE = [
 
 
 def format_note_array_alignment(
-    score_note_array, performance_note_array, alignment, unmatched_idx
-):
+    score_note_array: np.ndarray,
+    performance_note_array: np.ndarray,
+    alignment: np.ndarray,
+    unmatched_idx: int,
+) -> List[List[int]]:
     alignment_idx = list()
     score_note_name_to_index = {
         sid: idx for idx, sid in enumerate(score_note_array["id"])
@@ -48,8 +52,11 @@ def format_note_array_alignment(
 
 
 def format_score_performance_alignment(
-    score_note_array, performance_note_array, alignment_idx, unmatched_idx
-):
+    score_note_array: np.ndarray,
+    performance_note_array: np.ndarray,
+    alignment_idx: np.ndarray,
+    unmatched_idx: int,
+) -> List[Dict[str, Any]]:
     alignment = list()
     for sidx, pidx in alignment_idx:
         if sidx < unmatched_idx and pidx < unmatched_idx:
@@ -76,7 +83,9 @@ def format_score_performance_alignment(
     return alignment
 
 
-def get_shifted_and_stretched_and_agnostic_midis(midi1, midi2):
+def get_shifted_and_stretched_and_agnostic_midis(
+    midi1: Score, midi2: Score
+) -> Tuple[Score, Score]:
     note_info2 = midi2.tracks[0].notes.numpy()
     note_info1 = midi1.tracks[0].notes.numpy()
     # shift to zero
@@ -92,7 +101,11 @@ def get_shifted_and_stretched_and_agnostic_midis(midi1, midi2):
     return midi1, midi2
 
 
-def stretch(note_info_to_change, note_info_ref, factor=2.0):
+def stretch(
+    note_info_to_change: Dict[str, np.ndarray],
+    note_info_ref: Dict[str, np.ndarray],
+    factor: float = 2.0,
+) -> Dict[str, np.ndarray]:
     time_to_change = note_info_to_change["time"]
     dur_to_change = note_info_to_change["duration"]
     time_ref = note_info_ref["time"]
@@ -114,7 +127,9 @@ def stretch(note_info_to_change, note_info_ref, factor=2.0):
     }
 
 
-def velocity_and_duration_agnostic_note_info(note_info):
+def velocity_and_duration_agnostic_note_info(
+    note_info: Dict[str, np.ndarray]
+) -> Dict[str, np.ndarray]:
     new_duration = np.full_like(note_info["duration"], 100)
     new_velocity = np.full_like(note_info["velocity"], 63)
     note_info["velocity"] = new_velocity
@@ -122,13 +137,15 @@ def velocity_and_duration_agnostic_note_info(note_info):
     return note_info
 
 
-def minimal_note_array_from_symusic(score, fields=["pitch", "time"]):
+def minimal_note_array_from_symusic(
+    score: Score, fields: List[str] = ["pitch", "time"]
+) -> np.ndarray:
     note_info = score.tracks[0].notes.numpy()
     note_array = np.column_stack([note_info[field] for field in fields])
     return note_array
 
 
-def note_array_to_symusic_score(note_array):
+def note_array_to_symusic_score(note_array: np.ndarray) -> Score:
     fields = set(note_array.dtype.fields)
     score_units = set(("onset_quarter", "onset_beat"))
     performance_units = set(("onset_tick", "onset_sec"))
@@ -173,7 +190,9 @@ def note_array_to_symusic_score(note_array):
 ###################### DTW ############################
 
 
-def get_local_path_from_confidence_matrix(confidence_matrix):
+def get_local_path_from_confidence_matrix(
+    confidence_matrix: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, bool, bool]:
     path = get_path_from_confidence_matrix(confidence_matrix)
     (new_path, starting_path, ending_path, startpoints, endpoints) = get_path_endpoints(
         path, confidence_matrix.shape, cutoff=1
@@ -182,14 +201,18 @@ def get_local_path_from_confidence_matrix(confidence_matrix):
     return (new_path, starting_path, ending_path, startpoints, endpoints)
 
 
-def get_path_from_confidence_matrix(mat, directional_weights=np.array([1, 2, 1])):
+def get_path_from_confidence_matrix(
+    mat: np.ndarray, directional_weights: np.ndarray = np.array([1, 2, 1])
+) -> np.ndarray:
     wdtw = WDTW(directional_weights=directional_weights)
     dmat = invert_matrix(mat)
     path = wdtw.from_distance_matrix(dmat)[0]
     return path
 
 
-def get_path_endpoints(path, size, cutoff=1):
+def get_path_endpoints(
+    path: np.ndarray, size: Tuple[int, int], cutoff: int = 1
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, bool, bool]:
     new_path = np.copy(path)
     starting_path = np.array([])
     ending_path = np.array([])
@@ -245,7 +268,7 @@ def get_path_endpoints(path, size, cutoff=1):
     return new_path, starting_path, ending_path, s1_exclusion_start, s1_exclusion_end
 
 
-def get_merging_idx(array, threshold=2):
+def get_merging_idx(array: np.ndarray, threshold: int = 2) -> Dict[int, List[int]]:
     array = array[np.argsort(array)]
 
     mergers = defaultdict(list)
@@ -261,12 +284,12 @@ def get_merging_idx(array, threshold=2):
 
 
 def get_input_to_ref_map(
-    note_array,  # pitch, onset
-    note_array_ref,  # pitch, onset
-    alignment_idx,
-    merge_close_onsets=5,
-    return_callable=True,
-):  # na_idx, na_ref_idx
+    note_array: np.ndarray,  # pitch, onset
+    note_array_ref: np.ndarray,  # pitch, onset
+    alignment_idx: np.ndarray,
+    merge_close_onsets: int = 5,
+    return_callable: bool = True,
+) -> Union[Callable, np.ndarray]:  # na_idx, na_ref_idx
     na_onset = note_array[alignment_idx[:, 0], 1]
     na_ref_onset = note_array_ref[alignment_idx[:, 1], 1]
     onsets = np.column_stack((na_onset, na_ref_onset))
