@@ -6,6 +6,7 @@ This module contains methods to align subparts of a performance.
 import numpy as np
 from ..dp.nwtw import SubPartDynamicProgramming
 import partitura as pt
+from typing import Any, Tuple, Optional, List, Dict
 
 
 class SubPartMatcher(object):
@@ -13,14 +14,18 @@ class SubPartMatcher(object):
     Subpart Alignment
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.DP = SubPartDynamicProgramming()
 
-    def preprocess_score(self, score):
+    def preprocess_score(self, score: Any) -> Any:
         bass_line = score.parts[-1]
         return pt.score.Score(bass_line)
 
-    def preprocess_performance(self, pna, sna):
+    def preprocess_performance(
+        self, 
+        pna: np.ndarray, 
+        sna: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         max_score_pitch = np.max(sna["pitch"])
         min_score_pitch = np.min(sna["pitch"])
         pitch_mask = np.all(
@@ -28,7 +33,13 @@ class SubPartMatcher(object):
         )
         return pna[pitch_mask], pna[~pitch_mask]
 
-    def align_from_path(self, path, sna, pna, pna_top_voice=None):
+    def align_from_path(
+        self,
+        path: np.ndarray,
+        sna: np.ndarray,
+        pna: np.ndarray,
+        pna_top_voice: Optional[np.ndarray] = None,
+    ) -> List[Dict[str, Any]]:
         alignment = list()
         used_pidx = set()
         for snote_idx in range(len(sna)):
@@ -61,7 +72,12 @@ class SubPartMatcher(object):
 
         return alignment
 
-    def from_note_arrays(self, sna, pna_original, preprocess_pna=True):
+    def from_note_arrays(
+        self, 
+        sna: np.ndarray, 
+        pna_original: np.ndarray, 
+        preprocess_pna: bool = True
+    ) -> List[Dict[str, Any]]:
         """
         compute subpart alignment from note arrays.
 
@@ -86,7 +102,12 @@ class SubPartMatcher(object):
             alignment = self.align_from_path(path, sna, pna_original)
         return alignment
 
-    def __call__(self, score_path, performance_path, preprocess_pna=True):
+    def __call__(
+        self, 
+        score_path: str, 
+        performance_path: str, 
+        preprocess_pna: bool = True
+    ) -> List[Dict[str, Any]]:
         """
         compute subpart alignment from score
         and performance paths.

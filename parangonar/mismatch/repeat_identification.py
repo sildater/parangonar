@@ -3,6 +3,7 @@
 """
 This module contain methods for (repeat) structure identification
 """
+from typing import List, Dict, Any, Optional, Tuple, Set, Union
 import partitura as pt
 import numpy as np
 from ..dp.nwtw import BoundedSmithWaterman
@@ -17,7 +18,7 @@ class RepeatIdentifier(object):
 
     """
 
-    def __init__(self, max_number_of_paths=100000):
+    def __init__(self, max_number_of_paths: int = 100000) -> None:
         self.directions = np.array([[1, 1], [1, 0]])
         self.dists = np.array([1, 1])
         self.matcher = BoundedSmithWaterman(
@@ -30,7 +31,7 @@ class RepeatIdentifier(object):
         )
         self.max_number_of_paths = max_number_of_paths
 
-    def prepare_score(self, score):
+    def prepare_score(self, score: Any) -> Tuple[Any, np.ndarray, List[Set[int]]]:
         # score representation
         # score = pt.load_musicxml(score_path)
         part = pt.score.merge_parts(score.parts)
@@ -44,14 +45,18 @@ class RepeatIdentifier(object):
             )
         return part, unique_onsets, score_pitches_at_onsets
 
-    def prepare_performance(self, perf):
+    def prepare_performance(self, perf: Any) -> Tuple[np.ndarray, np.ndarray]:
         # perf = pt.load_performance_midi(perf_path)
         # performance representation
         perf_note_array = perf.note_array()
         perf_pitches = perf_note_array["pitch"]
         return perf_note_array, perf_pitches
 
-    def extract_segments(self, part, unique_onsets, verbose=False):
+    def extract_segments(
+        self, part: Any, 
+        unique_onsets: np.ndarray, 
+        verbose: bool = False
+    ) -> Tuple[List[Any], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         if verbose:
             print("*" * 20)
             print("SEGMENTS")
@@ -161,7 +166,11 @@ class RepeatIdentifier(object):
         return output_path, path_cost
 
     def compute_path_gain(
-        self, cost, path, backtracking, segment_onset_idx, directions
+        self, 
+        cost, 
+        path, 
+        backtracking, 
+        segment_onset_idx, directions
     ):
         ending_m = cost.shape[0] - 1  # the end of the performance
         starting_m = 0
@@ -189,7 +198,13 @@ class RepeatIdentifier(object):
 
         return path_gain, full_path, full_path_list[::-1]
 
-    def __call__(self, score, performance, verbose=False, plot=False):
+    def __call__(
+        self, 
+        score: Any, 
+        performance: Any, 
+        verbose: bool = False, 
+        plot: Union[bool, str] = False
+    ) -> Optional[Tuple[str, Any]]:
         """
         Parameters
         ----------
