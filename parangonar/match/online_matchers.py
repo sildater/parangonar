@@ -3,6 +3,7 @@
 """
 This module contains online note matcher classes.
 """
+from typing import List, Dict, Any, Optional, Callable, Set
 from .. import ALIGNMENT_TRANSFORMER_CHECKPOINT
 import numpy as np
 from collections import defaultdict
@@ -27,8 +28,12 @@ class TempoModel(object):
     """
 
     def __init__(
-        self, init_beat_period=0.5, init_score_onset=0, init_perf_onset=0, lookback=1
-    ):
+        self,
+        init_beat_period: float = 0.5,
+        init_score_onset: float = 0,
+        init_perf_onset: float = 0,
+        lookback: int = 1,
+    ) -> None:
         self.lookback = lookback
         self.beat_period = init_beat_period
         self.prev_score_onsets = [init_score_onset - 2 * lookback]
@@ -45,14 +50,14 @@ class TempoModel(object):
             init_perf_onset - lookback * self.beat_period, init_score_onset - lookback
         )
 
-    def predict(self, score_onset):
+    def predict(self, score_onset: float) -> float:
         self.est_onset = (
             self.score_perf_map(score_onset - (self.lookback + 1))
             + (self.lookback + 1) * self.beat_period
         )
         return self.est_onset
 
-    def predict_ratio(self, score_onset, perf_onset):
+    def predict_ratio(self, score_onset: float, perf_onset: float) -> float:
         self.est_onset = (
             self.score_perf_map(score_onset - (self.lookback + 1))
             + (self.lookback + 1) * self.beat_period
@@ -64,7 +69,7 @@ class TempoModel(object):
         else:
             return error
 
-    def update(self, performed_onset, score_onset):
+    def update(self, performed_onset: float, score_onset: float) -> None:
         self.prev_perf_onsets_at_score_onsets[score_onset].append(performed_onset)
         if score_onset == self.prev_score_onsets[-1]:
             #     self.prev_perf_onsets[-1] = 4/5 * self.prev_perf_onsets[-1] + 1/5* performed_onset
@@ -103,36 +108,23 @@ class DummyTempoModel(object):
 
     def __init__(
         self,
-        init_beat_period=0.5,
-        init_score_onset=0,
-        init_perf_onset=0,
-        lookback=1,
-        func=None,
-    ):
+        init_beat_period: float = 0.5,
+        init_score_onset: float = 0,
+        init_perf_onset: float = 0,
+        lookback: int = 1,
+        func: Optional[Callable] = None,
+    ) -> None:
         self.lookback = lookback
         self.beat_period = init_beat_period
         self.score_perf_map = func
         # Count how many times has the tempo model been called
         self.counter = 0
 
-    def predict(self, score_onset):
+    def predict(self, score_onset: float) -> float:
         self.est_onset = self.score_perf_map(score_onset)
         return self.est_onset
 
-    # def predict_ratio(
-    #     self,
-    #     score_onset,
-    #     perf_onset
-    #     ):
-    #     self.est_onset = self.score_perf_map(score_onset - self.lookback) + \
-    #         self.lookback * self.beat_period
-    #     error = perf_onset - self.est_onset
-    #     offset_score =  score_onset  - self.prev_score_onsets[-1]
-    #     if offset_score > 0.0:
-    #         return error/(offset_score * self.beat_period)
-    #     else:
-    #         return error
-    def update(self, performed_onset, score_onset):
+    def update(self, performed_onset: float, score_onset: float) -> None:
         self.counter += 1
 
 
@@ -140,7 +132,7 @@ class DummyTempoModel(object):
 
 
 class OnlineTransformerMatcher(object):
-    def __init__(self, score_note_array_full):
+    def __init__(self, score_note_array_full: np.ndarray) -> None:
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
         self.first_p_onset = None
         self.tempo_model = None
@@ -203,7 +195,7 @@ class OnlineTransformerMatcher(object):
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
 
-    def prepare_performance(self, first_onset, init_beat_period=0.5):
+    def prepare_performance(self, first_onset: float, init_beat_period: float = 0.5) -> None:
         self.tempo_model = TempoModel(
             init_beat_period=init_beat_period,
             init_score_onset=self.score_note_array_full["onset_beat"][0],
@@ -228,7 +220,7 @@ class OnlineTransformerMatcher(object):
         self.model.to(self.device)
         self.model.eval()
 
-    def offline(self, performance_note_array):
+    def offline(self, performance_note_array: np.ndarray) -> List[Dict[str, Any]]:
         self.prepare_performance(performance_note_array[0]["onset_sec"])
 
         for p_note in performance_note_array[:]:
@@ -253,7 +245,7 @@ class OnlineTransformerMatcher(object):
 
         return self.note_alignments
 
-    def online(self, performance_note, debug=False):
+    def online(self, performance_note: np.ndarray, debug: bool = False) -> None:
         self.time_since_nn_update += 1
         p_id = performance_note["id"]
         p_onset = performance_note["onset_sec"]
@@ -340,18 +332,18 @@ class OnlineTransformerMatcher(object):
                 self.tempo_model.update(perf_onset, score_onset)
                 self._prev_score_onset = score_onset
 
-    def __call__(self):
+    def __call__(self) -> None:
         return None
 
-    def get_current_score_onset(self):
+    def get_current_score_onset(self) -> float:
         return self._prev_score_onset
 
 
-def perf_tokenizer(pitch, dims=7):
+def perf_tokenizer(pitch: int, dims: int = 7) -> np.ndarray:
     return np.ones((1, dims), dtype=int) * (pitch - 20)
 
 
-def score_tokenizer(pitch_set, dims=7):
+def score_tokenizer(pitch_set: Set[int], dims: int = 7) -> np.ndarray:
     token = np.zeros((1, dims), dtype=int)
     for no, pitch in enumerate(list(pitch_set)):
         if pitch >= 21 and pitch <= 108 and no < dims:
@@ -359,15 +351,15 @@ def score_tokenizer(pitch_set, dims=7):
     return token
 
 
-def perf_to_score_tokenizer(dims=7):
+def perf_to_score_tokenizer(dims: int = 7) -> np.ndarray:
     return np.ones((1, dims), dtype=int) * 89
 
 
-def end_tokenizer(dims=7, end_dims=1):
+def end_tokenizer(dims: int = 7, end_dims: int = 1) -> np.ndarray:
     return np.ones((end_dims, dims), dtype=int) * 90
 
 
-def tokenize(score_segment, perf_segment, dims=7):
+def tokenize(score_segment: List[Set[int]], perf_segment: List[int], dims: int = 7) -> np.ndarray:
     tokens = list()
     for perf_note in perf_segment:
         perf_token = perf_tokenizer(perf_note, dims)
@@ -384,11 +376,10 @@ def tokenize(score_segment, perf_segment, dims=7):
 
 
 class OnlinePureTransformerMatcher(object):
-    def __init__(self, score_note_array_full):
+    def __init__(self, score_note_array_full: np.ndarray) -> None:
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
         self.first_p_onset = None
         self.tempo_model = None
-
         self._prev_performance_notes = list()
         self._prev_score_onset = None
         self._snote_aligned = set()
@@ -447,7 +438,9 @@ class OnlinePureTransformerMatcher(object):
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
 
-    def prepare_performance(self, first_onset, func=None):
+    def prepare_performance(self, 
+                            first_onset: float, 
+                            func: Optional[Callable]=None):
         if func is None:
             self.tempo_model = TempoModel(
                 init_beat_period=0.5,
@@ -481,7 +474,9 @@ class OnlinePureTransformerMatcher(object):
         self.model.to(self.device)
         self.model.eval()
 
-    def offline(self, performance_note_array, func=None):
+    def offline(
+        self, performance_note_array: np.ndarray, func: Optional[Callable] = None
+    ) -> List[Dict[str, Any]]:
         self.prepare_performance(performance_note_array[0]["onset_sec"], func)
 
         for p_note in performance_note_array[:]:
@@ -565,7 +560,7 @@ class OnlinePureTransformerMatcher(object):
 
 
 class TOLTWMatcher(object):
-    def __init__(self, score_note_array):
+    def __init__(self, score_note_array: np.ndarray):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
@@ -588,7 +583,7 @@ class TOLTWMatcher(object):
         self._pnote_aligned = set()
         self.alignment = []
 
-    def prepare_score(self, s_array):
+    def prepare_score(self, s_array: np.ndarray):
         features = list()
         unique_onsets = np.unique(s_array["onset_beat"])
         self.unique_onsets = unique_onsets
@@ -606,14 +601,14 @@ class TOLTWMatcher(object):
             ]
         return features
 
-    def prepare_performance(self, performance_note_array):
+    def prepare_performance(self, performance_note_array: np.ndarray):
         self.performance_note_array = performance_note_array
         features = list()
         for note in performance_note_array:
             features.append([note["onset_sec"], note["pitch"]])
         return features
 
-    def offline(self, performance_note_array):
+    def offline(self, performance_note_array: np.ndarray):
         tracking_path = self(performance_note_array)
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
@@ -654,12 +649,12 @@ class TOLTWMatcher(object):
 
         return note_alignments
 
-    def add_note_alignment(self, perf_id, score_id):
+    def add_note_alignment(self, perf_id: str, score_id: str):
         self.alignment.append((score_id, perf_id))
         self._snote_aligned.add(score_id)
         self._pnote_aligned.add(perf_id)
 
-    def __call__(self, performance_note_array):
+    def __call__(self, performance_note_array: np.ndarray):
         self.features_p = self.prepare_performance(performance_note_array)
         for feature in self.features_p:
             self.queue.put([feature])
@@ -668,7 +663,7 @@ class TOLTWMatcher(object):
 
 
 class OLTWMatcher(object):
-    def __init__(self, score_note_array):
+    def __init__(self, score_note_array: np.ndarray):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
@@ -688,7 +683,7 @@ class OLTWMatcher(object):
         self._pnote_aligned = set()
         self.alignment = []
 
-    def prepare_score(self, s_array):
+    def prepare_score(self, s_array: np.ndarray):
         features = list()
         unique_onsets = np.unique(s_array["onset_beat"])
         self.unique_onsets = unique_onsets
@@ -704,14 +699,14 @@ class OLTWMatcher(object):
             ]
         return features
 
-    def prepare_performance(self, performance_note_array):
+    def prepare_performance(self, performance_note_array: np.ndarray):
         self.performance_note_array = performance_note_array
         features = list()
         for note in performance_note_array:
             features.append(note["pitch"])
         return features
 
-    def offline(self, performance_note_array):
+    def offline(self, performance_note_array: np.ndarray):
         tracking_path = self(performance_note_array)
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
@@ -752,12 +747,12 @@ class OLTWMatcher(object):
 
         return note_alignments
 
-    def add_note_alignment(self, perf_id, score_id):
+    def add_note_alignment(self, perf_id: str, score_id: str):
         self.alignment.append((score_id, perf_id))
         self._snote_aligned.add(score_id)
         self._pnote_aligned.add(perf_id)
 
-    def __call__(self, performance_note_array):
+    def __call__(self, performance_note_array: np.ndarray):
         self.features_p = self.prepare_performance(performance_note_array)
         for feature in self.features_p:
             self.queue.put([feature])
