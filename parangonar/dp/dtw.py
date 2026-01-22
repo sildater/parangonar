@@ -4,6 +4,7 @@
 This module contains dynamic time warping methods.
 """
 
+from typing import Tuple, Union, Callable, Optional
 import numpy as np
 from scipy.spatial.distance import euclidean, cdist
 from numba import jit
@@ -34,17 +35,21 @@ class WeightedDynamicTimeWarping(object):
 
     def __init__(
         self,
-        directional_weights=np.array([1, 1, 1]),
-        directions=np.array([[1, 0], [1, 1], [0, 1]]),
-        metric=euclidean,
-        cdist_fun=cdist,
-    ):
+        directional_weights: np.ndarray = np.array([1, 1, 1]),
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        metric: Callable = euclidean,
+        cdist_fun: Callable = cdist,
+    ) -> None:
         self.directional_weights = directional_weights
         self.directions = directions
         self.metric = metric
         self.cdist_fun = cdist_fun
 
-    def __call__(self, X, Y, return_matrices=False, return_cost=False):
+    def __call__(self, 
+                 X: np.ndarray, 
+                 Y: np.ndarray, 
+                 return_matrices: bool=False, 
+                 return_cost: bool=False):
         """
         Parameters
         ----------
@@ -73,7 +78,10 @@ class WeightedDynamicTimeWarping(object):
         )
         return out
 
-    def from_distance_matrix(self, pwD, return_matrices=False, return_cost=False):
+    def from_distance_matrix(self, 
+                             pwD: np.ndarray, 
+                             return_matrices: bool=False, 
+                             return_cost: bool=False):
         """
             Parameters
         ----------
@@ -118,11 +126,21 @@ class DynamicTimeWarping(object):
         the pairwise distance to be used (scipy cdist or local cdist)
     """
 
-    def __init__(self, metric=euclidean, cdist_fun=cdist):
+    def __init__(
+        self, 
+        metric: Callable = euclidean, 
+        cdist_fun: Callable = cdist
+    ) -> None:
         self.metric = metric
         self.cdist_fun = cdist_fun
 
-    def __call__(self, X, Y, return_path=True, return_cost_matrix=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_path: bool = True,
+        return_cost_matrix: bool = False,
+    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
@@ -157,10 +175,16 @@ class DynamicTimeWarpingSingleLoop(object):
         the pairwise distance metric to be used between the input
     """
 
-    def __init__(self, metric=element_of_set_metric):
+    def __init__(self, metric: Callable = element_of_set_metric) -> None:
         self.metric = metric
 
-    def __call__(self, X, Y, return_path=True, return_cost_matrix=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_path: bool = True,
+        return_cost_matrix: bool = False,
+    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
         # Compute the pw distances and accumulated cost matrix
         dtwd_matrix = cdist_dtw_single_loop(X, Y, self.metric)
         # dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
@@ -203,19 +227,25 @@ class FlexDynamicTimeWarping(object):
 
     def __init__(
         self,
-        directional_weights=np.array([1, 1, 1]),
-        directions=np.array([[1, 0], [1, 1], [0, 1]]),
-        buffer=1,
-        metric=euclidean,
-        cdist_fun=cdist,
-    ):
+        directional_weights: np.ndarray = np.array([1, 1, 1]),
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        buffer: int = 1,
+        metric: Callable = euclidean,
+        cdist_fun: Callable = cdist,
+    ) -> None:
         self.directional_weights = directional_weights
         self.directions = directions
         self.buffer = buffer
         self.metric = metric
         self.cdist_fun = cdist_fun
 
-    def __call__(self, X, Y, return_matrices=False, return_cost=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_matrices: bool = False,
+        return_cost: bool = False,
+    ) -> Union[Tuple[np.ndarray, ...], np.ndarray]:
         """
         Parameters
         ----------
@@ -245,7 +275,12 @@ class FlexDynamicTimeWarping(object):
         )
         return out
 
-    def from_distance_matrix(self, pwD, return_matrices=False, return_cost=False):
+    def from_distance_matrix(
+        self,
+        pwD: np.ndarray,
+        return_matrices: bool = False,
+        return_cost: bool = False,
+    ) -> Union[Tuple[np.ndarray, ...], np.ndarray]:
         """
             Parameters
         ----------
@@ -285,10 +320,10 @@ FDTW = FlexDynamicTimeWarping
 
 @jit(nopython=True)
 def weighted_dtw_forward_and_backward(
-    pwD,
-    directional_weights=np.array([1, 1, 1]),
-    directions=np.array([[1, 0], [1, 1], [0, 1]]),
-):
+    pwD: np.ndarray,
+    directional_weights: np.ndarray = np.array([1, 1, 1]),
+    directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     compute dynamic time warping cost matrix
     and backtracking path
@@ -372,7 +407,7 @@ def weighted_dtw_forward_and_backward(
     return output_D, output_path[1:, :]
 
 
-def dtw_backtracking(dtwd):
+def dtw_backtracking(dtwd: np.ndarray) -> np.ndarray:
     """
     Decode path from the accumulated dtw cost matrix.
 
@@ -448,7 +483,7 @@ def dtw_backtracking(dtwd):
     return np.array(path[::-1], dtype=int)
 
 
-def dtw_dmatrix_from_pairwise_dmatrix(D):
+def dtw_dmatrix_from_pairwise_dmatrix(D: np.ndarray) -> np.ndarray:
     """
     compute dynamic time warping cost matrix
     from a pairwise distance matrix
@@ -482,7 +517,11 @@ def dtw_dmatrix_from_pairwise_dmatrix(D):
     return dtwd[1:, 1:]
 
 
-def cdist_dtw_single_loop(arr1, arr2, metric):
+def cdist_dtw_single_loop(
+    arr1: np.ndarray, 
+    arr2: np.ndarray, 
+    metric: Callable
+) -> np.ndarray:
     """
 
     compute  a pairwise distance matrix
@@ -531,11 +570,11 @@ def cdist_dtw_single_loop(arr1, arr2, metric):
 
 @jit(nopython=True)
 def flexdtw_forward_and_backward(
-    pwD,
-    directional_weights=np.array([1, 1, 1]),
-    directions=np.array([[1, 0], [1, 1], [0, 1]]),
-    buffer=1,
-):
+    pwD: np.ndarray,
+    directional_weights: np.ndarray = np.array([1, 1, 1]),
+    directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+    buffer: int = 1,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     compute felxDTW cost matrix,
     backtrace matrix,
@@ -664,7 +703,10 @@ def flexdtw_forward_and_backward(
     # return 1,2,3,4
 
 
-def flexdtw_dmatrix_from_pairwise_dmatrix(pwD, directional_weights=np.array([1, 1, 1])):
+def flexdtw_dmatrix_from_pairwise_dmatrix(
+    pwD: np.ndarray, 
+    directional_weights: np.ndarray = np.array([1, 1, 1])
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     compute felxDTW cost matrix,
     backtrace matrix,
@@ -719,7 +761,12 @@ def flexdtw_dmatrix_from_pairwise_dmatrix(pwD, directional_weights=np.array([1, 
     return D, B, S
 
 
-def flexdtw_backtracking(D, B, S, buffer=1):
+def flexdtw_backtracking(
+    D: np.ndarray, 
+    B: np.ndarray, 
+    S: np.ndarray, 
+    buffer: int = 1
+) -> np.ndarray:
     """
     Decode path from the accumulated dtw cost matrix,
     backtrace matrix, and starting point matrix
