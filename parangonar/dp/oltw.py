@@ -113,7 +113,13 @@ class OLTW(object):
         offset_y = max(self.input_pointer - self.w, 0)
         return np.array([offset_x, offset_y])
 
-    def update_ref_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
+    def update_ref_direction(self, 
+                             dist, 
+                             new_acc, 
+                             new_len_acc, 
+                             wx, 
+                             wy, 
+                             d):
         update_x0 = wx - d
         for i in range(d):
             for j in range(wy):
@@ -145,7 +151,13 @@ class OLTW(object):
                     new_len_acc[update_x0 + i, j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_input_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
+    def update_input_direction(self, 
+                               dist, 
+                               new_acc, 
+                               new_len_acc, 
+                               wx, 
+                               wy, 
+                               d):
         update_y0 = wy - d
         for i in range(wx):
             for j in range(d):
@@ -177,7 +189,13 @@ class OLTW(object):
                     new_len_acc[i, update_y0 + j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_both_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
+    def update_both_direction(self, 
+                              dist, 
+                              new_acc, 
+                              new_len_acc, 
+                              wx, 
+                              wy, 
+                              d):
         for i in range(wx):
             for j in range(wy):
                 local_dist = dist[i, j]
@@ -208,7 +226,13 @@ class OLTW(object):
                     new_len_acc[i, j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_both_direction_new(self, dist, new_acc, new_len_acc, wx, wy, d):
+    def update_both_direction_new(self, 
+                                  dist, 
+                                  new_acc, 
+                                  new_len_acc, 
+                                  wx, 
+                                  wy, 
+                                  d):
         for j in range(wy - d, wy):
             new_acc[0, j] = dist[0, j] * self.directional_weights[2] + new_acc[0, j - 1]
             new_len_acc[0, j] = 1 + new_len_acc[0, j - 1]

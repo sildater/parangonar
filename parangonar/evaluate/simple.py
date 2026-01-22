@@ -6,8 +6,7 @@ single-command methods to align music files
 and save the result as csv files.
 """
 
-
-import parangonar as pa
+from typing import Optional
 import partitura as pt
 from numpy.lib import recfunctions as rfn
 import numpy as np
@@ -16,10 +15,12 @@ from ..match import (
     DualDTWNoteMatcher
 )
 
-def match_midis(ref_midi, # this is usually a score (deadpan) midi file and will be processed assuming that it is
-                performance_midi, # this can be any recorded or sequenced midi file that will be matched to the reference
-                output_file = "matched_notes.csv", #  a path to a csv file where we store the resulting match info
-                shift_onsets_to_zero = False): # whether to shift both note arrays such that they start at zero
+def match_midis(
+    ref_midi: str,  # this is usually a score (deadpan) midi file and will be processed assuming that it is
+    performance_midi: str,  # this can be any recorded or sequenced midi file that will be matched to the reference
+    output_file: str = "matched_notes.csv",  #  a path to a csv file where we store the resulting match info
+    shift_onsets_to_zero: bool = False,
+) -> None:  # whether to shift both note arrays such that they start at zero
     
     ref_midi_p = pt.load_performance_midi(ref_midi)
     performance_midi_p = pt.load_performance_midi(performance_midi)

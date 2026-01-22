@@ -8,6 +8,7 @@ and sonic visualizer:
 https://www.sonicvisualiser.org/
 """
 
+from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
 import partitura as pt
 from fractions import Fraction
@@ -21,7 +22,12 @@ from json import encoder
 encoder.FLOAT_REPR = lambda o: format(o, ".3f")
 
 
-def save_piano_precision_csv(performance, spart, alignment, out="scorealignment.csv"):
+def save_piano_precision_csv(
+    performance: Any, 
+    spart: Any, 
+    alignment: List[Dict[str, Any]], 
+    out: str = "scorealignment.csv"
+) -> None:
     """
     save alignment for pianoprecision
 
@@ -41,7 +47,10 @@ def save_piano_precision_csv(performance, spart, alignment, out="scorealignment.
     export_piano_precision_to_csv(pp_list, out)
 
 
-def export_piano_precision_to_csv(pp_list, out="scorealignment.csv"):
+def export_piano_precision_to_csv(
+    pp_list: List[Tuple[int, Fraction, float]], 
+    out: str = "scorealignment.csv"
+) -> None:
     with open(out, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["LABEL", "TIME"])
@@ -50,7 +59,11 @@ def export_piano_precision_to_csv(pp_list, out="scorealignment.csv"):
             writer.writerow([mixed, f"{flt:.3f}"])
 
 
-def convert_alignment_to_list(alignment, spart, performance):
+def convert_alignment_to_list(
+    alignment: List[Dict[str, Any]], 
+    spart: Any, 
+    performance: Any
+) -> List[Tuple[int, Fraction, float]]:
     score_note_array = spart.note_array()
     performance_note_array = performance.note_array()
     beat_map = spart.beat_map
@@ -103,30 +116,9 @@ def convert_alignment_to_list(alignment, spart, performance):
     return line_tuples
 
 
-def save_notes_for_sonic_visualiser(notes_array, output_filename):
-    """
-    Saves a structured numpy array to a Sonic Visualiser-compatible note file.
 
-    Parameters
-    ----------
-    alignment: list
-        note alignment list of dicts
-    performance : object
-        a performance object
-    spart: object
-        a score part object
-    """
-    with open(output_filename, "w") as f:
-        for note in notes_array:
-            onset = float(note["onset"])
-            duration = float(note["duration"])
-            pitch = note["pitch"]
-            # Combine ID and pitch or use just pitch if you prefer
-            label = f"{pitch}"  # Or f"{note['id']}:{pitch}" if ID is meaningful
-            f.write(f"{onset:.6f}\t{duration:.6f}\t{label}\n")
-
-
-def save_notes_for_sonic_visualiser(note_array, out="notes.csv"):
+def save_notes_for_sonic_visualiser(note_array: np.ndarray, 
+                                    out: str="notes.csv") -> None:
     """
     Saves a performance note array to a Sonic Visualiser note file.
 
@@ -148,8 +140,10 @@ def save_notes_for_sonic_visualiser(note_array, out="notes.csv"):
 
 
 def save_attribute_for_sonic_visualiser_instants(
-    note_array, attribute_name, out="instants.csv"
-):
+    note_array: np.ndarray, 
+    attribute_name: str, 
+    out: str = "instants.csv"
+) -> None:
     """
     Saves a note array attribute array to a Sonic Visualiser instants file.
 
@@ -173,8 +167,11 @@ def save_attribute_for_sonic_visualiser_instants(
 
 
 def save_attribute_for_sonic_visualiser_time_values(
-    note_array, attribute_name, out="time_values.csv", set_range=False
-):
+    note_array: np.ndarray,
+    attribute_name: str,
+    out: str = "time_values.csv",
+    set_range: bool = False,
+) -> None:
     """
     Saves a note array attribute array to a Sonic Visualiser time values file.
 
@@ -199,7 +196,11 @@ def save_attribute_for_sonic_visualiser_time_values(
             f.write(f"{onset+2:.9f},{set_range[1]:.9f},max value\n")
 
 
-def compute_snote_pnote_array(performance, score_part, alignment):
+def compute_snote_pnote_array(
+    performance: Any, 
+    score_part: Any, 
+    alignment: List[Dict[str, Any]]
+) -> np.ndarray:
     """
     Saves a note array attribute array to a Sonic Visualiser time values file.
 
@@ -254,8 +255,9 @@ def compute_snote_pnote_array(performance, score_part, alignment):
 
 
 def compute_onsetwise_snote_pnote_array(
-    merged_note_array, attribute_list=["velocity", "beat_period", "articulation_log"]
-):
+    merged_note_array: np.ndarray,
+    attribute_list: List[str] = ["velocity", "beat_period", "articulation_log"],
+) -> np.ndarray:
     unique_onset_idx = pt.musicanalysis.performance_codec.get_unique_onset_idxs(
         merged_note_array["onset_beat"]
     )
@@ -280,8 +282,12 @@ def compute_onsetwise_snote_pnote_array(
 
 
 def save_expression_features_for_sonic_visualiser(
-    merged_note_array, out_dir=".", notewise=False, onsetwise=True, beatwise=0
-):
+    merged_note_array: np.ndarray,
+    out_dir: str = ".",
+    notewise: bool = False,
+    onsetwise: bool = True,
+    beatwise: int = 0,
+) -> None:
     """
     Saves a note array attribute array to a Sonic Visualiser time values file.
 
@@ -360,14 +366,14 @@ def save_expression_features_for_sonic_visualiser(
 
 
 def save_sonic_visualizer_csvs(
-    performance,
-    score_part,
-    alignment,
-    out_dir=".",
-    notewise=False,
-    onsetwise=True,
-    beatwise=0,
-):
+    performance: Any,
+    score_part: Any,
+    alignment: List[Dict[str, Any]],
+    out_dir: str = ".",
+    notewise: bool = False,
+    onsetwise: bool = True,
+    beatwise: int = 0,
+) -> None:
     """
     save expression features for sonic visualizer
 
@@ -406,7 +412,12 @@ def save_sonic_visualizer_csvs(
     save_notes_for_sonic_visualiser(merged_note_array, out_dir / Path("notes.csv"))
 
 
-def save_maps(performance, score_part, alignment, out="maps.json"):
+def save_maps(
+    performance: Any, 
+    score_part: Any, 
+    alignment: List[Dict[str, Any]], 
+    out: str = "maps.json"
+) -> None:
     """
     save alignment as MAPS JSON file
 

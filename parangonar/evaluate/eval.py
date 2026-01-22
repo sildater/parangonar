@@ -5,18 +5,18 @@ This module contains methods to evaluate
 - note matching via f scores for match, insertion, and deletion
 - score following / temporal alignment via asynchrony
 """
-from typing import List
+from typing import List, Dict, Tuple, Union, Optional, Any
 import numpy as np
 import partitura as pt
 import os
 
 
 def fscore_alignments(
-    prediction: List[dict],
-    ground_truth: List[dict],
+    prediction: List[Dict[str, Any]],
+    ground_truth: List[Dict[str, Any]],
     types: List[str],
-    return_numbers=False,
-) -> (float, float, float):
+    return_numbers: bool = False,
+) -> Union[Tuple[float, float, float], Tuple[float, float, float, int, int]]:
     """
     Parameters
     ----------
@@ -56,7 +56,9 @@ def fscore_alignments(
         return precision, recall, f_score
 
 
-def print_fscore_alignments(prediction: List[dict], ground_truth: List[dict]):
+def print_fscore_alignments(
+    prediction: List[Dict[str, Any]], ground_truth: List[Dict[str, Any]]
+) -> None:
     print("------------------")
     types = ["match", "insertion", "deletion"]
     for alignment_type in types:
@@ -75,7 +77,9 @@ def print_fscore_alignments(prediction: List[dict], ground_truth: List[dict]):
         print("------------------")
 
 
-def evaluate_asynchrony(target_ponsets, tracked_ponsets):
+def evaluate_asynchrony(
+    target_ponsets: np.ndarray, tracked_ponsets: np.ndarray
+) -> Tuple[float, float, float, float]:
     asynchrony = target_ponsets - tracked_ponsets
     abs_asynch = abs(asynchrony)
     mean_asynch = np.median(abs_asynch)
@@ -86,15 +90,15 @@ def evaluate_asynchrony(target_ponsets, tracked_ponsets):
 
 
 def evaluate_score_following(
-    performance_note_array=None,
-    score_note_array=None,
-    gt_alignment=None,
-    alignment=None,
-    out_dir="",
-    file_suffix="",
-    write_to_file=False,
-    print_results=False,
-):
+    performance_note_array: np.ndarray,
+    score_note_array: np.ndarray,
+    gt_alignment: List[Dict[str, Any]],
+    alignment:List[Dict[str, Any]],
+    out_dir: str = "",
+    file_suffix: str = "",
+    write_to_file: bool = False,
+    print_results: bool = False,
+) -> Optional[Tuple[float, float, float, float]]:
     """
     Parameters
     ----------
