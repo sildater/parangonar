@@ -3,7 +3,9 @@
 """
 This module contains alignment utilities.
 """
+from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 from partitura.utils.music import ensure_notearray
+import partitura
 
 from partitura.musicanalysis.performance_codec import (
     to_matched_score,
@@ -17,7 +19,7 @@ from scipy.interpolate import interp1d
 ################################### PARANGONADA EXPORT ###################################
 
 
-def alignment_dicts_to_array(alignment):
+def alignment_dicts_to_array(alignment: List[Dict[str, Any]]) -> np.ndarray:
     """
     create structured array from list of dicts type alignment.
 
@@ -55,8 +57,13 @@ def alignment_dicts_to_array(alignment):
 
 
 def save_parangonada_csv(
-    alignment, performance_data, score_data, outdir=None, zalign=None, feature=None
-):
+    alignment: List[Dict[str, Any]],
+    performance_data: Any,
+    score_data: Any,
+    outdir: Optional[str] = None,
+    zalign: Optional[List[Dict[str, Any]]] = None,
+    feature: Optional[Dict[str, Any]] = None,
+) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
     """
     Save an alignment for visualization with parangonda.
 
@@ -208,14 +215,14 @@ def save_parangonada_csv(
 
 
 def node_array(
-    part,
-    ppart,
-    alignment,
-    tapping_noise=False,
-    node_interval=1,
-    start_beat=None,
-    nodes_in_beats=True,
-):
+    part: Any,
+    ppart: Any,
+    alignment: List[Dict[str, Any]],
+    tapping_noise: Union[bool, float] = False,
+    node_interval: float = 1,
+    start_beat: Optional[float] = None,
+    nodes_in_beats: bool = True,
+) -> List[Tuple[float, float]]:
     """
     generates an array of nodes, corresponding score time point and
     performance time point tuples, spacing given by note_interval.
@@ -276,8 +283,12 @@ def node_array(
 
 
 def beat_times_from_matched_score(
-    x, y, tapping_noise=False, node_interval=1.0, start_beat=None
-):
+    x: np.ndarray,
+    y: np.ndarray,
+    tapping_noise: Union[bool, float] = False,
+    node_interval: float = 1.0,
+    start_beat: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     beat_times_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
 
     min_beat = np.ceil(x.min())  # -node_interval
@@ -303,8 +314,13 @@ def beat_times_from_matched_score(
 
 
 def measure_times_from_matched_score(
-    x, y, part, tapping_noise=False, measure_interval=1, start_measure=None
-):
+    x: np.ndarray,
+    y: np.ndarray,
+    part: Any,
+    tapping_noise: Union[bool, float] = False,
+    measure_interval: int = 1,
+    start_measure: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     beat_times_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
 
     measure_times_in_part = [
@@ -331,7 +347,11 @@ def measure_times_from_matched_score(
     return pmeasure_times, smeasure_times
 
 
-def notewise_to_onsetwise(notewise_inputs, unique_onset_idxs, aggregation_func=np.mean):
+def notewise_to_onsetwise(
+    notewise_inputs: np.ndarray,
+    unique_onset_idxs: List[np.ndarray],
+    aggregation_func: Callable = np.mean,
+) -> np.ndarray:
     """Agregate onset times per score onset"""
 
     onsetwise_inputs = np.zeros(len(unique_onset_idxs), dtype=notewise_inputs.dtype)
@@ -341,9 +361,11 @@ def notewise_to_onsetwise(notewise_inputs, unique_onset_idxs, aggregation_func=n
     return onsetwise_inputs
 
 
-def expand_grace_notes(note_array, backwards_time=0.2):
+def expand_grace_notes(note_array: np.ndarray, 
+                       backwards_time: float = 0.2) -> np.ndarray:
     """
-    expand the duration of gracenotes in a note_array and reset their onset by a timespan called backwards_time
+    expand the duration of gracenotes in a note_array and 
+    reset their onset by a timespan called backwards_time
     """
     grace_note_onsets = np.unique(
         note_array["onset_beat"][note_array["duration_beat"] == 0.0]
@@ -361,7 +383,7 @@ def expand_grace_notes(note_array, backwards_time=0.2):
     return note_array
 
 
-def convert_grace_to_insertions(alignment):
+def convert_grace_to_insertions(alignment: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     relabel all ornament alignments as insertions
     """
