@@ -43,7 +43,9 @@ def l2(vec1: np.ndarray, vec2: np.ndarray) -> float:
 
 
 def invert_matrix(
-    S: np.ndarray, inversion: str = "reciprocal", positive: bool = False
+    S: np.ndarray, 
+    inversion: str = "reciprocal", 
+    positive: bool = False
 ) -> np.ndarray:
     """
     simple converter from similarity to distance matrix
@@ -73,7 +75,9 @@ def dnw(vec1: np.ndarray, vec2: np.ndarray) -> float:
 
 
 def cdist_local(
-    arr1: np.ndarray, arr2: np.ndarray, metric: Callable
+    arr1: np.ndarray, 
+    arr2: np.ndarray, 
+    metric: Callable
 ) -> np.ndarray:
     """
     compute array of pairwise distances between
@@ -105,7 +109,10 @@ def cdist_local(
 
 @jit(nopython=True)
 def bounded_recursion(
-    prev_val: float, min_val: float = 0, max_val: float = 10, slope_at_min: float = 1
+    prev_val: float, 
+    min_val: float = 0, 
+    max_val: float = 10, 
+    slope_at_min: float = 1
 ) -> float:
     """
     a recursive function which when starting at min_val,

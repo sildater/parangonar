@@ -3,6 +3,7 @@
 """
 Implementation of Needleman Wunsch and derived algorithms
 """
+from typing import Tuple, Union, List, Callable, Optional, Dict, Any
 import numpy as np
 from collections import defaultdict
 from scipy.spatial.distance import euclidean, cdist
@@ -28,7 +29,7 @@ class NWDistanceMatrix(object):
         Gap parameter (for initializing the matrix)
     """
 
-    def __init__(self, gamma=0.1):
+    def __init__(self, gamma: float = 0.1) -> None:
         self.gamma = float(gamma)
         self.val_dict = defaultdict(lambda: np.inf)
         self.indices_dict = dict()
@@ -36,11 +37,11 @@ class NWDistanceMatrix(object):
         self.ydim = 0
 
     @property
-    def nw_distance(self):
+    def nw_distance(self) -> float:
         """The total accumulated cost of alignment"""
         return self[self.xdim, self.ydim]
 
-    def __getitem__(self, indices):
+    def __getitem__(self, indices: Tuple[int, int]) -> float:
         i, j = indices
         if i == 0 and j != 0:
             return self.gamma * j
@@ -51,7 +52,9 @@ class NWDistanceMatrix(object):
         else:
             return self.val_dict[i, j]
 
-    def __setitem__(self, indices, values):
+    def __setitem__(self, 
+                    indices: Tuple[int, int], 
+                    values: Tuple[float, Tuple[int, int], int]) -> None:
         if indices[0] > self.xdim:
             self.xdim = indices[0]
         if indices[1] > self.ydim:
@@ -59,7 +62,7 @@ class NWDistanceMatrix(object):
         self.val_dict[indices] = values[0]
         self.indices_dict[indices] = (values[1], values[2])
 
-    def path_step(self, i, j):
+    def path_step(self, i: int, j: int) -> Tuple[Tuple[int, int], int]:
         """
         Get the indices and type of message for backtracking
         """
@@ -73,7 +76,7 @@ class NWDistanceMatrix(object):
             return self.indices_dict[i, j]
 
     @property
-    def cost_matrix(self):
+    def cost_matrix(self) -> np.ndarray:
         """
         The alignment cost matrix
         """
@@ -89,7 +92,9 @@ class NeedlemanWunsch(object):
     Needleman-Wunsch algorithm for aligning sequences.
     """
 
-    def __init__(self, metric=euclidean, gamma=0.1):
+    def __init__(self, 
+                 metric: Callable=euclidean, 
+                 gamma: float=0.1):
         self.metric = metric
         self.gamma = gamma
 
@@ -154,10 +159,19 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     Needleman-Wunsch Dynamic Time Warping as introduced by Grachten et al.
     """
 
-    def __init__(self, metric=euclidean, gamma=0.1):
+    def __init__(self, 
+                 metric: Callable = euclidean, 
+                 gamma: float = 0.1) -> None:
         super().__init__(metric=metric, gamma=gamma)
 
-    def __call__(self, X, Y, return_path=True, window=None, return_cost_matrix=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_path: bool = True,
+        window: Optional[List[Tuple[int, int]]] = None,
+        return_cost_matrix: bool = False,
+    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
         X = X.astype(float)
         Y = Y.astype(float)
         len_X, len_Y = len(X), len(Y)
@@ -208,7 +222,7 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
 
         return out
 
-    def backtracking(self, nw_matrix):
+    def backtracking(self, nw_matrix: NWDistanceMatrix) -> np.ndarray:
         path = []
         i, j = nw_matrix.xdim, nw_matrix.ydim
 
@@ -253,14 +267,14 @@ class WeightedNeedlemanWunschTimeWarping(object):
 
     def __init__(
         self,
-        directions=np.array([[1, 0], [1, 1], [0, 1]]),
-        directional_penalties=np.array([1, 0, 1]),
-        directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
-        directional_weights=np.array([1, 1, 1]),
-        metric=euclidean,
-        cdist_fun=cdist,
-        gamma=1,
-    ):
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        directional_penalties: np.ndarray = np.array([1, 0, 1]),
+        directional_distances: List[np.ndarray] = [np.array([]), np.array([[0, 0]]), np.array([])],
+        directional_weights: np.ndarray = np.array([1, 1, 1]),
+        metric: Callable = euclidean,
+        cdist_fun: Callable = cdist,
+        gamma: float = 1,
+    ) -> None:
         self.metric = metric
         self.cdist_fun = cdist_fun
         self.gamma = gamma
@@ -269,7 +283,11 @@ class WeightedNeedlemanWunschTimeWarping(object):
         self.directional_penalties = directional_penalties
         self.directional_distances = directional_distances
 
-    def __call__(self, X, Y, return_matrices=True, return_cost=False):
+    def __call__(self, 
+                 X: np.ndarray, 
+                 Y: np.ndarray, 
+                 return_matrices: bool=True, 
+                 return_cost: bool=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
 
@@ -293,13 +311,13 @@ class WeightedNeedlemanWunschTimeWarping(object):
 
 
 def weighted_nwdtw_forward_and_backward(
-    pwD,
-    directional_weights=np.array([1, 1, 1]),
-    directions=np.array([[1, 0], [1, 1], [0, 1]]),
-    directional_penalties=np.array([1, 0, 1]),
-    directional_distances=[np.array([]), np.array([[0, 0]]), np.array([])],
-    gamma=1,
-):
+    pwD: np.ndarray,
+    directional_weights: np.ndarray = np.array([1, 1, 1]),
+    directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+    directional_penalties: np.ndarray = np.array([1, 0, 1]),
+    directional_distances: List[np.ndarray] = [np.array([]), np.array([[0, 0]]), np.array([])],
+    gamma: float = 1,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     compute needleman-wunsch dynamic time warping cost matrix
     and backtracking path
@@ -419,14 +437,14 @@ class OriginalNeedlemanWunsch(object):
 
     def __init__(
         self,
-        metric=euclidean,
-        cdist_fun=cdist,
-        gamma_penalty=-1.0,
-        gamma_match=1.0,
-        gap_penalty=-0.5,
-        threshold=1.0,
-        smith_waterman=False,
-    ):
+        metric: Callable = euclidean,
+        cdist_fun: Callable = cdist,
+        gamma_penalty: float = -1.0,
+        gamma_match: float = 1.0,
+        gap_penalty: float = -0.5,
+        threshold: float = 1.0,
+        smith_waterman: bool = False,
+    ) -> None:
         self.metric = metric
         self.cdist_fun = cdist_fun
         self.gamma_penalty = gamma_penalty
@@ -435,7 +453,11 @@ class OriginalNeedlemanWunsch(object):
         self.threshold = threshold
         self.smith_waterman = smith_waterman
 
-    def __call__(self, X, Y, return_matrices=True, return_cost=False):
+    def __call__(self, 
+                 X: np.ndarray, 
+                 Y: np.ndarray, 
+                 return_matrices: bool=True, 
+                 return_cost: bool=False):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
 
@@ -459,13 +481,13 @@ class OriginalNeedlemanWunsch(object):
 
 
 def onw_forward_and_backward(
-    pwD,
-    gamma_penalty=-1.0,
-    gamma_match=1.0,
-    threshold=1.0,
-    gap_penalty=0.5,
-    smith_waterman=False,
-):
+    pwD: np.ndarray,
+    gamma_penalty: float = -1.0,
+    gamma_match: float = 1.0,
+    threshold: float = 1.0,
+    gap_penalty: float = 0.5,
+    smith_waterman: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     compute needleman-wunsch cost matrix
     and backtracking path
@@ -563,7 +585,7 @@ class BoundedSmithWaterman(object):
     """
     Bounded Smith-Waterman algorithm for aligning (sub-)sequences.
 
-        Parameters
+    Parameters
     ----------
     gamma_penalty: float
         penalty value
@@ -579,18 +601,18 @@ class BoundedSmithWaterman(object):
 
     def __init__(
         self,
-        gamma_penalty=-1.0,
-        gamma_match=1.0,
-        threshold=1.0,
-        metric=element_of_set_metric,
-        cdist_fun=cdist_local,
-        directions=np.array([[1, 0], [1, 1], [0, 1]]),
-        directional_penalties=np.array([0, 0, 0]),
-        directional_distances=np.array([1, 1, 1]),
-        gain_min_val=0,
-        gain_max_val=10,
-        gain_slope_at_min=1,
-    ):
+        gamma_penalty: float = -1.0,
+        gamma_match: float = 1.0,
+        threshold: float = 1.0,
+        metric: Callable = element_of_set_metric,
+        cdist_fun: Callable = cdist_local,
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        directional_penalties: np.ndarray = np.array([0, 0, 0]),
+        directional_distances: np.ndarray = np.array([1, 1, 1]),
+        gain_min_val: float = 0,
+        gain_max_val: float = 10,
+        gain_slope_at_min: float = 1,
+    ) -> None:
         self.metric = metric
         self.cdist_fun = cdist_fun
         self.gamma_penalty = gamma_penalty
@@ -603,7 +625,9 @@ class BoundedSmithWaterman(object):
         self.gain_max_val = gain_max_val
         self.gain_slope_at_min = gain_slope_at_min
 
-    def __call__(self, X, Y):
+    def __call__(self, 
+                 X: np.ndarray, 
+                 Y: np.ndarray)->Tuple[np.ndarray, np.ndarray]:
         X = np.asanyarray(X)
         Y = np.asanyarray(Y)
 
@@ -625,7 +649,8 @@ class BoundedSmithWaterman(object):
         out = (cost, B)
         return out
 
-    def from_similarity_matrix(self, pwD):
+    def from_similarity_matrix(self, 
+                               pwD: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         cost, B = bsw_forward(
             pwD,
             self.gamma_penalty,
@@ -644,17 +669,17 @@ class BoundedSmithWaterman(object):
 
 @jit(nopython=True)
 def bsw_forward(
-    pwD,
-    gamma_penalty=-1.0,
-    gamma_match=1.0,
-    threshold=1.0,
-    directions=np.array([[1, 0], [1, 1], [0, 1]]),
-    directional_penalties=np.array([0, 0, 0]),
-    directional_distances=np.array([1, 1, 1]),
-    gain_min_val=0,
-    gain_max_val=10,
-    gain_slope_at_min=1,
-):
+    pwD: np.ndarray,
+    gamma_penalty: float = -1.0,
+    gamma_match: float = 1.0,
+    threshold: float = 1.0,
+    directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+    directional_penalties: np.ndarray = np.array([0, 0, 0]),
+    directional_distances: np.ndarray = np.array([1, 1, 1]),
+    gain_min_val: float = 0,
+    gain_max_val: float = 10,
+    gain_slope_at_min: float = 1,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     compute needleman-wunsch cost matrix
     and backtracking path
@@ -750,7 +775,11 @@ class SubPartDynamicProgramming(object):
         moving average recursion factor for tempo update
     """
 
-    def __init__(self, weights=np.array([1, 0.5, 2]), tempo_factor=0.1):
+    def __init__(
+        self, 
+        weights: np.ndarray = np.array([1, 0.5, 2]), 
+        tempo_factor: float = 0.1
+    ) -> None:
         self.weights = weights
         self.tempo_factor = tempo_factor
 
@@ -769,8 +798,11 @@ class SubPartDynamicProgramming(object):
 
 
 def subpart_DP_forward_and_backward(
-    pna, sna, weights=np.array([1, 0.5, 2]), tempo_factor=0.1
-):
+    pna: np.ndarray,
+    sna: np.ndarray,
+    weights: np.ndarray = np.array([1, 0.5, 2]),
+    tempo_factor: float = 0.1,
+) -> Tuple[np.ndarray, ...]:
     """
     Parameters
     ----------
