@@ -3,18 +3,19 @@
 """
 This module contains pairwise distance metrics and other DP helpers.
 """
+from typing import Union, Set, List, Callable, Tuple
 import numpy as np
 from numba import jit
 
 
-def element_of_metric(vec1, vec2):
+def element_of_metric(vec1: np.ndarray, vec2: np.ndarray) -> float:
     """
     metric that evaluates occurence of vec2 (scalar) in vec1 (vector n-dim)
     """
     return 1 - np.sum(vec2 == vec1)
 
 
-def element_of_set_metric(element_, set_):
+def element_of_set_metric(element_: Union[int, float], set_: Set[Union[int, float]]) -> float:
     """
     metric that evaluates occurence of an element in a set
     """
@@ -24,7 +25,7 @@ def element_of_set_metric(element_, set_):
         return 1.0
 
 
-def element_of_set_metric_se(set_, element_):
+def element_of_set_metric_se(set_: Set[Union[int, float]], element_: Union[int, float]) -> float:
     """
     metric that evaluates occurence of an element in a set
     """
@@ -34,14 +35,16 @@ def element_of_set_metric_se(set_, element_):
         return 1.0
 
 
-def l2(vec1, vec2):
+def l2(vec1: np.ndarray, vec2: np.ndarray) -> float:
     """
     l2 metric between vec1 and vec2
     """
     return np.sqrt(np.sum((vec2 - vec1) ** 2))
 
 
-def invert_matrix(S, inversion="reciprocal", positive=False):
+def invert_matrix(
+    S: np.ndarray, inversion: str = "reciprocal", positive: bool = False
+) -> np.ndarray:
     """
     simple converter from similarity to distance matrix
     and vice versa
@@ -55,7 +58,7 @@ def invert_matrix(S, inversion="reciprocal", positive=False):
     return D
 
 
-def dnw(vec1, vec2):
+def dnw(vec1: np.ndarray, vec2: np.ndarray) -> float:
     """
     normalized and weighted distance for LNCO/LNSO features.
     https://ieeexplore.ieee.org/abstract/document/6333860/
@@ -69,7 +72,9 @@ def dnw(vec1, vec2):
     return dn * dampening_factor
 
 
-def cdist_local(arr1, arr2, metric):
+def cdist_local(
+    arr1: np.ndarray, arr2: np.ndarray, metric: Callable
+) -> np.ndarray:
     """
     compute array of pairwise distances between
     the elements of two arrays given a metric
@@ -99,7 +104,9 @@ def cdist_local(arr1, arr2, metric):
 
 
 @jit(nopython=True)
-def bounded_recursion(prev_val, min_val=0, max_val=10, slope_at_min=1):
+def bounded_recursion(
+    prev_val: float, min_val: float = 0, max_val: float = 10, slope_at_min: float = 1
+) -> float:
     """
     a recursive function which when starting at min_val,
     grows to slope_at_min after one step,
@@ -114,16 +121,16 @@ def bounded_recursion(prev_val, min_val=0, max_val=10, slope_at_min=1):
 
 
 def tempo_and_pitch_metric(
-    pitch_set_s,
-    pitch_p,
-    onset_s,
-    onset_p,
-    prev_onset_s,
-    prev_onset_p,
-    tempo,  # sec / beat
-    time_weight=0.5,
-    tempo_factor=0.5,
-):
+    pitch_set_s: Set[int],
+    pitch_p: int,
+    onset_s: float,
+    onset_p: float,
+    prev_onset_s: float,
+    prev_onset_p: float,
+    tempo: float,  # sec / beat
+    time_weight: float = 0.5,
+    tempo_factor: float = 0.5,
+) -> Tuple[float, float]:
     """
     metric that combines
     1) pitch set metric
@@ -155,18 +162,18 @@ def tempo_and_pitch_metric(
 
 
 def onset_pitch_duration_metric(
-    pitch_s,
-    pitch_p,
-    onset_s,
-    onset_p,
-    prev_onset_s,
-    prev_onset_p,
-    duration_s,
-    duration_p,
-    tempo,  # sec / beat
-    weights=np.array([1, 1, 1]),  # onset, dur, pitch
-    tempo_factor=0.5,
-):
+    pitch_s: int,
+    pitch_p: int,
+    onset_s: float,
+    onset_p: float,
+    prev_onset_s: float,
+    prev_onset_p: float,
+    duration_s: float,
+    duration_p: float,
+    tempo: float,  # sec / beat
+    weights: np.ndarray = np.array([1, 1, 1]),  # onset, dur, pitch
+    tempo_factor: float = 0.5,
+) -> Tuple[float, float]:
     """
     metric that combines
     1) pitch set metric
