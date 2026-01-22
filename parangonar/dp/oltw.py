@@ -4,6 +4,7 @@
 This module contains On-Line Time Warping.
 """
 
+from typing import Optional, List, Callable, Any
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -20,7 +21,7 @@ class Direction(IntEnum):
     INPUT = 1
     BOTH = 2
 
-    def toggle(self):
+    def toggle(self) -> "Direction":
         return Direction(self ^ 1) if self != Direction.BOTH else Direction.INPUT
 
 
@@ -59,16 +60,16 @@ class OLTW(object):
 
     def __init__(
         self,
-        reference_features=None,
-        queue=None,
-        window_size=10,  # shape of the acc cost matric
-        max_run_count=100,  # maximal number of steps
-        hop_size=1,  # number of seq items that get added at step
-        directional_weights=np.array([1, 1, 1]),  # down, diag, right
-        cdist_fun=cdist_local,
-        cdist_metric=element_of_set_metric_se,
-        **kwargs,
-    ):
+        reference_features: Optional[List[Any]] = None,
+        queue: Optional[Queue] = None,
+        window_size: int = 10,  # shape of the acc cost matric
+        max_run_count: int = 100,  # maximal number of steps
+        hop_size: int = 1,  # number of seq items that get added at step
+        directional_weights: np.ndarray = np.array([1, 1, 1]),  # down, diag, right
+        cdist_fun: Callable = cdist_local,
+        cdist_metric: Callable = element_of_set_metric_se,
+        **kwargs: Any,
+    ) -> None:
         self.queue = queue
         self.cdist_fun = cdist_fun
         self.cdist_metric = cdist_metric
@@ -84,12 +85,12 @@ class OLTW(object):
         self.hop_size = hop_size
         self.initialize()
 
-    def set_feature_arrays(self, reference_features):
+    def set_feature_arrays(self, reference_features: List[Any]) -> None:
         self.reference_features = reference_features
         self.N_ref = len(reference_features)
         self.input_features = list()
 
-    def initialize(self):
+    def initialize(self) -> None:
         self.ref_pointer = 0
         self.input_pointer = 0
         self.run_count = 0
@@ -104,10 +105,10 @@ class OLTW(object):
         self.local_both_dist = np.zeros((self.w, self.w))
 
     @property
-    def warping_path(self):  # [shape=(2, T)]
+    def warping_path(self) -> np.ndarray:  # [shape=(2, T)]
         return self.wp[:, 1:]
 
-    def offset(self):
+    def offset(self) -> np.ndarray:
         offset_x = max(self.ref_pointer - self.w, 0)
         offset_y = max(self.input_pointer - self.w, 0)
         return np.array([offset_x, offset_y])
@@ -403,7 +404,7 @@ class OLTW(object):
         self.select_candidate()
         self.add_candidate_to_path()
 
-    def run(self, verbose=False):
+    def run(self, verbose: bool = False) -> np.ndarray:
         if verbose:
             print("Start running OLTW")
         self.initialize()
