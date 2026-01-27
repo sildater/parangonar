@@ -789,7 +789,7 @@ class SLT_OLTW(object):
         """
         Update the current position and the warping path.
         """
-        self.input_features +=input_features 
+        self.input_features += input_features 
         window_start, window_end = self.get_window()
         min_cost = np.inf
         min_index = window_start
@@ -919,5 +919,5 @@ if __name__ == "__main__":
         )
 
 
-    p2 = o2.run_offline(verbose = False)
+    p2 = o2.run(verbose = False)
     print("path single loop T_OLTW \n", p2)

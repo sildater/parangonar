@@ -409,7 +409,7 @@ class OnlineTransformerMatcher(object):
             torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
         # softmax is along 0 dimension here, unlike pure transformer
-        pred_ids = torch.argmax(torch.softmax(out.squeeze(1), dim=0)[:, 1]).cpu().numpy()
+        pred_ids = torch.argsort(torch.softmax(out.squeeze(1), dim=0)[:, 1], descending=True).cpu().numpy()
         # pred_id = torch.argmax(torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
 
         # use the tempo model
@@ -830,12 +830,12 @@ class TOLTWMatcher(object):
             self.tracker = SLT_OLTW(
                 reference_features=self.features_s,
                 queue=self.queue,
-                window_size=40,
+                window_size=20,
                 max_run_count=10,
                 init_tempo=1,
                 tempo_factor=0.1,
                 time_weight=2.0,
-                directional_weights=np.array([2.0, 1.0, 1.0]),
+                directional_weights=np.array([1.0, 1.0, 1.0]),
             )
 
         # note alignment compatibility
@@ -887,7 +887,7 @@ class TOLTWMatcher(object):
         the tracker returns an index which can be transformed back to 
         score position using self.unique_onsets
         """
-        note_tuple = [performance_note["onset_sec"], performance_note["pitch"]]
+        note_tuple = [[performance_note["onset_sec"], performance_note["pitch"]]]
         return self.tracker(note_tuple)
     
     ### PARANGONAR COMPATIBILITY
@@ -1132,7 +1132,7 @@ class OLTWMatcher(object):
         the tracker returns an index which can be transformed back to 
         score position using self.unique_onsets
         """
-        note_pitch = performance_note["pitch"]
+        note_pitch = [performance_note["pitch"]]
         return self.tracker(note_pitch)
 
     ### PARANGONAR COMPATIBILITY
