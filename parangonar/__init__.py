@@ -41,6 +41,8 @@ from .match import (
     OnlinePureTransformerMatcher,
     TOLTWMatcher,
     OLTWMatcher,
+    SLTOLTWMatcher,
+    SLOLTWMatcher,
 )
 from .mismatch import RepeatIdentifier, SubPartMatcher
 from .evaluate import (
@@ -62,6 +64,11 @@ __all__ = [
     "OnlineTransformerMatcher",
     "OnlinePureTransformerMatcher",
     "TOLTWMatcher",
+    "OLTWMatcher",
+    "SLTOLTWMatcher",
+    "SLOLTWMatcher",
+    "RepeatIdentifier",
+    "SubPartMatcher",
     "fscore_alignments",
     "print_fscore_alignments",
     "plot_alignment_comparison",

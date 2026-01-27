@@ -19,6 +19,8 @@ from .online_matchers import (
     OnlinePureTransformerMatcher,
     TOLTWMatcher,
     OLTWMatcher,
+    SLTOLTWMatcher,
+    SLOLTWMatcher
 )
 from .utils import node_array, save_parangonada_csv
 from .pretrained_models import AlignmentTransformer, TheGlueNote

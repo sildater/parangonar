@@ -7,3 +7,5 @@ for sequence alignment.
 
 from .dtw import DTW, DTWSL
 from .nwtw import NW_DTW, NW
+from .oltw import OLTW, SL_OLTW
+from .t_oltw import T_OLTW, SLT_OLTW

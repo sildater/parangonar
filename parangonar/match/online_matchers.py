@@ -11,8 +11,8 @@ from .pretrained_models import AlignmentTransformer
 import torch
 from .matchers import na_within
 from scipy.interpolate import interp1d
-from ..dp.t_oltw import T_OLTW
-from ..dp.oltw import OLTW
+from ..dp.t_oltw import T_OLTW, SLT_OLTW
+from ..dp.oltw import OLTW, SL_OLTW
 from queue import Queue
 
 
@@ -609,7 +609,7 @@ class TOLTWMatcher(object):
         return features
 
     def offline(self, performance_note_array: np.ndarray):
-        tracking_path = self(performance_note_array)
+        tracking_path = self.compute_tracking_path(performance_note_array)
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
         predicted_score_times = self.unique_onsets[tracking_path[0]]
@@ -654,12 +654,79 @@ class TOLTWMatcher(object):
         self._snote_aligned.add(score_id)
         self._pnote_aligned.add(perf_id)
 
-    def __call__(self, performance_note_array: np.ndarray):
+    def compute_tracking_path(self, performance_note_array: np.ndarray):
         self.features_p = self.prepare_performance(performance_note_array)
         for feature in self.features_p:
             self.queue.put([feature])
         tracking_path = self.tracker.run()
         return tracking_path
+    
+class SLTOLTWMatcher(object):
+    """
+    SLT_OLTW score follower object that plugs into matchmaker API
+    """
+    def __init__(self, score_note_array: np.ndarray):
+        self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+        self.features_s = self.prepare_score(self.score_note_array_full)
+        self.features_p = None
+        self.performance_note_array = None
+        self.queue = Queue()
+        # best parameters according to https://arxiv.org/abs/2505.05078v1
+        self.tracker = SLT_OLTW(
+            reference_features=self.features_s,
+            window_size=40,
+            max_run_count=10,
+            init_tempo=1,
+            tempo_factor=0.1,
+            time_weight=2.0,
+            directional_weights=np.array([2.0, 1.0, 1.0]),
+        )
+
+    def prepare_score(self, s_array: np.ndarray):
+        features = list()
+        unique_onsets = np.unique(s_array["onset_beat"])
+        self.unique_onsets = unique_onsets
+        self.N_ref = len(self.unique_onsets)
+        # create pitch set representation
+        for onset in unique_onsets:
+            features.append(
+                [onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])]
+            )
+        return features
+
+    def prepare_performance(self, performance_note_array: np.ndarray):
+        self.performance_note_array = performance_note_array
+        features = list()
+        for note in performance_note_array:
+            features.append([note["onset_sec"], note["pitch"]])
+        return features
+    
+    @property
+    def warping_path(self) -> np.ndarray:
+        """
+        utility forward for matchmaker
+        """
+        return self.tracker.warping_path
+    
+    def is_still_following(self, offset = 1):
+        """
+        utility forward for matchmaker
+        """
+        return self.tracker.current_position < self.N_ref - offset
+    
+    def __call__(self, performance_note) -> int:
+        """
+        main entrypoint for matchmaker.
+        performance_note arrives as single row of a note array
+        and is converted to a tuple of onset time and pitch.
+        (see prepare_performance for info on how to transform)
+
+        the tracker returns an index which can be transformed back to 
+        score position using self.unique_onsets
+        """
+        note_tuple = [performance_note["onset_sec"], performance_note["pitch"]]
+        return self.tracker(note_tuple)
+
 
 
 class OLTWMatcher(object):
@@ -707,7 +774,7 @@ class OLTWMatcher(object):
         return features
 
     def offline(self, performance_note_array: np.ndarray):
-        tracking_path = self(performance_note_array)
+        tracking_path = self.compute_tracking_path(performance_note_array)
         # process tracking path into alignment
         path_perf_notes = self.performance_note_array[tracking_path[1]]
         predicted_score_times = self.unique_onsets[tracking_path[0]]
@@ -752,9 +819,64 @@ class OLTWMatcher(object):
         self._snote_aligned.add(score_id)
         self._pnote_aligned.add(perf_id)
 
-    def __call__(self, performance_note_array: np.ndarray):
+    def compute_tracking_path(self, performance_note_array: np.ndarray):
         self.features_p = self.prepare_performance(performance_note_array)
         for feature in self.features_p:
             self.queue.put([feature])
         tracking_path = self.tracker.run()
         return tracking_path
+
+class SLOLTWMatcher(object):
+    def __init__(self, score_note_array: np.ndarray):
+        self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+        self.features_s = self.prepare_score(self.score_note_array_full)
+        self.tracker = SL_OLTW(
+            reference_features=self.features_s,
+            window_size=40,
+            max_run_count=10,
+            directional_weights=np.array([2.0, 1.0, 1.0]),
+        )
+
+    def prepare_score(self, s_array: np.ndarray):
+        features = list()
+        unique_onsets = np.unique(s_array["onset_beat"])
+        self.unique_onsets = unique_onsets
+        self.N_ref = len(self.unique_onsets)
+        # create pitch set representation
+        for onset in unique_onsets:
+            features.append(set(s_array[s_array["onset_beat"] == onset]["pitch"]))
+        return features
+
+    def prepare_performance(self, performance_note_array: np.ndarray):
+        self.performance_note_array = performance_note_array
+        features = list()
+        for note in performance_note_array:
+            features.append(note["pitch"])
+        return features
+
+    @property
+    def warping_path(self) -> np.ndarray:
+        """
+        utility forward for matchmaker
+        """
+        return self.tracker.warping_path
+    
+    def is_still_following(self, offset = 1):
+        """
+        utility forward for matchmaker
+        """
+        return self.tracker.current_position < self.N_ref - offset
+    
+    def __call__(self, performance_note) -> int:
+        """
+        main entrypoint for matchmaker.
+        performance_note arrives as single row of a note array
+        and is converted to a an int for pitch.
+        (see prepare_performance for info on how to transform)
+
+        the tracker returns an index which can be transformed back to 
+        score position using self.unique_onsets
+        """
+        note_pitch = performance_note["pitch"]
+        return self.tracker(note_pitch)
+

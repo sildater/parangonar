@@ -822,7 +822,7 @@ class SLT_OLTW(object):
         self.initialize()
         if self.queue_non_empty:
             new_features = self.get_new_input()
-            while self.is_still_following_offline():
+            while self.is_still_following():
                 # for offline usage
                 self.step(new_features)
                 new_features = self.get_new_input()
@@ -843,7 +843,7 @@ class SLT_OLTW(object):
             self.queue_non_empty = False
             return None
     
-    def is_still_following_offline(self):
+    def is_still_following(self):
         is_still_following = self.current_position < self.N_ref
         return is_still_following and self.queue_non_empty
 

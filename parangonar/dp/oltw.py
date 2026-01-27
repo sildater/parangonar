@@ -615,7 +615,7 @@ class SL_OLTW(object):
         self.initialize()
         if self.queue_non_empty:
             new_features = self.get_new_input()
-            while self.is_still_following_offline():
+            while self.is_still_following():
                 # for offline usage
                 self.step(new_features)
                 new_features = self.get_new_input()
@@ -689,5 +689,5 @@ if __name__ == "__main__":
         cdist_metric=element_of_set_metric_se,
     )
     
-    p2 = o2.run_offline(verbose = True)
+    p2 = o2.run()
     print("path 2\n", p2)
