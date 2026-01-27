@@ -4,14 +4,15 @@
 This module contains On-Line Time Warping.
 """
 
-from typing import Optional, List, Callable, Any
+from typing import Optional, List, Callable, Any, Generator, Tuple
 import matplotlib.pyplot as plt
-
+from numpy.typing import NDArray
 import numpy as np
 import scipy
 from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
+import progressbar
 
 from ..dp.metrics import element_of_set_metric_se, cdist_local
 
@@ -99,7 +100,7 @@ class OLTW(object):
 
         self.ref_pointer += self.w  # window of ref shifted at start
         self.acc_dist_matrix = np.full((self.w, self.w), np.inf)
-        self.acc_dist_matrix[0, :] = 0
+        self.acc_dist_matrix[0, 0] = 0.0 
         self.acc_len_matrix = np.zeros((self.w, self.w))
         self.queue_non_empty = True
         self.local_both_dist = np.zeros((self.w, self.w))
@@ -338,7 +339,7 @@ class OLTW(object):
         wx, wy = x + 1, y + 1  # append an extra column
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
-        new_acc[0, 0] = 0  # starting point in corner
+        new_acc[0, 0] = 0.0  # starting point in corner
         new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
         new_len_acc[0, 0] = 0  # starting point in corner
         x_seg = self.reference_features[0:x]  # [wx, feature_dim]
@@ -445,11 +446,270 @@ class OLTW(object):
                 print("ACC LEN \n", self.acc_len_matrix)
                 print("RECENT WARPING PATH \n", self.warping_path[:, -3:])
                 print("NEXT DIRECTION \n", direction)
+                print("RUN COUNT \n", self.run_count)
                 print("*" * 50)
             self.handle_direction(direction)
         if verbose:
             print("... and we're done.")
         return self.warping_path
+
+
+class SL_OLTW(object):
+    """
+    Single Loop OLTW version refactored
+    for update with __call__ and .run() API.
+    inspired by Matchmaker OnlineTimeWarpingArzt.
+    """
+
+    def __init__(
+        self,
+        reference_features: Optional[List[Any]] = None,
+        queue: Optional[Queue] = None,
+        window_size: int = 10,  # shape of the acc cost matric
+        max_run_count: int = 100,  # maximal number of steps
+        hop_size: int = 1,  # number of seq items that get added at step
+        directional_weights: np.ndarray = np.array([1, 1, 1]),  # down, diag, right
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        cdist_metric: Callable = element_of_set_metric_se,
+    ) -> None:
+        self.queue = queue
+        self.cdist_metric = cdist_metric
+        self.directional_weights = directional_weights
+        self.directions = directions
+        if reference_features is not None:
+            self.set_feature_arrays(reference_features)
+        else:
+            self.reference_features = None
+            self.N_ref = None
+            self.input_features = None
+        self.window_size = window_size
+        self.max_run_count = max_run_count
+        self.hop_size = hop_size
+        self.initialize()
+
+    def set_feature_arrays(self, reference_features: List[Any]) -> None:
+        self.reference_features = reference_features
+        self.N_ref = len(reference_features)
+        self.input_features = list()
+
+    def initialize(self) -> None:
+        self.init_position: int = 0 # score/reference 
+        self.current_position: int = 0 # score/reference/playhead pointer
+        
+        self.positions: List[int] = []
+        self._warping_path: List = []
+        self.global_cost_matrix: NDArray[np.float32] = (
+            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32) 
+        ).astype(np.float32)
+        self.global_path_length_matrix: NDArray[np.float32] = (
+            np.zeros((self.N_ref + 1, 2), dtype=np.float32) 
+        ).astype(np.float32)
+        # dummy for later
+        # self.init_tempo = 1
+        # self.global_tempo_matrix: NDArray[np.float32] = (
+        #     np.full((self.N_ref + 1, 2), self.init_tempo, dtype=np.float32) 
+        # ).astype(np.float32)
+ 
+        self.input_index: int = 0 # input pointer
+        self.queue_non_empty: bool = True
+
+    @property
+    def warping_path(self) -> np.ndarray:
+        wp = (np.array(self._warping_path).T).astype(np.int32) # [shape=(2, T)]
+        return wp
+
+    def get_window(self) -> Tuple[int, int]:
+        w_size = self.window_size
+        window_start = max(self.window_index - w_size, 0)
+        window_end = min(self.window_index + w_size, self.N_ref)
+        return window_start, window_end
+
+    def __call__(self, input: np.ndarray) -> int:
+        self.step(input)
+        return self.current_position
+    
+    def update_loop(self,
+                    window_start,
+                    window_end,
+                    min_cost,
+                    min_index
+        ):
+        i = window_start # score idx
+        j = self.input_index # performance idx
+        best_path = 0
+        if i == j == 0:
+            # default cost to get started
+            self.global_cost_matrix[1, 1] = 0.1
+            self.global_path_length_matrix[1, 1] = 0
+            min_cost = 0
+            min_index = 0
+            
+        while i < window_end:
+            if not (i == j == 0):
+                # get the previously computed local cost
+                for d_idx, direction in enumerate(self.directions):
+                    (istep, jstep) = direction
+                    previ = i - istep
+                    prevj = j - jstep
+                    jlocal = 1 - jstep
+                    input_f = self.input_features[j]
+                    ref_f = self.reference_features[i]
+                    # prev_onset_p = self.input_features[prevj][0]  # previous onset in p direction
+                    # prev_onset_s = self.reference_features[previ][0]
+                    # tempo = self.acc_tempo_matrix[previ, jlocal]
+                    prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
+                    prev_cost = self.global_cost_matrix[previ + 1, jlocal]
+                    local_dist = self.cdist_metric(ref_f,input_f)
+                    # local_dist, new_tempo = self.cdist_metric(
+                    #     pitch_set_s=score_features[i + 1][1],
+                    #     pitch_p=perf_features[j + 1][1],
+                    #     onset_s=score_features[i + 1][0],
+                    #     onset_p=perf_features[j + 1][0],
+                    #     prev_onset_s=prev_onset_s,
+                    #     prev_onset_p=prev_onset_p,
+                    #     tempo=tempo,  # sec / beat
+                    #     time_weight=self.time_weight,
+                    #     tempo_factor=self.tempo_factor,
+                    # )
+                    # print(i, j, prev_path_len, prev_cost)
+                    if prev_cost < np.inf:
+                        cost = (
+                            prev_cost * prev_path_len 
+                            + local_dist * self.directional_weights[d_idx]
+                        ) / (prev_path_len + 1)
+                    else: 
+                        cost = np.inf
+
+                    if cost < min_cost:
+                        min_cost = cost
+                        # besttempo = new_tempo
+                        best_path = 1 + prev_path_len
+                        min_index = i
+
+                self.global_cost_matrix[i+1, 1] = min_cost
+                self.global_path_length_matrix[i+1, 1] = best_path
+                # new_tempo_acc[i, j] = besttempo
+    
+            i = i + 1
+
+        # rotate the columns for reuse
+        self.global_cost_matrix[:, 0] = self.global_cost_matrix[:, 1]
+        self.global_cost_matrix[:, 1] = np.inf
+        self.global_path_length_matrix[:, 0] = self.global_path_length_matrix[:, 1]
+        self.global_path_length_matrix[:, 1] = np.inf
+        # self.global_cost_matrix[:, 0] = self.global_cost_matrix[:, 1]
+        # self.global_cost_matrix[:, 1] = np.inf
+
+        return min_index, min_cost
+        
+    def step(self, input_features):
+        """
+        Update the current position and the warping path.
+        """
+        self.input_features +=input_features 
+        window_start, window_end = self.get_window()
+        min_cost = np.inf
+        min_index = window_start
+
+        min_index, min_cost = self.update_loop(
+            window_start=window_start,
+            window_end=window_end,
+            min_cost=min_cost,
+            min_index=min_index,
+        )
+
+        # adapt current_position: do not go backwards,
+        # but also go a maximum of self.max_run_count steps forward
+        if self.input_index == 0:
+            pass
+        else:
+            self.current_position = min(
+                max(self.current_position, min_index),
+                self.current_position + self.max_run_count
+            )
+
+        self._warping_path.append((self.current_position, self.input_index))
+        # update input index
+        self.input_index += 1
+
+    def run(self, verbose: bool = True) -> Generator[int, None, np.ndarray]:
+        """Run the online alignment process.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to show progress bar, by default True
+
+        Yields
+        ------
+        int
+            Current position in the reference sequence
+
+        """
+        self.initialize()
+
+        if verbose:
+            pbar = progressbar.ProgressBar(max_value=self.N_ref, redirect_stdout=True)
+
+        while self.is_still_following():
+            features = self.queue.get()
+    
+            self.step(features)
+
+            if verbose:
+                pbar.update(int(self.current_position))
+            yield self.current_position
+
+        if verbose:
+            pbar.finish()
+
+        return self.warping_path
+    
+
+    def run_offline(self, verbose: bool = True) ->np.ndarray :
+        """Run the online alignment process.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to show progress bar, by default True
+
+        Yields
+        ------
+        int
+            Current position in the reference sequence
+
+        """
+        self.initialize()
+        new_features = self.get_new_input()
+        while self.is_still_following():
+            # for offline usage
+            self.step(new_features)
+            new_features = self.get_new_input()
+
+        return self.warping_path
+
+    def get_new_input(self):
+        try:
+            input_feature = self.queue.get(block=False)
+            return input_feature
+
+        except:
+            print("empty queue")
+            self.queue_non_empty = False
+            return None
+
+    def is_still_following(self):
+        is_still_following = self.current_position < self.N_ref
+        return is_still_following and self.queue_non_empty
+
+    @property
+    def window_index(self) -> int:
+        return self.current_position
+
+    
+
+
 
 
 if __name__ == "__main__":
@@ -465,16 +725,32 @@ if __name__ == "__main__":
     for tt in t:
         queue.put([tt])
 
-    o = OLTW(
+    o1 = OLTW(
         reference_features=r,
         input_feature_shape=1,
         queue=queue,
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
-        max_run_count=3,
-        directional_weights=np.array([1.05, 1.1, 1]),
+        max_run_count=71,
+        directional_weights=np.array([0.95, 0.9, 0.95]),
         cdist_fun=cdist_local,
         cdist_metric=element_of_set_metric_se,
     )
-    # p = o.run(verbose = True)
-    # print("path \n", p)
+    p = o1.run(verbose = True)
+    print("path 1\n", p)
+
+    print("*"*50)
+    queue2 = Queue()
+    for tt in t:
+        queue2.put([tt])
+    o2 = SL_OLTW(
+        reference_features=r,
+        queue=queue2,
+        window_size=WINDOW_SIZE,
+        max_run_count=71,
+        directional_weights=np.array([1.05, 1, 1.05]),
+        cdist_metric=element_of_set_metric_se,
+    )
+    
+    p2 = o2.run_offline(verbose = True)
+    print("path 2\n", p2)

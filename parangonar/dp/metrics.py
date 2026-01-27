@@ -30,7 +30,7 @@ def element_of_set_metric_se(set_: Set[Union[int, float]], element_: Union[int, 
     metric that evaluates occurence of an element in a set
     """
     if element_ in set_:
-        return 0.0
+        return 0.2
     else:
         return 1.0
 
