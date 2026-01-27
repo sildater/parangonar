@@ -559,26 +559,150 @@ class OnlinePureTransformerMatcher(object):
 ################################### OLTW MATCHERS ###################################
 
 
+# class TOLTWMatcher(object):
+#     def __init__(self, score_note_array: np.ndarray):
+#         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+#         self.features_s = self.prepare_score(self.score_note_array_full)
+#         self.features_p = None
+#         self.performance_note_array = None
+#         self.queue = Queue()
+#         # best parameters according to https://arxiv.org/abs/2505.05078v1
+#         self.tracker = T_OLTW(
+#             reference_features=self.features_s,
+#             queue=self.queue,
+#             hop_size=1,
+#             window_size=40,
+#             max_run_count=10,
+#             init_tempo=1,
+#             tempo_factor=0.1,
+#             time_weight=2.0,
+#             directional_weights=np.array([2.0, 1.0, 1.0]),
+#         )
+#         # alignment collectors
+#         self._snote_aligned = set()
+#         self._pnote_aligned = set()
+#         self.alignment = []
+
+#     def prepare_score(self, s_array: np.ndarray):
+#         features = list()
+#         unique_onsets = np.unique(s_array["onset_beat"])
+#         self.unique_onsets = unique_onsets
+#         # create pitch set representation
+#         for onset in unique_onsets:
+#             features.append(
+#                 [onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])]
+#             )
+#         # score by pitch representation
+#         self.score_by_pitch = defaultdict(list)
+#         unique_pitches = np.unique(self.score_note_array_full["pitch"])
+#         for pitch in unique_pitches:
+#             self.score_by_pitch[pitch] = self.score_note_array_full[
+#                 self.score_note_array_full["pitch"] == pitch
+#             ]
+#         return features
+
+#     def prepare_performance(self, performance_note_array: np.ndarray):
+#         self.performance_note_array = performance_note_array
+#         features = list()
+#         for note in performance_note_array:
+#             features.append([note["onset_sec"], note["pitch"]])
+#         return features
+
+#     def offline(self, performance_note_array: np.ndarray):
+#         tracking_path = self.compute_tracking_path(performance_note_array)
+#         # process tracking path into alignment
+#         path_perf_notes = self.performance_note_array[tracking_path[1]]
+#         predicted_score_times = self.unique_onsets[tracking_path[0]]
+#         for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
+#             if perf_note["id"] not in self._pnote_aligned:
+#                 p_pitch = perf_note["pitch"]
+#                 possible_score_notes = self.score_by_pitch[p_pitch]
+#                 possible_score_notes = na_within(
+#                     possible_score_notes,
+#                     "onset_beat",
+#                     pred_score_onset,
+#                     pred_score_onset,
+#                     exclusion_ids=self._snote_aligned,
+#                 )
+#                 if len(possible_score_notes) > 0:
+#                     best_note = possible_score_notes[0]
+#                     self.add_note_alignment(perf_note["id"], best_note["id"])
+
+#         # create output alignment list
+#         note_alignments = list()
+#         for s_ID, p_ID in self.alignment:
+#             note_alignments.append(
+#                 {"label": "match", "score_id": s_ID, "performance_id": p_ID}
+#             )
+#         # add unmatched notes
+#         for score_note in self.score_note_array_full:
+#             if score_note["id"] not in self._snote_aligned:
+#                 note_alignments.append(
+#                     {"label": "deletion", "score_id": score_note["id"]}
+#                 )
+
+#         for performance_note in performance_note_array:
+#             if performance_note["id"] not in self._pnote_aligned:
+#                 note_alignments.append(
+#                     {"label": "insertion", "performance_id": performance_note["id"]}
+#                 )
+
+#         return note_alignments
+
+#     def add_note_alignment(self, perf_id: str, score_id: str):
+#         self.alignment.append((score_id, perf_id))
+#         self._snote_aligned.add(score_id)
+#         self._pnote_aligned.add(perf_id)
+
+#     def compute_tracking_path(self, performance_note_array: np.ndarray):
+#         self.features_p = self.prepare_performance(performance_note_array)
+#         for feature in self.features_p:
+#             self.queue.put([feature])
+#         tracking_path = self.tracker.run()
+#         return tracking_path
+    
 class TOLTWMatcher(object):
-    def __init__(self, score_note_array: np.ndarray):
+    """
+    SLT_OLTW score follower object that plugs into matchmaker API
+    """
+    def __init__(self, 
+                 score_note_array: np.ndarray, 
+                 tracker_type: str = "T_OLTW"):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
         self.performance_note_array = None
         self.queue = Queue()
-        # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = T_OLTW(
-            reference_features=self.features_s,
-            queue=self.queue,
-            hop_size=1,
-            window_size=40,
-            max_run_count=10,
-            init_tempo=1,
-            tempo_factor=0.1,
-            time_weight=2.0,
-            directional_weights=np.array([2.0, 1.0, 1.0]),
-        )
-        # alignment collectors
+
+        # standard T_OLTW as used for https://arxiv.org/abs/2505.05078v1
+        if tracker_type == "T_OLTW":
+            # best parameters according to https://arxiv.org/abs/2505.05078v1
+            self.tracker = T_OLTW(
+                    reference_features=self.features_s,
+                    queue=self.queue,
+                    hop_size=1,
+                    window_size=40,
+                    max_run_count=10,
+                    init_tempo=1,
+                    tempo_factor=0.1,
+                    time_weight=2.0,
+                    directional_weights=np.array([2.0, 1.0, 1.0]),
+                )
+
+        # single loop TempoOLTW which interfaces with matchmaker
+        elif tracker_type == "SLT_OLTW":
+            self.tracker = SLT_OLTW(
+                reference_features=self.features_s,
+                queue=self.queue,
+                window_size=40,
+                max_run_count=10,
+                init_tempo=1,
+                tempo_factor=0.1,
+                time_weight=2.0,
+                directional_weights=np.array([2.0, 1.0, 1.0]),
+            )
+
+        # note alignment compatibility
         self._snote_aligned = set()
         self._pnote_aligned = set()
         self.alignment = []
@@ -587,6 +711,7 @@ class TOLTWMatcher(object):
         features = list()
         unique_onsets = np.unique(s_array["onset_beat"])
         self.unique_onsets = unique_onsets
+        self.N_ref = len(self.unique_onsets)
         # create pitch set representation
         for onset in unique_onsets:
             features.append(
@@ -600,106 +725,8 @@ class TOLTWMatcher(object):
                 self.score_note_array_full["pitch"] == pitch
             ]
         return features
-
-    def prepare_performance(self, performance_note_array: np.ndarray):
-        self.performance_note_array = performance_note_array
-        features = list()
-        for note in performance_note_array:
-            features.append([note["onset_sec"], note["pitch"]])
-        return features
-
-    def offline(self, performance_note_array: np.ndarray):
-        tracking_path = self.compute_tracking_path(performance_note_array)
-        # process tracking path into alignment
-        path_perf_notes = self.performance_note_array[tracking_path[1]]
-        predicted_score_times = self.unique_onsets[tracking_path[0]]
-        for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
-            if perf_note["id"] not in self._pnote_aligned:
-                p_pitch = perf_note["pitch"]
-                possible_score_notes = self.score_by_pitch[p_pitch]
-                possible_score_notes = na_within(
-                    possible_score_notes,
-                    "onset_beat",
-                    pred_score_onset,
-                    pred_score_onset,
-                    exclusion_ids=self._snote_aligned,
-                )
-                if len(possible_score_notes) > 0:
-                    best_note = possible_score_notes[0]
-                    self.add_note_alignment(perf_note["id"], best_note["id"])
-
-        # create output alignment list
-        note_alignments = list()
-        for s_ID, p_ID in self.alignment:
-            note_alignments.append(
-                {"label": "match", "score_id": s_ID, "performance_id": p_ID}
-            )
-        # add unmatched notes
-        for score_note in self.score_note_array_full:
-            if score_note["id"] not in self._snote_aligned:
-                note_alignments.append(
-                    {"label": "deletion", "score_id": score_note["id"]}
-                )
-
-        for performance_note in performance_note_array:
-            if performance_note["id"] not in self._pnote_aligned:
-                note_alignments.append(
-                    {"label": "insertion", "performance_id": performance_note["id"]}
-                )
-
-        return note_alignments
-
-    def add_note_alignment(self, perf_id: str, score_id: str):
-        self.alignment.append((score_id, perf_id))
-        self._snote_aligned.add(score_id)
-        self._pnote_aligned.add(perf_id)
-
-    def compute_tracking_path(self, performance_note_array: np.ndarray):
-        self.features_p = self.prepare_performance(performance_note_array)
-        for feature in self.features_p:
-            self.queue.put([feature])
-        tracking_path = self.tracker.run()
-        return tracking_path
     
-class SLTOLTWMatcher(object):
-    """
-    SLT_OLTW score follower object that plugs into matchmaker API
-    """
-    def __init__(self, score_note_array: np.ndarray):
-        self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
-        self.features_s = self.prepare_score(self.score_note_array_full)
-        self.features_p = None
-        self.performance_note_array = None
-        self.queue = Queue()
-        # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = SLT_OLTW(
-            reference_features=self.features_s,
-            window_size=40,
-            max_run_count=10,
-            init_tempo=1,
-            tempo_factor=0.1,
-            time_weight=2.0,
-            directional_weights=np.array([2.0, 1.0, 1.0]),
-        )
-
-    def prepare_score(self, s_array: np.ndarray):
-        features = list()
-        unique_onsets = np.unique(s_array["onset_beat"])
-        self.unique_onsets = unique_onsets
-        self.N_ref = len(self.unique_onsets)
-        # create pitch set representation
-        for onset in unique_onsets:
-            features.append(
-                [onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])]
-            )
-        return features
-
-    def prepare_performance(self, performance_note_array: np.ndarray):
-        self.performance_note_array = performance_note_array
-        features = list()
-        for note in performance_note_array:
-            features.append([note["onset_sec"], note["pitch"]])
-        return features
+    ### MATCHMAKER COMPATIBILITY
     
     @property
     def warping_path(self) -> np.ndarray:
@@ -726,51 +753,14 @@ class SLTOLTWMatcher(object):
         """
         note_tuple = [performance_note["onset_sec"], performance_note["pitch"]]
         return self.tracker(note_tuple)
-
-
-
-class OLTWMatcher(object):
-    def __init__(self, score_note_array: np.ndarray):
-        self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
-        self.features_s = self.prepare_score(self.score_note_array_full)
-        self.features_p = None
-        self.performance_note_array = None
-        self.queue = Queue()
-        # best parameters according to https://arxiv.org/abs/2505.05078v1
-        self.tracker = OLTW(
-            reference_features=self.features_s,
-            queue=self.queue,
-            hop_size=1,
-            window_size=5,
-            max_run_count=10,
-            directional_weights=np.array([1.0, 1.0, 1.0]),
-        )
-        # alignment collectors
-        self._snote_aligned = set()
-        self._pnote_aligned = set()
-        self.alignment = []
-
-    def prepare_score(self, s_array: np.ndarray):
-        features = list()
-        unique_onsets = np.unique(s_array["onset_beat"])
-        self.unique_onsets = unique_onsets
-        # create pitch set representation
-        for onset in unique_onsets:
-            features.append(set(s_array[s_array["onset_beat"] == onset]["pitch"]))
-        # score by pitch representation
-        self.score_by_pitch = defaultdict(list)
-        unique_pitches = np.unique(self.score_note_array_full["pitch"])
-        for pitch in unique_pitches:
-            self.score_by_pitch[pitch] = self.score_note_array_full[
-                self.score_note_array_full["pitch"] == pitch
-            ]
-        return features
+    
+    ### PARANGONAR COMPATIBILITY
 
     def prepare_performance(self, performance_note_array: np.ndarray):
         self.performance_note_array = performance_note_array
         features = list()
         for note in performance_note_array:
-            features.append(note["pitch"])
+            features.append([note["onset_sec"], note["pitch"]])
         return features
 
     def offline(self, performance_note_array: np.ndarray):
@@ -825,18 +815,144 @@ class OLTWMatcher(object):
             self.queue.put([feature])
         tracking_path = self.tracker.run()
         return tracking_path
+    
 
-class SLOLTWMatcher(object):
-    def __init__(self, score_note_array: np.ndarray):
+
+
+
+
+# class OLTWMatcher(object):
+#     def __init__(self, score_note_array: np.ndarray):
+#         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+#         self.features_s = self.prepare_score(self.score_note_array_full)
+#         self.features_p = None
+#         self.performance_note_array = None
+#         self.queue = Queue()
+#         # best parameters according to https://arxiv.org/abs/2505.05078v1
+#         self.tracker = OLTW(
+#             reference_features=self.features_s,
+#             queue=self.queue,
+#             hop_size=1,
+#             window_size=5,
+#             max_run_count=10,
+#             directional_weights=np.array([1.0, 1.0, 1.0]),
+#         )
+#         # alignment collectors
+#         self._snote_aligned = set()
+#         self._pnote_aligned = set()
+#         self.alignment = []
+
+#     def prepare_score(self, s_array: np.ndarray):
+#         features = list()
+#         unique_onsets = np.unique(s_array["onset_beat"])
+#         self.unique_onsets = unique_onsets
+#         # create pitch set representation
+#         for onset in unique_onsets:
+#             features.append(set(s_array[s_array["onset_beat"] == onset]["pitch"]))
+#         # score by pitch representation
+#         self.score_by_pitch = defaultdict(list)
+#         unique_pitches = np.unique(self.score_note_array_full["pitch"])
+#         for pitch in unique_pitches:
+#             self.score_by_pitch[pitch] = self.score_note_array_full[
+#                 self.score_note_array_full["pitch"] == pitch
+#             ]
+#         return features
+
+    # def prepare_performance(self, performance_note_array: np.ndarray):
+    #     self.performance_note_array = performance_note_array
+    #     features = list()
+    #     for note in performance_note_array:
+    #         features.append(note["pitch"])
+    #     return features
+
+    # def offline(self, performance_note_array: np.ndarray):
+    #     tracking_path = self.compute_tracking_path(performance_note_array)
+    #     # process tracking path into alignment
+    #     path_perf_notes = self.performance_note_array[tracking_path[1]]
+    #     predicted_score_times = self.unique_onsets[tracking_path[0]]
+    #     for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
+    #         if perf_note["id"] not in self._pnote_aligned:
+    #             p_pitch = perf_note["pitch"]
+    #             possible_score_notes = self.score_by_pitch[p_pitch]
+    #             possible_score_notes = na_within(
+    #                 possible_score_notes,
+    #                 "onset_beat",
+    #                 pred_score_onset,
+    #                 pred_score_onset,
+    #                 exclusion_ids=self._snote_aligned,
+    #             )
+    #             if len(possible_score_notes) > 0:
+    #                 best_note = possible_score_notes[0]
+    #                 self.add_note_alignment(perf_note["id"], best_note["id"])
+
+    #     # create output alignment list
+    #     note_alignments = list()
+    #     for s_ID, p_ID in self.alignment:
+    #         note_alignments.append(
+    #             {"label": "match", "score_id": s_ID, "performance_id": p_ID}
+    #         )
+    #     # add unmatched notes
+    #     for score_note in self.score_note_array_full:
+    #         if score_note["id"] not in self._snote_aligned:
+    #             note_alignments.append(
+    #                 {"label": "deletion", "score_id": score_note["id"]}
+    #             )
+
+    #     for performance_note in performance_note_array:
+    #         if performance_note["id"] not in self._pnote_aligned:
+    #             note_alignments.append(
+    #                 {"label": "insertion", "performance_id": performance_note["id"]}
+    #             )
+
+    #     return note_alignments
+
+    # def add_note_alignment(self, perf_id: str, score_id: str):
+    #     self.alignment.append((score_id, perf_id))
+    #     self._snote_aligned.add(score_id)
+    #     self._pnote_aligned.add(perf_id)
+
+    # def compute_tracking_path(self, performance_note_array: np.ndarray):
+    #     self.features_p = self.prepare_performance(performance_note_array)
+    #     for feature in self.features_p:
+    #         self.queue.put([feature])
+    #     tracking_path = self.tracker.run()
+    #     return tracking_path
+
+class OLTWMatcher(object):
+    def __init__(self, 
+                 score_note_array: np.ndarray,
+                 tracker_type: str = "OLTW"):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
-        self.tracker = SL_OLTW(
-            reference_features=self.features_s,
-            window_size=40,
-            max_run_count=10,
-            directional_weights=np.array([2.0, 1.0, 1.0]),
-        )
+        self.features_p = None
+        self.performance_note_array = None
+        self.queue = Queue()
 
+        # standard OLTW 
+        if tracker_type == "OLTW":
+            self.tracker = OLTW(
+                reference_features=self.features_s,
+                queue=self.queue,
+                hop_size=1,
+                window_size=40,
+                max_run_count=10,
+                directional_weights=np.array([2.0, 1.0, 1.0]),
+            )
+
+        # single loop OLTW which interfaces with matchmaker
+        elif tracker_type == "SL_OLTW":
+            self.tracker = SL_OLTW(
+                reference_features=self.features_s,
+                window_size=40,
+                max_run_count=10,
+                directional_weights=np.array([2.0, 1.0, 1.0]),
+            )
+
+        # alignment collectors
+        self._snote_aligned = set()
+        self._pnote_aligned = set()
+        self.alignment = []
+       
     def prepare_score(self, s_array: np.ndarray):
         features = list()
         unique_onsets = np.unique(s_array["onset_beat"])
@@ -845,14 +961,17 @@ class SLOLTWMatcher(object):
         # create pitch set representation
         for onset in unique_onsets:
             features.append(set(s_array[s_array["onset_beat"] == onset]["pitch"]))
+        # score by pitch representation
+        self.score_by_pitch = defaultdict(list)
+        unique_pitches = np.unique(self.score_note_array_full["pitch"])
+        for pitch in unique_pitches:
+            self.score_by_pitch[pitch] = self.score_note_array_full[
+                self.score_note_array_full["pitch"] == pitch
+            ]
         return features
 
-    def prepare_performance(self, performance_note_array: np.ndarray):
-        self.performance_note_array = performance_note_array
-        features = list()
-        for note in performance_note_array:
-            features.append(note["pitch"])
-        return features
+    
+    ### MATCHMAKER COMPATIBILITY
 
     @property
     def warping_path(self) -> np.ndarray:
@@ -880,3 +999,64 @@ class SLOLTWMatcher(object):
         note_pitch = performance_note["pitch"]
         return self.tracker(note_pitch)
 
+    ### PARANGONAR COMPATIBILITY
+    
+    def prepare_performance(self, performance_note_array: np.ndarray):
+        self.performance_note_array = performance_note_array
+        features = list()
+        for note in performance_note_array:
+            features.append(note["pitch"])
+        return features
+
+    def offline(self, performance_note_array: np.ndarray):
+        tracking_path = self.compute_tracking_path(performance_note_array)
+        # process tracking path into alignment
+        path_perf_notes = self.performance_note_array[tracking_path[1]]
+        predicted_score_times = self.unique_onsets[tracking_path[0]]
+        for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
+            if perf_note["id"] not in self._pnote_aligned:
+                p_pitch = perf_note["pitch"]
+                possible_score_notes = self.score_by_pitch[p_pitch]
+                possible_score_notes = na_within(
+                    possible_score_notes,
+                    "onset_beat",
+                    pred_score_onset,
+                    pred_score_onset,
+                    exclusion_ids=self._snote_aligned,
+                )
+                if len(possible_score_notes) > 0:
+                    best_note = possible_score_notes[0]
+                    self.add_note_alignment(perf_note["id"], best_note["id"])
+
+        # create output alignment list
+        note_alignments = list()
+        for s_ID, p_ID in self.alignment:
+            note_alignments.append(
+                {"label": "match", "score_id": s_ID, "performance_id": p_ID}
+            )
+        # add unmatched notes
+        for score_note in self.score_note_array_full:
+            if score_note["id"] not in self._snote_aligned:
+                note_alignments.append(
+                    {"label": "deletion", "score_id": score_note["id"]}
+                )
+
+        for performance_note in performance_note_array:
+            if performance_note["id"] not in self._pnote_aligned:
+                note_alignments.append(
+                    {"label": "insertion", "performance_id": performance_note["id"]}
+                )
+
+        return note_alignments
+
+    def add_note_alignment(self, perf_id: str, score_id: str):
+        self.alignment.append((score_id, perf_id))
+        self._snote_aligned.add(score_id)
+        self._pnote_aligned.add(perf_id)
+
+    def compute_tracking_path(self, performance_note_array: np.ndarray):
+        self.features_p = self.prepare_performance(performance_note_array)
+        for feature in self.features_p:
+            self.queue.put([feature])
+        tracking_path = self.tracker.run()
+        return tracking_path
