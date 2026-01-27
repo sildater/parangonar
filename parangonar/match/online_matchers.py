@@ -144,9 +144,17 @@ class OnlineTransformerMatcher(object):
         self._pnote_aligned_pitch = list()
         self.alignment = []
         self.note_alignments = []
-        self.time_since_nn_update = 0
         self.prepare_score()
         self.prepare_model()
+        self.initialize()
+
+    def initialize(self):
+        # alias and utils for matchmaker
+        self.unique_onsets = self._unique_score_onsets
+        self.N_ref = len(self.unique_onsets)
+        self.current_position = 0
+        self.input_index = 0
+        self._warping_path = list()
 
     def prepare_score(self):
         self.score_note_array_no_grace = self.score_note_array_full[
@@ -161,22 +169,6 @@ class OnlineTransformerMatcher(object):
 
         self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
         self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-
-        # onset range for forward backward view
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [
-                self._unique_score_onsets[s_id],
-                self._unique_score_onsets[s_id + 2],
-            ]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [
-            self._unique_score_onsets[0],
-            self._unique_score_onsets[1],
-        ]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [
-            self._unique_score_onsets[-2],
-            self._unique_score_onsets[-1],
-        ]
 
         # set of pitches at onset / map from onset to idx in unique onsets
         self.pitches_at_onset_by_id = list()
@@ -202,6 +194,21 @@ class OnlineTransformerMatcher(object):
             init_perf_onset=first_onset,
             lookback=1,
         )
+        # if func is None:
+        #     self.tempo_model = TempoModel(
+        #         init_beat_period=0.5,
+        #         init_score_onset=self.score_note_array_full["onset_beat"][0],
+        #         init_perf_onset=first_onset,
+        #         lookback=3,
+        #     )
+        # else:
+        #     self.tempo_model = DummyTempoModel(
+        #         init_beat_period=0.5,
+        #         init_score_onset=self.score_note_array_full["onset_beat"][0],
+        #         init_perf_onset=first_onset,
+        #         lookback=3,
+        #         func=func,
+        #     )
 
     def prepare_model(self):
         self.model = AlignmentTransformer(
@@ -246,7 +253,6 @@ class OnlineTransformerMatcher(object):
         return self.note_alignments
 
     def online(self, performance_note: np.ndarray, debug: bool = False) -> None:
-        self.time_since_nn_update += 1
         p_id = performance_note["id"]
         p_onset = performance_note["onset_sec"]
         p_pitch = performance_note["pitch"]
@@ -315,13 +321,14 @@ class OnlineTransformerMatcher(object):
         dists = list(top_three_notes.keys())
         if len(dists) >= 1:
             best_note = top_three_notes[np.min(dists)]
+
             if best_note["is_grace"]:
                 self.add_note_alignment(p_id, best_note["id"])
             else:
                 self.add_note_alignment(
                     p_id, best_note["id"], p_onset, best_note["onset_beat"]
                 )
-
+   
     def add_note_alignment(self, perf_id, score_id, perf_onset=None, score_onset=None):
         self.alignment.append((score_id, perf_id))
         self._snote_aligned.add(score_id)
@@ -332,11 +339,123 @@ class OnlineTransformerMatcher(object):
                 self.tempo_model.update(perf_onset, score_onset)
                 self._prev_score_onset = score_onset
 
-    def __call__(self) -> None:
-        return None
-
     def get_current_score_onset(self) -> float:
         return self._prev_score_onset
+    
+    ### MATCHMAKER COMPATIBILITY
+    
+    @property
+    def warping_path(self) -> np.ndarray:
+        """
+        utility forward for matchmaker
+        """
+        wp = (np.array(self._warping_path).T).astype(np.int32) # [shape=(2, T)]
+        return wp
+    
+    def is_still_following(self, offset = 0):
+        """
+        utility forward for matchmaker
+        """
+        return self.current_position < self.N_ref - offset
+    
+    def __call__(self, performance_note) -> int:
+        """
+        main entrypoint for matchmaker.
+        performance_note arrives as single row of a note array
+
+        the tracker returns an index which can be transformed back to 
+        score position using self.unique_onsets
+        """
+        p_id = performance_note["id"]
+        p_onset = performance_note["onset_sec"]
+        p_pitch = performance_note["pitch"]
+        self._prev_performance_notes.append(p_pitch)
+
+        if self.input_index == 0:
+            self.prepare_performance(first_onset = p_onset, 
+                                     init_beat_period = 0.5)
+
+        current_id = self.current_position
+
+        possible_score_notes = self.score_by_pitch[p_pitch]
+        # align greedily if open note at current onset
+        if (
+            p_pitch
+            in self.pitches_at_onset_by_id[current_id]
+        ):
+            best_notes = na_within(
+                possible_score_notes,
+                "onset_beat",
+                self._prev_score_onset,
+                self._prev_score_onset,
+                exclusion_ids=self._snote_aligned,
+            )
+            if len(best_notes) > 0:
+                # stay at location
+                self._warping_path.append((self.current_position, self.input_index))
+                self.input_index += 1
+                # self._prev_score_onset = self._unique_score_onsets[self.current_position]
+                return self.current_position
+
+
+        # use the model prediction
+        s_slice = slice(np.max((current_id - 7, 0)), current_id + 9)
+        p_slice = slice(-8, None)
+        score_seq = self.pitches_at_onset_by_id[s_slice]
+        perf_seq = self._prev_performance_notes[p_slice]
+
+        tokenized_score_seq = tokenize(score_seq, perf_seq, dims=7)
+        out = self.model(
+            torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
+        )
+        # softmax is along 0 dimension here, unlike pure transformer
+        pred_ids = torch.argmax(torch.softmax(out.squeeze(1), dim=0)[:, 1]).cpu().numpy()
+        # pred_id = torch.argmax(torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
+
+        # use the tempo model
+        top_three_notes = dict()
+        for pred_id in pred_ids[:3]:
+            new_pred_id = (
+                pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
+            )
+            pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
+            possible_score_notes = self.score_by_pitch[p_pitch]
+            possible_score_notes = na_within(
+                possible_score_notes,
+                "onset_beat",
+                pred_score_onset,
+                pred_score_onset,
+                exclusion_ids=self._snote_aligned,
+            )
+            if len(possible_score_notes) > 0:
+                dist = np.abs(
+                    self.tempo_model.predict(possible_score_notes[0]["onset_beat"])
+                    - p_onset
+                )
+                top_three_notes[dist] = possible_score_notes[0]
+
+        dists = list(top_three_notes.keys())
+        if len(dists) >= 1:
+            closest_note = top_three_notes[np.min(dists)]
+            closest_score_onset = closest_note["onset_beat"]
+            closest_note_id = self.id_by_onset[closest_score_onset]
+            self.current_position = closest_note_id
+            self._warping_path.append((self.current_position, self.input_index))
+            self.input_index += 1
+            # update tempo model
+            if not closest_note["is_grace"] and closest_score_onset >= self._prev_score_onset:
+                self.tempo_model.update(p_onset, closest_score_onset)
+                self._prev_score_onset = closest_score_onset
+        
+        return self.current_position
+    
+
+
+        
+
+        
+
+#### TOKENIZATION
 
 
 def perf_tokenizer(pitch: int, dims: int = 7) -> np.ndarray:
@@ -375,11 +494,13 @@ def tokenize(score_segment: List[Set[int]], perf_segment: List[int], dims: int =
     return np.row_stack(tokens)
 
 
+### PURE TRANSFORMER
+
+
 class OnlinePureTransformerMatcher(object):
     def __init__(self, score_note_array_full: np.ndarray) -> None:
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
         self.first_p_onset = None
-        self.tempo_model = None
         self._prev_performance_notes = list()
         self._prev_score_onset = None
         self._snote_aligned = set()
@@ -387,9 +508,17 @@ class OnlinePureTransformerMatcher(object):
         self._pnote_aligned_pitch = list()
         self.alignment = []
         self.note_alignments = []
-        self.time_since_nn_update = 0
         self.prepare_score()
         self.prepare_model()
+        self.initialize()
+
+    def initialize(self):
+        # alias and utils for matchmaker
+        self.unique_onsets = self._unique_score_onsets
+        self.N_ref = len(self.unique_onsets)
+        self.current_position = 0
+        self.input_index = 0
+        self._warping_path = list()
 
     def prepare_score(self):
         self.score_note_array_no_grace = self.score_note_array_full[
@@ -404,22 +533,6 @@ class OnlinePureTransformerMatcher(object):
 
         self._prev_score_onset = self.score_note_array_full["onset_beat"][0]
         self._unique_score_onsets = np.unique(self.score_note_array_full["onset_beat"])
-
-        # onset range for forward backward view
-        self.onset_range_at_onset = dict()
-        for s_id, s_onset in enumerate(self._unique_score_onsets[1:-1]):
-            self.onset_range_at_onset[s_onset] = [
-                self._unique_score_onsets[s_id],
-                self._unique_score_onsets[s_id + 2],
-            ]
-        self.onset_range_at_onset[self._unique_score_onsets[0]] = [
-            self._unique_score_onsets[0],
-            self._unique_score_onsets[1],
-        ]
-        self.onset_range_at_onset[self._unique_score_onsets[-1]] = [
-            self._unique_score_onsets[-2],
-            self._unique_score_onsets[-1],
-        ]
 
         # set of pitches at onset / map from onset to idx in unique onsets
         self.pitches_at_onset_by_id = list()
@@ -437,25 +550,6 @@ class OnlinePureTransformerMatcher(object):
 
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
-
-    def prepare_performance(self, 
-                            first_onset: float, 
-                            func: Optional[Callable]=None):
-        if func is None:
-            self.tempo_model = TempoModel(
-                init_beat_period=0.5,
-                init_score_onset=self.score_note_array_full["onset_beat"][0],
-                init_perf_onset=first_onset,
-                lookback=3,
-            )
-        else:
-            self.tempo_model = DummyTempoModel(
-                init_beat_period=0.5,
-                init_score_onset=self.score_note_array_full["onset_beat"][0],
-                init_perf_onset=first_onset,
-                lookback=3,
-                func=func,
-            )
 
     def prepare_model(self):
         self.model = AlignmentTransformer(
@@ -475,9 +569,8 @@ class OnlinePureTransformerMatcher(object):
         self.model.eval()
 
     def offline(
-        self, performance_note_array: np.ndarray, func: Optional[Callable] = None
+        self, performance_note_array: np.ndarray
     ) -> List[Dict[str, Any]]:
-        self.prepare_performance(performance_note_array[0]["onset_sec"], func)
 
         for p_note in performance_note_array[:]:
             self.online(p_note)
@@ -549,11 +642,54 @@ class OnlinePureTransformerMatcher(object):
         if perf_onset is not None and score_onset is not None:
             self.aligned_notes_at_onset[score_onset].append(perf_onset)
             if score_onset >= self._prev_score_onset:
-                self.tempo_model.update(perf_onset, score_onset)
                 self._prev_score_onset = score_onset
 
-    def __call__(self):
-        return None
+    def get_current_score_onset(self) -> float:
+        return self._prev_score_onset
+    
+    ### MATCHMAKER COMPATIBILITY
+    
+    @property
+    def warping_path(self) -> np.ndarray:
+        """
+        utility forward for matchmaker
+        """
+        wp = (np.array(self._warping_path).T).astype(np.int32) # [shape=(2, T)]
+        return wp
+    
+    def is_still_following(self, offset = 0):
+        """
+        utility forward for matchmaker
+        """
+        return self.current_position < self.N_ref - offset
+    
+    def __call__(self, performance_note) -> int:
+        """
+        main entrypoint for matchmaker.
+        performance_note arrives as single row of a note array
+
+        the tracker returns an index which can be transformed back to 
+        score position using self.unique_onsets
+        """
+        p_pitch = performance_note["pitch"]
+        self._prev_performance_notes.append(p_pitch)
+
+        current_id = self.current_position
+        s_slice = slice(np.max((current_id - 7, 0)), current_id + 9)
+        p_slice = slice(-8, None)
+        score_seq = self.pitches_at_onset_by_id[s_slice]
+        perf_seq = self._prev_performance_notes[p_slice]
+
+        tokenized_score_seq = tokenize(score_seq, perf_seq, dims=7)
+        out = self.model(
+            torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
+        )
+        pred_id = torch.argmax(torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
+        new_pred_id = pred_id - len(perf_seq) - 1 + np.max((current_id - 7, 0))
+        self.current_position = new_pred_id
+        self._warping_path.append((self.current_position, self.input_index))
+        self.input_index += 1
+        return self.current_position
 
 
 ################################### OLTW MATCHERS ###################################
