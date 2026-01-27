@@ -460,7 +460,6 @@ class SL_OLTW(object):
     for update with __call__ and .run() API.
     inspired by Matchmaker OnlineTimeWarpingArzt.
     """
-
     def __init__(
         self,
         reference_features: Optional[List[Any]] = None,
@@ -493,7 +492,6 @@ class SL_OLTW(object):
     def initialize(self) -> None:
         self.init_position: int = 0 # score/reference 
         self.current_position: int = 0 # score/reference/playhead pointer
-        
         self.positions: List[int] = []
         self._warping_path: List = []
         self.global_cost_matrix: NDArray[np.float32] = (
@@ -502,14 +500,11 @@ class SL_OLTW(object):
         self.global_path_length_matrix: NDArray[np.float32] = (
             np.zeros((self.N_ref + 1, 2), dtype=np.float32) 
         ).astype(np.float32)
-        # dummy for later
-        # self.init_tempo = 1
-        # self.global_tempo_matrix: NDArray[np.float32] = (
-        #     np.full((self.N_ref + 1, 2), self.init_tempo, dtype=np.float32) 
-        # ).astype(np.float32)
- 
         self.input_index: int = 0 # input pointer
-        self.queue_non_empty: bool = True
+        if self.queue is not None:
+            self.queue_non_empty: bool = True
+        else:
+            self.queue_non_empty: bool = False
 
     @property
     def warping_path(self) -> np.ndarray:
@@ -552,24 +547,10 @@ class SL_OLTW(object):
                     jlocal = 1 - jstep
                     input_f = self.input_features[j]
                     ref_f = self.reference_features[i]
-                    # prev_onset_p = self.input_features[prevj][0]  # previous onset in p direction
-                    # prev_onset_s = self.reference_features[previ][0]
-                    # tempo = self.acc_tempo_matrix[previ, jlocal]
                     prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
                     prev_cost = self.global_cost_matrix[previ + 1, jlocal]
                     local_dist = self.cdist_metric(ref_f,input_f)
-                    # local_dist, new_tempo = self.cdist_metric(
-                    #     pitch_set_s=score_features[i + 1][1],
-                    #     pitch_p=perf_features[j + 1][1],
-                    #     onset_s=score_features[i + 1][0],
-                    #     onset_p=perf_features[j + 1][0],
-                    #     prev_onset_s=prev_onset_s,
-                    #     prev_onset_p=prev_onset_p,
-                    #     tempo=tempo,  # sec / beat
-                    #     time_weight=self.time_weight,
-                    #     tempo_factor=self.tempo_factor,
-                    # )
-                    # print(i, j, prev_path_len, prev_cost)
+
                     if prev_cost < np.inf:
                         cost = (
                             prev_cost * prev_path_len 
@@ -586,7 +567,6 @@ class SL_OLTW(object):
 
                 self.global_cost_matrix[i+1, 1] = min_cost
                 self.global_path_length_matrix[i+1, 1] = best_path
-                # new_tempo_acc[i, j] = besttempo
     
             i = i + 1
 
@@ -595,8 +575,6 @@ class SL_OLTW(object):
         self.global_cost_matrix[:, 1] = np.inf
         self.global_path_length_matrix[:, 0] = self.global_path_length_matrix[:, 1]
         self.global_path_length_matrix[:, 1] = np.inf
-        # self.global_cost_matrix[:, 0] = self.global_cost_matrix[:, 1]
-        # self.global_cost_matrix[:, 1] = np.inf
 
         return min_index, min_cost
         
@@ -630,64 +608,25 @@ class SL_OLTW(object):
         # update input index
         self.input_index += 1
 
-    def run(self, verbose: bool = True) -> Generator[int, None, np.ndarray]:
-        """Run the online alignment process.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            Whether to show progress bar, by default True
-
-        Yields
-        ------
-        int
-            Current position in the reference sequence
-
+    def run(self) -> np.ndarray: 
+        """
+        Run the online alignment process in an offline loop.
         """
         self.initialize()
-
-        if verbose:
-            pbar = progressbar.ProgressBar(max_value=self.N_ref, redirect_stdout=True)
-
-        while self.is_still_following():
-            features = self.queue.get()
-    
-            self.step(features)
-
-            if verbose:
-                pbar.update(int(self.current_position))
-            yield self.current_position
-
-        if verbose:
-            pbar.finish()
-
-        return self.warping_path
-    
-
-    def run_offline(self, verbose: bool = True) ->np.ndarray :
-        """Run the online alignment process.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            Whether to show progress bar, by default True
-
-        Yields
-        ------
-        int
-            Current position in the reference sequence
-
-        """
-        self.initialize()
-        new_features = self.get_new_input()
-        while self.is_still_following():
-            # for offline usage
-            self.step(new_features)
+        if self.queue_non_empty:
             new_features = self.get_new_input()
-
-        return self.warping_path
+            while self.is_still_following_offline():
+                # for offline usage
+                self.step(new_features)
+                new_features = self.get_new_input()
+            return self.warping_path
+        else:
+            print("standalone offline run requires a queue")
 
     def get_new_input(self):
+        """
+        queue.get wrapper for graceful exit when used offline.
+        """
         try:
             input_feature = self.queue.get(block=False)
             return input_feature

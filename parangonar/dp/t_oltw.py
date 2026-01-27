@@ -690,7 +690,11 @@ class SLT_OLTW(object):
         ).astype(np.float32)
  
         self.input_index: int = 0 # input pointer
-        self.queue_non_empty: bool = True
+        if self.queue is not None:
+            self.queue_non_empty: bool = True
+        else:
+            self.queue_non_empty: bool = False
+
 
     @property
     def warping_path(self) -> np.ndarray:
@@ -810,65 +814,26 @@ class SLT_OLTW(object):
         self._warping_path.append((self.current_position, self.input_index))
         # update input index
         self.input_index += 1
-
-    def run(self, verbose: bool = True) -> Generator[int, None, np.ndarray]:
-        """Run the online alignment process.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            Whether to show progress bar, by default True
-
-        Yields
-        ------
-        int
-            Current position in the reference sequence
-
+    
+    def run(self) -> np.ndarray: 
+        """
+        Run the online alignment process in an offline loop.
         """
         self.initialize()
-
-        if verbose:
-            pbar = progressbar.ProgressBar(max_value=self.N_ref, redirect_stdout=True)
-
-        while self.is_still_following():
-            features = self.queue.get()
-    
-            self.step(features)
-
-            if verbose:
-                pbar.update(int(self.current_position))
-            yield self.current_position
-
-        if verbose:
-            pbar.finish()
-
-        return self.warping_path
-    
-
-    def run_offline(self, verbose: bool = True) ->np.ndarray :
-        """Run the online alignment process.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            Whether to show progress bar, by default True
-
-        Yields
-        ------
-        int
-            Current position in the reference sequence
-
-        """
-        self.initialize()
-        new_features = self.get_new_input()
-        while self.is_still_following():
-            # for offline usage
-            self.step(new_features)
+        if self.queue_non_empty:
             new_features = self.get_new_input()
-
-        return self.warping_path
+            while self.is_still_following_offline():
+                # for offline usage
+                self.step(new_features)
+                new_features = self.get_new_input()
+            return self.warping_path
+        else:
+            print("standalone offline run requires a queue")
 
     def get_new_input(self):
+        """
+        queue.get wrapper for graceful exit when used offline.
+        """
         try:
             input_feature = self.queue.get(block=False)
             return input_feature
@@ -877,8 +842,8 @@ class SLT_OLTW(object):
             print("empty queue")
             self.queue_non_empty = False
             return None
-
-    def is_still_following(self):
+    
+    def is_still_following_offline(self):
         is_still_following = self.current_position < self.N_ref
         return is_still_following and self.queue_non_empty
 
