@@ -467,7 +467,6 @@ class SL_OLTW(object):
         queue: Optional[Queue] = None,
         window_size: int = 10,  # shape of the acc cost matric
         max_run_count: int = 100,  # maximal number of steps
-        hop_size: int = 1,  # number of seq items that get added at step
         directional_weights: np.ndarray = np.array([1, 1, 1]),  # down, diag, right
         directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
         cdist_metric: Callable = element_of_set_metric_se,
@@ -484,7 +483,6 @@ class SL_OLTW(object):
             self.input_features = None
         self.window_size = window_size
         self.max_run_count = max_run_count
-        self.hop_size = hop_size
         self.initialize()
 
     def set_feature_arrays(self, reference_features: List[Any]) -> None:
@@ -732,7 +730,7 @@ if __name__ == "__main__":
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
         max_run_count=71,
-        directional_weights=np.array([0.95, 0.9, 0.95]),
+        directional_weights=np.array([1.05, 1, 1.05]),
         cdist_fun=cdist_local,
         cdist_metric=element_of_set_metric_se,
     )
