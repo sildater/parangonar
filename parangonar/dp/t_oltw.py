@@ -714,23 +714,25 @@ class SLT_OLTW(object):
     def update_loop(self,
                     window_start,
                     window_end,
-                    min_cost,
                     min_index
         ):
         i = window_start # score idx
         j = self.input_index # performance idx
-        best_path = 0
-        best_tempo = self.init_tempo
+        min_cost = np.inf
+
+
         if i == j == 0:
             # default cost to get started
-            self.global_cost_matrix[1, 1] = 0.1
+            self.global_cost_matrix[1, 1] = 0.0
             self.global_path_length_matrix[1, 1] = 0
             min_cost = 0
             min_index = 0
             
         while i < window_end:
             if not (i == j == 0):
-                # get the previously computed local cost
+                min_local_cost = np.inf
+                min_local_tempo = self.init_tempo
+                min_local_path_len = 1
                 for d_idx, direction in enumerate(self.directions):
                     (istep, jstep) = direction
                     previ = i - istep
@@ -743,36 +745,39 @@ class SLT_OLTW(object):
                     tempo = self.global_tempo_matrix[previ + 1, jlocal]
                     prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
                     prev_cost = self.global_cost_matrix[previ + 1, jlocal]
-                    
-                    local_dist, new_tempo = self.cdist_metric(
-                        pitch_set_s=ref_f[1],
-                        pitch_p=input_f[1],
-                        onset_s=ref_f[0],
-                        onset_p=input_f[0],
-                        prev_onset_s=prev_onset_s,
-                        prev_onset_p=prev_onset_p,
-                        tempo=tempo,  # sec / beat
-                        time_weight=self.time_weight,
-                        tempo_factor=self.tempo_factor,
-                    )
-                    # print(i, j, prev_path_len, prev_cost)
+
                     if prev_cost < np.inf:
+                    
+                        local_dist, new_tempo = self.cdist_metric(
+                            pitch_set_s=ref_f[1],
+                            pitch_p=input_f[1],
+                            onset_s=ref_f[0],
+                            onset_p=input_f[0],
+                            prev_onset_s=prev_onset_s,
+                            prev_onset_p=prev_onset_p,
+                            tempo=tempo,  # sec / beat
+                            time_weight=self.time_weight,
+                            tempo_factor=self.tempo_factor
+                            )
+        
                         cost = (
                             prev_cost * prev_path_len 
                             + local_dist * self.directional_weights[d_idx]
-                        ) / (prev_path_len + 1)
-                    else: 
-                        cost = np.inf
+                            ) / (prev_path_len + 1)
 
-                    if cost < min_cost:
-                        min_cost = cost
-                        best_tempo = new_tempo
-                        best_path = 1 + prev_path_len
-                        min_index = i
+                        if cost < min_local_cost:
+                            min_local_cost = cost
+                            min_local_tempo = new_tempo
+                            min_local_path_len = 1 + prev_path_len
 
-                self.global_cost_matrix[i+1, 1] = min_cost
-                self.global_path_length_matrix[i+1, 1] = best_path
-                self.global_tempo_matrix[i+1, 1] = best_tempo
+                self.global_cost_matrix[i+1, 1] = min_local_cost
+                self.global_path_length_matrix[i+1, 1] = min_local_path_len
+                self.global_tempo_matrix[i+1, 1] = min_local_tempo
+
+                if min_local_cost < min_cost:
+                    min_cost = min_local_cost
+                    min_index = i
+            
             i = i + 1
 
         # rotate the columns for reuse
@@ -783,7 +788,7 @@ class SLT_OLTW(object):
         self.global_tempo_matrix[:, 0] = self.global_tempo_matrix[:, 1]
         self.global_tempo_matrix[:, 1] = self.init_tempo
 
-        return min_index, min_cost
+        return min_index
         
     def step(self, input_features):
         """
@@ -791,13 +796,11 @@ class SLT_OLTW(object):
         """
         self.input_features += input_features 
         window_start, window_end = self.get_window()
-        min_cost = np.inf
         min_index = window_start
 
-        min_index, min_cost = self.update_loop(
+        min_index = self.update_loop(
             window_start=window_start,
             window_end=window_end,
-            min_cost=min_cost,
             min_index=min_index,
         )
 

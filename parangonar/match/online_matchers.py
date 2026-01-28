@@ -799,6 +799,8 @@ class OnlinePureTransformerMatcher(object):
     
 class TOLTWMatcher(object):
     """
+    T_OLTW online note alignment object
+    or
     SLT_OLTW score follower object that plugs into matchmaker API
     """
     def __init__(self, 

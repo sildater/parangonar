@@ -524,49 +524,51 @@ class SL_OLTW(object):
     def update_loop(self,
                     window_start,
                     window_end,
-                    min_cost,
                     min_index
         ):
         i = window_start # score idx
         j = self.input_index # performance idx
-        best_path = 0
+        min_cost = np.inf
+
         if i == j == 0:
             # default cost to get started
-            self.global_cost_matrix[1, 1] = 0.1
+            self.global_cost_matrix[1, 1] = 0.0
             self.global_path_length_matrix[1, 1] = 0
             min_cost = 0
             min_index = 0
             
         while i < window_end:
             if not (i == j == 0):
-                # get the previously computed local cost
+                min_local_cost = np.inf
+                min_local_path_len = 1
                 for d_idx, direction in enumerate(self.directions):
                     (istep, jstep) = direction
-                    previ = i - istep
-                    prevj = j - jstep
+                    previ = i - istep # score
+                    # prevj = j - jstep # performance
                     jlocal = 1 - jstep
                     input_f = self.input_features[j]
                     ref_f = self.reference_features[i]
                     prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
                     prev_cost = self.global_cost_matrix[previ + 1, jlocal]
-                    local_dist = self.cdist_metric(ref_f,input_f)
-
                     if prev_cost < np.inf:
+                        local_dist = self.cdist_metric(ref_f,input_f)
+
                         cost = (
                             prev_cost * prev_path_len 
                             + local_dist * self.directional_weights[d_idx]
                         ) / (prev_path_len + 1)
-                    else: 
-                        cost = np.inf
+                 
 
-                    if cost < min_cost:
-                        min_cost = cost
-                        # besttempo = new_tempo
-                        best_path = 1 + prev_path_len
-                        min_index = i
+                        if cost < min_local_cost:
+                            min_local_cost = cost
+                            min_local_path_len = 1 + prev_path_len
 
-                self.global_cost_matrix[i+1, 1] = min_cost
-                self.global_path_length_matrix[i+1, 1] = best_path
+                self.global_cost_matrix[i+1, 1] = min_local_cost
+                self.global_path_length_matrix[i+1, 1] = min_local_path_len
+
+                if min_local_cost < min_cost:
+                    min_cost = min_local_cost
+                    min_index = i
     
             i = i + 1
 
@@ -576,7 +578,7 @@ class SL_OLTW(object):
         self.global_path_length_matrix[:, 0] = self.global_path_length_matrix[:, 1]
         self.global_path_length_matrix[:, 1] = np.inf
 
-        return min_index, min_cost
+        return min_index
         
     def step(self, input_features):
         """
@@ -584,14 +586,12 @@ class SL_OLTW(object):
         """
         self.input_features += input_features 
         window_start, window_end = self.get_window()
-        min_cost = np.inf
         min_index = window_start
 
-        min_index, min_cost = self.update_loop(
+        min_index = self.update_loop(
             window_start=window_start,
             window_end=window_end,
-            min_cost=min_cost,
-            min_index=min_index,
+            min_index=min_index
         )
 
         # adapt current_position: do not go backwards,
