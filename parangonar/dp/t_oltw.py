@@ -570,7 +570,7 @@ class T_OLTW(object):
             self.input_pointer += self.hop_size
 
         except:
-            print("empty queue")
+            # print("empty queue")
             self.queue_non_empty = False
 
     def is_still_following(self):
@@ -851,7 +851,7 @@ class SLT_OLTW(object):
             return input_feature
 
         except:
-            print("empty queue")
+            # print("empty queue")
             self.queue_non_empty = False
             return None
     
