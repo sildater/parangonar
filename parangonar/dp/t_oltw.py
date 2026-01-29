@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 from enum import IntEnum
 from queue import Queue
 from ..dp.metrics import tempo_and_pitch_metric
-import progressbar
 
 def accumulate_tester():
     score = [[0, {1, 2}], [1, {3, 4}], [2, {3, 4}], [3, {3, 4}]]  # onset_s, pitch set
@@ -173,6 +172,7 @@ class T_OLTW(object):
         self.acc_dist_matrix[0, :] = 0
         self.acc_len_matrix = np.zeros((self.w, self.w))
         self.queue_non_empty = True
+        self.directions_chosen = ""
 
     @property
     def warping_path(self) -> np.ndarray:  # [shape=(2, T)]
@@ -591,6 +591,13 @@ class T_OLTW(object):
             self.run_count = 1
         self.previous_direction = direction
 
+        if direction is Direction.REF:
+            self.directions_chosen += "|"
+        elif direction is Direction.BOTH:
+            self.directions_chosen += "\\"
+        elif direction is Direction.INPUT:
+            self.directions_chosen += "-"
+
     def handle_first_input(self):
         direction = self.select_next_direction()
         self.handle_direction(direction)
@@ -599,6 +606,7 @@ class T_OLTW(object):
         self.add_candidate_to_path()
 
     def run(self, verbose: bool = False) -> np.ndarray:
+        
         if verbose:
             print("Start running OLTW")
         self.initialize()
@@ -626,6 +634,7 @@ class T_OLTW(object):
 
         if verbose:
             print("... and we're done.")
+            print(self.directions_chosen)
         return self.warping_path
     
 
@@ -810,7 +819,7 @@ class SLT_OLTW(object):
             pass
         else:
             self.current_position = min(
-                max(self.current_position, min_index),
+                max(self.current_position - self.max_run_count, min_index),
                 self.current_position + self.max_run_count
             )
 
