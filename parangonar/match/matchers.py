@@ -1943,7 +1943,9 @@ class TheGlueNoteMatcher(object):
     def prepare_model(self) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(
-            THEGLUENOTE_CHECKPOINT, map_location=torch.device(self.device)
+            THEGLUENOTE_CHECKPOINT, 
+            weights_only=True,
+            map_location=torch.device(self.device)
         )
         self.model = TheGlueNote(device=self.device)
         self.model.load_state_dict(checkpoint["state_dict"])
