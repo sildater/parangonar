@@ -79,6 +79,7 @@ class AlignmentTransformer(nn.Module):
         self.transformerDECODER = TransformerEncoder(
             encoder_layer=D_layers,
             num_layers=num_decoder_layers,
+            enable_nested_tensor=False,
         )
         self.out = nn.Linear(self.dim_model, self.dim_class)
 
