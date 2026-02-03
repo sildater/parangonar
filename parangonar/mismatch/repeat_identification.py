@@ -227,7 +227,7 @@ class RepeatIdentifier(object):
         if len(paths) < 2:
             print("no structural variations!")
             print("*" * 20)
-            return None
+            return None, None
 
         path_gains = {}
         for path in paths:
