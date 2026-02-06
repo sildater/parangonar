@@ -414,6 +414,7 @@ class OnlineTransformerMatcher(object):
                         self.add_note_alignment(p_id, best_note["id"])
                     else:
                         self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
+        
 
     def add_note_alignment(self, perf_id, score_id, perf_onset=None, score_onset=None):
         self.alignment.append((score_id, perf_id))
@@ -555,6 +556,7 @@ class OnlineTransformerMatcher(object):
         # align greedily if open note at current onset
         current_id = self.current_position
         possible_score_notes = self.score_by_pitch[p_pitch]
+
         if p_pitch in self.pitches_at_onset_by_id[current_id]:
             best_notes = na_within(possible_score_notes, "onset_beat", 
                                     self._prev_score_onset, self._prev_score_onset,
@@ -562,6 +564,7 @@ class OnlineTransformerMatcher(object):
             if len(best_notes) > 0:
                 # stay at location
                 self._snote_aligned.add(best_notes[0]["id"])
+                self.tempo_model.update(p_onset, best_notes[0]["onset_beat"])
                 self._warping_path.append((self.current_position, self.input_index))
                 self.input_index += 1
                 return self.current_position
@@ -577,7 +580,6 @@ class OnlineTransformerMatcher(object):
         out = self.model(torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device))
         pred_id = torch.argmax(torch.softmax(out.squeeze(1),dim=0)[:,1]).cpu().numpy()
         new_pred_id = pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id-7, 0)))
-
         ## <----x-> window of sensibility
         if new_pred_id > -5 and new_pred_id < 2:
             pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
@@ -590,15 +592,14 @@ class OnlineTransformerMatcher(object):
                 best_note = possible_score_notes[0]
                 current_onset = best_note["onset_beat"]
                 self._snote_aligned.add(best_note["id"])
-                self.current_position = current_id + new_pred_id
-                self._warping_path.append((self.current_position, self.input_index))
-                self.input_index += 1
-                # update tempo model
+                # update tempo model + position
                 if not best_note["is_grace"] and current_onset >= self._prev_score_onset:
                     self.tempo_model.update(p_onset, current_onset)
-                self._prev_score_onset = current_onset
-            
-            return self.current_position
+                    self._prev_score_onset = current_onset
+                    self.current_position = current_id + new_pred_id
+                self._warping_path.append((self.current_position, self.input_index))
+                self.input_index += 1
+                return self.current_position
     
         # do you really want to jump?
         elif new_pred_id >= 2:
@@ -619,15 +620,15 @@ class OnlineTransformerMatcher(object):
                     dist = np.abs(self.tempo_model.predict(possible_score_notes[0]["onset_beat"]) - p_onset)
                     if dist < 1.0:
                         best_note = possible_score_notes[0]
-                        self._snote_aligned.add(best_note["id"])
                         current_onset = best_note["onset_beat"]
-                        self.current_position = current_id + 1
+                        self._snote_aligned.add(best_note["id"])
+                        # update tempo model + position
+                        if not best_note["is_grace"] and current_onset >= self._prev_score_onset:
+                            self.tempo_model.update(p_onset, current_onset)
+                            self._prev_score_onset = current_onset
+                            self.current_position = current_id + 1
                         self._warping_path.append((self.current_position, self.input_index))
                         self.input_index += 1
-                        # update tempo model
-                        if not best_note["is_grace"] and current_onset >= self._prev_score_onset:
-                            self.tempo_model.update(p_onset, best_note["onset_beat"])
-                        self._prev_score_onset = current_onset
                         return self.current_position
 
             # actually do the jump, cautiously            
@@ -643,14 +644,18 @@ class OnlineTransformerMatcher(object):
                     best_note = possible_score_notes[0]
                     current_onset = best_note["onset_beat"]
                     self._snote_aligned.add(best_note["id"])
-                    self.current_position = current_id + new_pred_id
-                    self._warping_path.append((self.current_position, self.input_index))
-                    self.input_index += 1
-                    # update tempo model
+                    # update tempo model + position
                     if not best_note["is_grace"] and current_onset >= self._prev_score_onset:
                         self.tempo_model.update(p_onset, current_onset)
-                    self._prev_score_onset = current_onset
-
+                        self._prev_score_onset = current_onset
+                        self.current_position = current_id + new_pred_id
+                    self._warping_path.append((self.current_position, self.input_index))
+                    self.input_index += 1
+                    return self.current_position
+        
+        # if all else fails, do nothing
+        self._warping_path.append((self.current_position, self.input_index))
+        self.input_index += 1
         return self.current_position
     
 
