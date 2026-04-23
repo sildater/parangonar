@@ -1941,9 +1941,16 @@ class TheGlueNoteMatcher(object):
         self.matching_threshold = (0.5,)
 
     def prepare_model(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            raise ImportError(
+                "The 'TheGlueNoteMatcher' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(
-            THEGLUENOTE_CHECKPOINT, 
+            THEGLUENOTE_CHECKPOINT,
             weights_only=True,
             map_location=torch.device(self.device)
         )

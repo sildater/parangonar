@@ -7,12 +7,18 @@ loaded in matchers and online_matchers.
 """
 
 from typing import Optional, Tuple, Union
-import torch
-import torch.nn as nn
+
+try:
+    import torch
+    import torch.nn as nn
+    from torch.nn import TransformerEncoder, TransformerEncoderLayer
+    from torch.nn.modules.normalization import LayerNorm
+    import torch.nn.functional as F
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 import numpy as np
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
-from torch.nn.modules.normalization import LayerNorm
-import torch.nn.functional as F
 
 # ALIGNMENT TRANSFORMER
 
@@ -55,6 +61,11 @@ class AlignmentTransformer(nn.Module):
         num_decoder_layers: int = 6,
         dropout_p: float = 0.1,
     ) -> None:
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "The 'AlignmentTransformer' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         super().__init__()
 
         self.tokennumber = token_number
@@ -133,6 +144,11 @@ class TheGlueNote(nn.Module):
         activation: nn.Module = nn.GELU(),
         using_decoder: bool = True,
     ) -> None:
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "The 'TheGlueNote' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         super().__init__()
         self.device = device
         self.token_number = token_number

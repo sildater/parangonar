@@ -7,7 +7,6 @@ from typing import Tuple, Union, List, Callable, Optional, Dict, Any
 import numpy as np
 from collections import defaultdict
 from scipy.spatial.distance import euclidean, cdist
-from numba import jit
 
 # helpers and metrics
 from .metrics import (
@@ -16,6 +15,7 @@ from .metrics import (
     bounded_recursion,
     onset_pitch_duration_metric,
 )
+from ..decorators import numba_jit as jit
 
 
 class NWDistanceMatrix(object):

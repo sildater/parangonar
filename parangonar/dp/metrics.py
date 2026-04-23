@@ -5,7 +5,7 @@ This module contains pairwise distance metrics and other DP helpers.
 """
 from typing import Union, Set, List, Callable, Tuple
 import numpy as np
-from numba import jit
+from ..decorators import numba_jit as jit
 
 
 def element_of_metric(vec1: np.ndarray, vec2: np.ndarray) -> float:

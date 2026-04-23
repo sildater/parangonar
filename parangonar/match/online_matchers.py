@@ -202,6 +202,13 @@ class OnlineTransformerMatcher(object):
         )
 
     def prepare_model(self):
+        try:
+            import torch
+        except ImportError:
+            raise ImportError(
+                "The 'OnlineTransformerMatcher' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         self.model = AlignmentTransformer(
             token_number=91,
             dim_model=64,
@@ -212,7 +219,7 @@ class OnlineTransformerMatcher(object):
         )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(
-            ALIGNMENT_TRANSFORMER_CHECKPOINT, 
+            ALIGNMENT_TRANSFORMER_CHECKPOINT,
             weights_only=True,
             map_location=torch.device(self.device)
         )
@@ -845,8 +852,7 @@ class OnlinePureTransformerMatcher(object):
         idx_max = np.argmax(self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
         print("jump index gain not very far:", self.backup_cost_matrix[current_idx + idx_max - max_backwards])
         return current_idx + idx_max - max_backwards
-        
-            
+              
     def prepare_lostness_tracker(self):
         self.used_pitches_tracker = [paobi.copy() for paobi in self.pitches_at_onset_by_id]
         self.theoretical_pitches_tracker = [paobi.copy() for paobi in self.pitches_at_onset_by_id]
@@ -919,6 +925,13 @@ class OnlinePureTransformerMatcher(object):
         return score_idx
 
     def prepare_model(self):
+        try:
+            import torch
+        except ImportError:
+            raise ImportError(
+                "The 'OnlinePureTransformerMatcher' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         self.model = AlignmentTransformer(
             token_number=91,  # 21 - 108 + 2 for padding (start_score, end) + 1 for non_pitch
             dim_model=64,
@@ -929,7 +942,7 @@ class OnlinePureTransformerMatcher(object):
         )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(
-            ALIGNMENT_TRANSFORMER_CHECKPOINT, 
+            ALIGNMENT_TRANSFORMER_CHECKPOINT,
             weights_only=True,
             map_location=torch.device(self.device)
         )

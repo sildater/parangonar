@@ -18,11 +18,15 @@ authors = [
 dependencies = [
   "numpy",
   "scipy",
-  "torch",
   "matplotlib",
   "partitura",
   "symusic",
   "miditok",
+]
+
+[project.optional-dependencies]
+accelerated = [
+  "torch",
   "numba",
 ]
 

@@ -7,10 +7,10 @@ This module contains dynamic time warping methods.
 from typing import Tuple, Union, Callable, Optional
 import numpy as np
 from scipy.spatial.distance import euclidean, cdist
-from numba import jit
 
 # helpers and metrics
 from .metrics import cdist_local, element_of_set_metric
+from ..decorators import numba_jit as jit
 
 
 # DTW / DP classes
