@@ -13,7 +13,11 @@ from .matchers import na_within
 from scipy.interpolate import interp1d
 from ..dp.t_oltw import T_OLTW, SLT_OLTW
 from ..dp.oltw import OLTW, SL_OLTW
+from ..dp.metrics import bounded_recursion
 from queue import Queue
+from scipy import ndimage
+from collections import deque
+
 
 
 ################################### TEMPO MODELS ###################################
@@ -156,6 +160,7 @@ class OnlineTransformerMatcher(object):
         self.input_index = 0
         self._warping_path = list()
         self.time_since_nn_update = 0
+        self.stuck_with_no_options = 0
 
     def prepare_score(self):
         self.score_note_array_no_grace = self.score_note_array_full[
@@ -195,21 +200,6 @@ class OnlineTransformerMatcher(object):
             init_perf_onset=first_onset,
             lookback=1,
         )
-        # if func is None:
-        #     self.tempo_model = TempoModel(
-        #         init_beat_period=0.5,
-        #         init_score_onset=self.score_note_array_full["onset_beat"][0],
-        #         init_perf_onset=first_onset,
-        #         lookback=3,
-        #     )
-        # else:
-        #     self.tempo_model = DummyTempoModel(
-        #         init_beat_period=0.5,
-        #         init_score_onset=self.score_note_array_full["onset_beat"][0],
-        #         init_perf_onset=first_onset,
-        #         lookback=3,
-        #         func=func,
-        #     )
 
     def prepare_model(self):
         self.model = AlignmentTransformer(
@@ -415,7 +405,6 @@ class OnlineTransformerMatcher(object):
                     else:
                         self.add_note_alignment(p_id, best_note["id"], p_onset, best_note["onset_beat"])
         
-
     def add_note_alignment(self, perf_id, score_id, perf_onset=None, score_onset=None):
         self.alignment.append((score_id, perf_id))
         self._snote_aligned.add(score_id)
@@ -567,6 +556,7 @@ class OnlineTransformerMatcher(object):
                 self.tempo_model.update(p_onset, best_notes[0]["onset_beat"])
                 self._warping_path.append((self.current_position, self.input_index))
                 self.input_index += 1
+                self.stuck_with_no_options = 0
                 return self.current_position
 
         # use the model prediction
@@ -599,6 +589,7 @@ class OnlineTransformerMatcher(object):
                     self.current_position = current_id + new_pred_id
                 self._warping_path.append((self.current_position, self.input_index))
                 self.input_index += 1
+                self.stuck_with_no_options = 0
                 return self.current_position
     
         # do you really want to jump?
@@ -629,6 +620,7 @@ class OnlineTransformerMatcher(object):
                             self.current_position = current_id + 1
                         self._warping_path.append((self.current_position, self.input_index))
                         self.input_index += 1
+                        self.stuck_with_no_options = 0
                         return self.current_position
 
             # actually do the jump, cautiously            
@@ -651,11 +643,23 @@ class OnlineTransformerMatcher(object):
                         self.current_position = current_id + new_pred_id
                     self._warping_path.append((self.current_position, self.input_index))
                     self.input_index += 1
+                    self.stuck_with_no_options = 0
                     return self.current_position
         
         # if all else fails, do nothing
         self._warping_path.append((self.current_position, self.input_index))
         self.input_index += 1
+        self.stuck_with_no_options += 1
+        if self.stuck_with_no_options >= 10 and self.stuck_with_no_options < 11:
+            # self.stuck_with_no_options = 0
+            # just jump forward
+            self.current_position += 8
+            self._warping_path[-1] = (self.current_position, self.input_index - 1)
+            print("STUCK with not options for 10 inputs at input idx:",self.input_index)
+        if self.stuck_with_no_options >= 30 and self.stuck_with_no_options < 31:
+            # self.stuck_with_no_options = 0
+            print("STUCK with not options for 30 inputs at input idx:",self.input_index)
+
         return self.current_position
     
 
@@ -695,14 +699,17 @@ def tokenize(score_segment: List[Set[int]], perf_segment: List[int], dims: int =
     end_token = end_tokenizer(dims, 26 - len(tokens))
     tokens.append(end_token)
 
-    return np.row_stack(tokens)
+    return np.vstack(tokens)
 
 
 ### PURE TRANSFORMER
 
-
 class OnlinePureTransformerMatcher(object):
-    def __init__(self, score_note_array_full: np.ndarray) -> None:
+    def __init__(self, 
+                 score_note_array_full: np.ndarray,
+                 allow_jump: bool = True,
+                 backup_steps: int = 24,
+                 jump_trigger: int = 24) -> None:
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
         self.first_p_onset = None
         self._prev_performance_notes = list()
@@ -715,6 +722,24 @@ class OnlinePureTransformerMatcher(object):
         self.prepare_score()
         self.prepare_model()
         self.initialize()
+
+        # lostness tracker
+        self.allow_jump = allow_jump
+        self.backup_steps = backup_steps
+        self.jump_trigger = jump_trigger
+        self.prepare_backup()
+        self.prepare_lostness_tracker()
+        self.global_backup = list()
+        self.buffer_len = self.jump_trigger + 4
+        self.non_forward_buffer = deque(maxlen=self.buffer_len)
+        self.non_matched_buffer = deque(maxlen=self.buffer_len)
+        self.non_matched_theoretical_buffer = deque(maxlen=self.buffer_len)
+        self.reset_buffers()
+
+        self.tracked_non_forward_av = list()
+        self.tracked_non_matched_av = list()
+        self.tracked_non_matched_theoretical_av = list()
+
 
     def initialize(self):
         # alias and utils for matchmaker
@@ -740,6 +765,7 @@ class OnlinePureTransformerMatcher(object):
 
         # set of pitches at onset / map from onset to idx in unique onsets
         self.pitches_at_onset_by_id = list()
+        self.pitch_class_at_onset_by_id = list()
         self.id_by_onset = dict()
 
         for i, onset in enumerate(self._unique_score_onsets):
@@ -750,10 +776,147 @@ class OnlinePureTransformerMatcher(object):
                     ]["pitch"]
                 )
             )
+            self.pitch_class_at_onset_by_id.append(
+                set(
+                    self.score_note_array_no_grace[
+                        self.score_note_array_no_grace["onset_beat"] == onset
+                    ]["pitch"] % 12
+                )
+            )
             self.id_by_onset[onset] = i
 
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
+
+    def reset_buffers(self):
+        for k in range(self.buffer_len):
+            self.non_forward_buffer.append(0)
+            self.non_matched_buffer.append(0)
+            self.non_matched_theoretical_buffer.append(0)
+        self.non_forward_running_av = 0
+        self.non_matched_running_av = 0
+        self.non_matched_theoretical_running_av = 0
+
+    def prepare_backup(self):
+        self.pitch_to_onset_mask = dict()
+        for pitch in range(128):
+            self.pitch_to_onset_mask[pitch] = np.array([pitch in pitches_at_onset  
+                                                        for pitches_at_onset in self.pitches_at_onset_by_id])
+        self.backup_cost_matrix = np.zeros(len(self._unique_score_onsets))
+
+    def update_backup(self, pitch):
+        """
+        backup_cost_matrix is a single vector of score onset length
+        it accumulates the gain of a bounded smith-waterman recursion for every performance note
+                p_n-1   p_n
+            \        \
+        s_m-1   v1  -   v2  
+            \        \
+        s_m     v3  -   v4 
+        don't jump from score to score for same p note
+        only diagonal and in perf dir 
+        -> max filter of size 2 -> m_filtered[n] = max(m[n], m[n-1])
+        if accumulates the gain wherever the pitch matches
+        and decreases it for mismatches
+        -> rolling cross-similarity matrix for local sequences
+        """
+        # pitch_class = pitch % 12
+        mask = self.pitch_to_onset_mask[pitch]
+        max_filtered_last_step = ndimage.maximum_filter(self.backup_cost_matrix, size = 2)
+        self.backup_cost_matrix[mask] = bounded_recursion(max_filtered_last_step[mask], 0, self.backup_steps)
+        self.backup_cost_matrix[~mask] = np.clip(self.backup_cost_matrix[~mask] - 1, 0, self.backup_steps)
+        self.global_backup.append(np.copy(self.backup_cost_matrix))
+    
+    def trigger_backup_and_jump(self, current_idx):
+        # sorted_idx = np.argsort(self.backup_cost_matrix)
+        # if np.max(self.backup_cost_matrix[current_idx - 8:current_idx + 8]) > self.backup_steps - 4:
+        #     idx_max = np.argmax(self.backup_cost_matrix[current_idx - 8:current_idx + 8])
+        #     print("jump index gain not very far:", self.backup_cost_matrix[current_idx + idx_max - 8])
+        #     return current_idx + idx_max - 8
+        # else:
+        #     for idx in sorted_idx[::-1]:
+        #         if abs(idx - current_idx) > 8:
+        #             print("jump index gain:", self.backup_cost_matrix[idx])
+        #             return idx
+        # return current_idx
+        max_jump_idx = 16
+        max_backwards = 4
+        print("slice of backup matrix", self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
+        idx_max = np.argmax(self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
+        print("jump index gain not very far:", self.backup_cost_matrix[current_idx + idx_max - max_backwards])
+        return current_idx + idx_max - max_backwards
+        
+            
+    def prepare_lostness_tracker(self):
+        self.used_pitches_tracker = [paobi.copy() for paobi in self.pitches_at_onset_by_id]
+        self.theoretical_pitches_tracker = [paobi.copy() for paobi in self.pitches_at_onset_by_id]
+        self.untracked_note_at_id = np.zeros_like(self.pitches_at_onset_by_id)
+    
+    def update_lostness_tracker(self, score_idx, performance_pitch, p_id):
+        """
+        the lostness tracker receives information about the main tracker's predicted output
+        and estimates whether the main tracker is lost
+        it keeps a record of:
+            whether the tracker is standing still or moving backwards 
+                (buffer and running average of steps) 
+            whether the tracker is using previously unaligned notes,
+                i.e., possible pitch, and unused note of this pitch at this onset
+                (buffer and running average of steps) 
+            whether the tracker is matching at all
+                i.e., not even possible pitch
+        """
+        set_of_pitches = self.used_pitches_tracker[score_idx]
+        set_of_pitches_theoretical = self.theoretical_pitches_tracker[score_idx]
+        if score_idx <= self.current_position:
+            push_val0 = 1
+        else:
+            push_val0 = 0
+        drop_val0 = self.non_forward_buffer[0]
+        self.non_forward_buffer.append(push_val0)
+        self.non_forward_running_av += push_val0 - drop_val0
+
+        push_val = 0
+        push_val_theory = 0
+        if performance_pitch in set_of_pitches:
+            self.used_pitches_tracker[score_idx].remove(performance_pitch)
+        else:
+            push_val = 1
+            if performance_pitch not in set_of_pitches_theoretical:
+                self.untracked_note_at_id[score_idx] += 1
+                push_val_theory = 1
+                
+        drop_val = self.non_matched_buffer[0]
+        self.non_matched_buffer.append(push_val)
+        self.non_matched_running_av += push_val - drop_val
+
+        drop_val_theory = self.non_matched_theoretical_buffer[0]
+        self.non_matched_theoretical_buffer.append(push_val_theory)
+        self.non_matched_theoretical_running_av += push_val_theory - drop_val_theory
+
+        self.tracked_non_matched_theoretical_av.append(self.non_matched_theoretical_running_av)
+        self.tracked_non_forward_av.append(self.non_forward_running_av)
+        self.tracked_non_matched_av.append(self.non_matched_running_av)
+
+        # if self.untracked_note_at_id[score_idx] > self.jump_trigger:
+        if self.non_matched_theoretical_running_av >= self.jump_trigger:# and self.non_forward_running_av >= self.jump_trigger:
+            print("jump was triggered at: ", score_idx, self.unique_onsets[score_idx])
+            print("by performance note id:", p_id)
+            print("non matched buffer:",self.non_matched_buffer)
+            print("non forward buffer:",self.non_forward_buffer)
+            jump_idx = self.trigger_backup_and_jump(score_idx)
+            print("jumping to: ", jump_idx,self.unique_onsets[jump_idx])
+            print("set of still unmatched pitches at current position:",self.used_pitches_tracker[score_idx])
+            print("untracked notes counted at surrounding positions:",self.untracked_note_at_id[score_idx-3:score_idx+3])
+            print("*"*50)
+            # reset backup
+            self.backup_cost_matrix = np.zeros(len(self._unique_score_onsets))
+            # reset lostness
+            self.prepare_lostness_tracker()
+            # reset buffers
+            self.reset_buffers()
+            return jump_idx
+        
+        return score_idx
 
     def prepare_model(self):
         self.model = AlignmentTransformer(
@@ -879,6 +1042,7 @@ class OnlinePureTransformerMatcher(object):
         """
         p_pitch = performance_note["pitch"]
         self._prev_performance_notes.append(p_pitch)
+        self.update_backup(p_pitch)
 
         current_id = self.current_position
         s_slice = slice(np.max((current_id - 7, 0)), current_id + 9)
@@ -892,116 +1056,16 @@ class OnlinePureTransformerMatcher(object):
         )
         pred_id = torch.argmax(torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
         new_pred_id = pred_id - len(perf_seq) - 1 + np.max((current_id - 7, 0))
+        if self.allow_jump:
+            new_pred_id = self.update_lostness_tracker(new_pred_id, p_pitch, performance_note["id"])
         self.current_position = new_pred_id
         self._warping_path.append((self.current_position, self.input_index))
         self.input_index += 1
+        
         return self.current_position
 
 
 ################################### OLTW MATCHERS ###################################
-
-
-# class TOLTWMatcher(object):
-#     def __init__(self, score_note_array: np.ndarray):
-#         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
-#         self.features_s = self.prepare_score(self.score_note_array_full)
-#         self.features_p = None
-#         self.performance_note_array = None
-#         self.queue = Queue()
-#         # best parameters according to https://arxiv.org/abs/2505.05078v1
-#         self.tracker = T_OLTW(
-#             reference_features=self.features_s,
-#             queue=self.queue,
-#             hop_size=1,
-#             window_size=40,
-#             max_run_count=10,
-#             init_tempo=1,
-#             tempo_factor=0.1,
-#             time_weight=2.0,
-#             directional_weights=np.array([2.0, 1.0, 1.0]),
-#         )
-#         # alignment collectors
-#         self._snote_aligned = set()
-#         self._pnote_aligned = set()
-#         self.alignment = []
-
-#     def prepare_score(self, s_array: np.ndarray):
-#         features = list()
-#         unique_onsets = np.unique(s_array["onset_beat"])
-#         self.unique_onsets = unique_onsets
-#         # create pitch set representation
-#         for onset in unique_onsets:
-#             features.append(
-#                 [onset, set(s_array[s_array["onset_beat"] == onset]["pitch"])]
-#             )
-#         # score by pitch representation
-#         self.score_by_pitch = defaultdict(list)
-#         unique_pitches = np.unique(self.score_note_array_full["pitch"])
-#         for pitch in unique_pitches:
-#             self.score_by_pitch[pitch] = self.score_note_array_full[
-#                 self.score_note_array_full["pitch"] == pitch
-#             ]
-#         return features
-
-#     def prepare_performance(self, performance_note_array: np.ndarray):
-#         self.performance_note_array = performance_note_array
-#         features = list()
-#         for note in performance_note_array:
-#             features.append([note["onset_sec"], note["pitch"]])
-#         return features
-
-#     def offline(self, performance_note_array: np.ndarray):
-#         tracking_path = self.compute_tracking_path(performance_note_array)
-#         # process tracking path into alignment
-#         path_perf_notes = self.performance_note_array[tracking_path[1]]
-#         predicted_score_times = self.unique_onsets[tracking_path[0]]
-#         for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
-#             if perf_note["id"] not in self._pnote_aligned:
-#                 p_pitch = perf_note["pitch"]
-#                 possible_score_notes = self.score_by_pitch[p_pitch]
-#                 possible_score_notes = na_within(
-#                     possible_score_notes,
-#                     "onset_beat",
-#                     pred_score_onset,
-#                     pred_score_onset,
-#                     exclusion_ids=self._snote_aligned,
-#                 )
-#                 if len(possible_score_notes) > 0:
-#                     best_note = possible_score_notes[0]
-#                     self.add_note_alignment(perf_note["id"], best_note["id"])
-
-#         # create output alignment list
-#         note_alignments = list()
-#         for s_ID, p_ID in self.alignment:
-#             note_alignments.append(
-#                 {"label": "match", "score_id": s_ID, "performance_id": p_ID}
-#             )
-#         # add unmatched notes
-#         for score_note in self.score_note_array_full:
-#             if score_note["id"] not in self._snote_aligned:
-#                 note_alignments.append(
-#                     {"label": "deletion", "score_id": score_note["id"]}
-#                 )
-
-#         for performance_note in performance_note_array:
-#             if performance_note["id"] not in self._pnote_aligned:
-#                 note_alignments.append(
-#                     {"label": "insertion", "performance_id": performance_note["id"]}
-#                 )
-
-#         return note_alignments
-
-#     def add_note_alignment(self, perf_id: str, score_id: str):
-#         self.alignment.append((score_id, perf_id))
-#         self._snote_aligned.add(score_id)
-#         self._pnote_aligned.add(perf_id)
-
-#     def compute_tracking_path(self, performance_note_array: np.ndarray):
-#         self.features_p = self.prepare_performance(performance_note_array)
-#         for feature in self.features_p:
-#             self.queue.put([feature])
-#         tracking_path = self.tracker.run()
-#         return tracking_path
     
 class TOLTWMatcher(object):
     """
@@ -1012,8 +1076,15 @@ class TOLTWMatcher(object):
     def __init__(self, 
                  score_note_array: np.ndarray, 
                  tracker_type: str = "T_OLTW",
-                 init_tempo: float = 1.0):
+                 init_tempo: Optional[float] = None):
+        
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
+        if init_tempo is not None:
+            self.init_tempo = init_tempo
+        else:
+            # start with a rough estimate of 90 qpm, divided by initial bpq
+            beat_per_quarter = self.score_note_array_full["duration_beat"][0]/ self.score_note_array_full["duration_quarter"][0]
+            self.init_tempo = 60 / 90 / beat_per_quarter
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
         self.performance_note_array = None
@@ -1028,7 +1099,7 @@ class TOLTWMatcher(object):
                     hop_size=1,
                     window_size=40,
                     max_run_count=10,
-                    init_tempo=init_tempo,
+                    init_tempo=self.init_tempo,
                     tempo_factor=0.1,
                     time_weight=2.0,
                     directional_weights=np.array([2.0, 1.0, 1.0]),
@@ -1039,9 +1110,9 @@ class TOLTWMatcher(object):
             self.tracker = SLT_OLTW(
                 reference_features=self.features_s,
                 queue=self.queue,
-                window_size=20,
+                window_size=40,
                 max_run_count=10,
-                init_tempo=init_tempo,
+                init_tempo=self.init_tempo,
                 tempo_factor=0.1,
                 time_weight=2.0,
                 directional_weights=np.array([2.0, 1.0, 1.0]),
@@ -1160,108 +1231,6 @@ class TOLTWMatcher(object):
             self.queue.put([feature])
         tracking_path = self.tracker.run()
         return tracking_path
-    
-
-
-
-
-
-# class OLTWMatcher(object):
-#     def __init__(self, score_note_array: np.ndarray):
-#         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
-#         self.features_s = self.prepare_score(self.score_note_array_full)
-#         self.features_p = None
-#         self.performance_note_array = None
-#         self.queue = Queue()
-#         # best parameters according to https://arxiv.org/abs/2505.05078v1
-#         self.tracker = OLTW(
-#             reference_features=self.features_s,
-#             queue=self.queue,
-#             hop_size=1,
-#             window_size=5,
-#             max_run_count=10,
-#             directional_weights=np.array([1.0, 1.0, 1.0]),
-#         )
-#         # alignment collectors
-#         self._snote_aligned = set()
-#         self._pnote_aligned = set()
-#         self.alignment = []
-
-#     def prepare_score(self, s_array: np.ndarray):
-#         features = list()
-#         unique_onsets = np.unique(s_array["onset_beat"])
-#         self.unique_onsets = unique_onsets
-#         # create pitch set representation
-#         for onset in unique_onsets:
-#             features.append(set(s_array[s_array["onset_beat"] == onset]["pitch"]))
-#         # score by pitch representation
-#         self.score_by_pitch = defaultdict(list)
-#         unique_pitches = np.unique(self.score_note_array_full["pitch"])
-#         for pitch in unique_pitches:
-#             self.score_by_pitch[pitch] = self.score_note_array_full[
-#                 self.score_note_array_full["pitch"] == pitch
-#             ]
-#         return features
-
-    # def prepare_performance(self, performance_note_array: np.ndarray):
-    #     self.performance_note_array = performance_note_array
-    #     features = list()
-    #     for note in performance_note_array:
-    #         features.append(note["pitch"])
-    #     return features
-
-    # def offline(self, performance_note_array: np.ndarray):
-    #     tracking_path = self.compute_tracking_path(performance_note_array)
-    #     # process tracking path into alignment
-    #     path_perf_notes = self.performance_note_array[tracking_path[1]]
-    #     predicted_score_times = self.unique_onsets[tracking_path[0]]
-    #     for pred_score_onset, perf_note in zip(predicted_score_times, path_perf_notes):
-    #         if perf_note["id"] not in self._pnote_aligned:
-    #             p_pitch = perf_note["pitch"]
-    #             possible_score_notes = self.score_by_pitch[p_pitch]
-    #             possible_score_notes = na_within(
-    #                 possible_score_notes,
-    #                 "onset_beat",
-    #                 pred_score_onset,
-    #                 pred_score_onset,
-    #                 exclusion_ids=self._snote_aligned,
-    #             )
-    #             if len(possible_score_notes) > 0:
-    #                 best_note = possible_score_notes[0]
-    #                 self.add_note_alignment(perf_note["id"], best_note["id"])
-
-    #     # create output alignment list
-    #     note_alignments = list()
-    #     for s_ID, p_ID in self.alignment:
-    #         note_alignments.append(
-    #             {"label": "match", "score_id": s_ID, "performance_id": p_ID}
-    #         )
-    #     # add unmatched notes
-    #     for score_note in self.score_note_array_full:
-    #         if score_note["id"] not in self._snote_aligned:
-    #             note_alignments.append(
-    #                 {"label": "deletion", "score_id": score_note["id"]}
-    #             )
-
-    #     for performance_note in performance_note_array:
-    #         if performance_note["id"] not in self._pnote_aligned:
-    #             note_alignments.append(
-    #                 {"label": "insertion", "performance_id": performance_note["id"]}
-    #             )
-
-    #     return note_alignments
-
-    # def add_note_alignment(self, perf_id: str, score_id: str):
-    #     self.alignment.append((score_id, perf_id))
-    #     self._snote_aligned.add(score_id)
-    #     self._pnote_aligned.add(perf_id)
-
-    # def compute_tracking_path(self, performance_note_array: np.ndarray):
-    #     self.features_p = self.prepare_performance(performance_note_array)
-    #     for feature in self.features_p:
-    #         self.queue.put([feature])
-    #     tracking_path = self.tracker.run()
-    #     return tracking_path
 
 class OLTWMatcher(object):
     def __init__(self, 

@@ -4,11 +4,12 @@
 This module contains TempoOLTW.
 """
 
-from typing import Optional, List, Callable, Any, Tuple, Generator
+from typing import Optional, List, Callable, Any, Tuple
 import numpy as np
 from numpy.typing import NDArray
 from enum import IntEnum
 from queue import Queue
+import copy
 from ..dp.metrics import tempo_and_pitch_metric
 
 def accumulate_tester():
@@ -736,7 +737,8 @@ class SLT_OLTW(object):
             self.global_path_length_matrix[1, 1] = 0
             min_cost = 0
             min_index = 0
-            
+        
+        local_cost_collector = list()
         while i < window_end:
             if not (i == j == 0):
                 min_local_cost = np.inf
@@ -768,6 +770,7 @@ class SLT_OLTW(object):
                             time_weight=self.time_weight,
                             tempo_factor=self.tempo_factor
                             )
+                        new_tempo = np.clip(new_tempo, 0.05, 10.0)
         
                         cost = (
                             prev_cost * prev_path_len 
@@ -775,6 +778,7 @@ class SLT_OLTW(object):
                             ) / (prev_path_len + 1)
 
                         if cost < min_local_cost:
+                            local_cost_collector.append((i,local_dist))
                             min_local_cost = cost
                             min_local_tempo = new_tempo
                             min_local_path_len = 1 + prev_path_len
@@ -788,12 +792,17 @@ class SLT_OLTW(object):
                     min_index = i
             
             i = i + 1
+        # print("local dists:\n",np.array(local_cost_collector).T)
+        # print("global cost:\n",self.global_cost_matrix[:10,:].T)
+        # print("global path length:\n",self.global_path_length_matrix[:10,:].T)
+        # print("global tempo:\n",self.global_tempo_matrix[:10,:].T)
+        # print("~"*10)
 
         # rotate the columns for reuse
         self.global_cost_matrix[:, 0] = self.global_cost_matrix[:, 1]
         self.global_cost_matrix[:, 1] = np.inf
         self.global_path_length_matrix[:, 0] = self.global_path_length_matrix[:, 1]
-        self.global_path_length_matrix[:, 1] = np.inf
+        self.global_path_length_matrix[:, 1] = 0
         self.global_tempo_matrix[:, 0] = self.global_tempo_matrix[:, 1]
         self.global_tempo_matrix[:, 1] = self.init_tempo
 
@@ -863,13 +872,7 @@ class SLT_OLTW(object):
     def window_index(self) -> int:
         return self.current_position
 
-
-
-
-
-
-
-
+#####################################################
 
 def testfeatures_t_oltw():
     score = [
@@ -886,34 +889,50 @@ def testfeatures_t_oltw():
     return score, perf
 
 
+def testfeatures_t_oltw_2():
+    score = [
+        [0.0, {0}],  # onset_s, pitch set
+        [0.1, {1}],
+        [0.2, {2}],
+        [0.3, {3}],
+        [0.4, {4}],
+        [0.5, {5}],
+        [0.6, {6}],
+        [0.7, {7}],
+    ]
+    perf = [[0.0, 0], [0.1, 1], [0.2, 2], [0.3, 3], [0.4, 4], 
+            [0.5, 5], [0.6, 6], [0.7, 7]]
+    return score, perf
+
+
 if __name__ == "__main__":
     RANGE_L = 6
     REPEATS = 3
     HOP_SIZE = 1
     WINDOW_SIZE = 3
-    import copy
 
-    r, t = testfeatures_t_oltw()
-    queue1 = Queue()
+    # r, t = testfeatures_t_oltw()
+    # queue1 = Queue()
     
-    for tt in t:
-        queue1.put([tt])
+    # for tt in t:
+    #     queue1.put([tt])
 
-    o1 = T_OLTW(
-        reference_features=copy.copy(r),
-        queue=queue1,
-        frame_per_seg=HOP_SIZE,
-        window_size=WINDOW_SIZE,
-        max_run_count=8,
-        init_tempo=2,
-        tempo_factor=0.1,
-        time_weight=0.1,
-        directional_weights=np.array([1.0, 1.0, 1.0]),
-    )
-    p1 = o1.run(verbose = False)
-    print("path T_OLTW \n", p1)
+    # o1 = T_OLTW(
+    #     reference_features=copy.copy(r),
+    #     queue=queue1,
+    #     frame_per_seg=HOP_SIZE,
+    #     window_size=WINDOW_SIZE,
+    #     max_run_count=8,
+    #     init_tempo=2,
+    #     tempo_factor=0.1,
+    #     time_weight=0.1,
+    #     directional_weights=np.array([1.0, 1.0, 1.0]),
+    # )
+    # p1 = o1.run(verbose = False)
+    # print("path T_OLTW \n", p1)
 
     # D, T = accumulate_tester()
+    r, t = testfeatures_t_oltw_2()
     queue2 = Queue()
 
     for tt in t:
@@ -922,14 +941,14 @@ if __name__ == "__main__":
     o2 = SLT_OLTW(
         reference_features=copy.copy(r),
         queue=queue2,
-        window_size=WINDOW_SIZE,
+        window_size=8,
         max_run_count=8,
         init_tempo=2,
         tempo_factor=0.1,
-        time_weight=0.1,
+        time_weight=0.5,
         directional_weights=np.array([1.0, 1.0, 1.0])
         )
 
 
-    p2 = o2.run(verbose = False)
+    p2 = o2.run()
     print("path single loop T_OLTW \n", p2)
