@@ -7,8 +7,13 @@ from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
 from scipy.interpolate import interp1d
 from collections import defaultdict
-import miditok
-import symusic
+
+try:
+    import miditok
+    import symusic
+    MIDI_AVAILABLE = True
+except ImportError:
+    MIDI_AVAILABLE = False
 
 import time
 from itertools import combinations
@@ -1935,6 +1940,11 @@ class DualDTWNoteMatcher(object):
 
 class TheGlueNoteMatcher(object):
     def __init__(self) -> None:
+        if not MIDI_AVAILABLE:
+            raise ImportError(
+                "The 'TheGlueNoteMatcher' class requires symusic and miditok, but they are not installed. "
+                "Please install them with: pip install parangonar[accelerated]"
+            )
         self.prepare_model()
         self.tokenizer = miditok.Structured()
         self.unmatched_idx = 100000000

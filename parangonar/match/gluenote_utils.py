@@ -5,7 +5,24 @@ utilities for the thegluenote
 """
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 import numpy as np
-from symusic import Score, Note, Track
+
+try:
+    from symusic import Score, Note, Track
+    SYMUSIC_AVAILABLE = True
+except ImportError:
+    SYMUSIC_AVAILABLE = False
+    # Create dummy classes for type hints
+    class Score:
+        pass
+    class Note:
+        @staticmethod
+        def from_numpy(**kwargs):
+            raise ImportError(
+                "symusic is not installed. Please install it with: pip install parangonar[accelerated]"
+            )
+    class Track:
+        pass
+
 from ..dp.dtw import WDTW
 from ..dp.metrics import invert_matrix
 from collections import defaultdict

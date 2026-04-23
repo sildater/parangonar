@@ -28,6 +28,8 @@ dependencies = [
 accelerated = [
   "torch",
   "numba",
+  "symusic",
+  "miditok",
 ]
 
 classifiers = [
