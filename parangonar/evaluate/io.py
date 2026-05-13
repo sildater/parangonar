@@ -76,13 +76,13 @@ def convert_alignment_to_list(
 
     measures = np.array(list(spart.iter_all(pt.score.Measure)))
     measure_starts_divs = np.array([m.start.t for m in measures])
-    # measure_starts_beats = beat_map(measure_starts_divs)
+    measure_starts_beats = beat_map(measure_starts_divs)
     measure_sorting_idx = measure_starts_divs.argsort()
     measure_starts_divs = measure_starts_divs[measure_sorting_idx]
     measures = measures[measure_sorting_idx]
 
-    # start_measure_num = 0 if measure_starts_beats.min() < 0 else 1
-    start_measure_num = 1
+    start_measure_num = 0 if measure_starts_beats.min() < 0 else 1
+    #start_measure_num = 1
     measure_starts = np.column_stack(
         (
             np.arange(start_measure_num, start_measure_num + len(measure_starts_divs)),
