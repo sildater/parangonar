@@ -3,11 +3,14 @@
 """
 This module contain methods for (repeat) structure identification
 """
+import logging
 from typing import List, Dict, Any, Optional, Tuple, Set, Union
 import partitura as pt
 import numpy as np
 from ..dp.nwtw import BoundedSmithWaterman
 import matplotlib.pyplot as plt
+
+logger = logging.getLogger(__name__)
 
 
 class RepeatIdentifier(object):
@@ -58,10 +61,10 @@ class RepeatIdentifier(object):
         verbose: bool = False
     ) -> Tuple[List[Any], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         if verbose:
-            print("*" * 20)
-            print("SEGMENTS")
-            print(pt.score.pretty_segments(part))
-            print("*" * 20)
+            logger.debug("%s", "*" * 20)
+            logger.debug("SEGMENTS")
+            logger.debug("%s", pt.score.pretty_segments(part))
+            logger.debug("%s", "*" * 20)
         # segments and paths
         pt.score.add_segments(part, force_new=True)
         segments = pt.score.get_segments(part)
@@ -225,15 +228,15 @@ class RepeatIdentifier(object):
         )
 
         if len(paths) < 2:
-            print("no structural variations!")
-            print("*" * 20)
+            logger.warning("no structural variations!")
+            logger.warning("%s", "*" * 20)
             return None, None
 
         path_gains = {}
         for path in paths:
             path_string = "".join(path.path)
             if verbose:
-                print("Testing path:", path_string)
+                logger.debug("Testing path: %s", path_string)
             path_gain, full_path, full_path_list = self.compute_path_gain(
                 cost, path, backtracking, segment_onset_idx, directions=self.directions
             )
@@ -242,7 +245,7 @@ class RepeatIdentifier(object):
         max_gain = max([k for k in path_gains.keys()])
         found_path, found_path_object, found_full_path_list = path_gains[max_gain]
         if verbose:
-            print("best fitting path: ", found_path)
+            logger.debug("best fitting path: %s", found_path)
 
         if plot:
             colors = ["r", "g", "b"]
