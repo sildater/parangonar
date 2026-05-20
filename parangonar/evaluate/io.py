@@ -339,7 +339,6 @@ def save_expression_features_for_sonic_visualiser(
         stime_to_ptime_map = interp1d(
             y=onset_merged_array["onset_sec"],
             x=onset_merged_array["onset_beat"],
-            bounds_error=False,
             fill_value="extrapolate",
         )
         max_beat = np.max(onset_merged_array["onset_beat"])
