@@ -4,6 +4,7 @@
 This module contains TempoOLTW.
 """
 
+import logging
 from typing import Optional, List, Callable, Any, Tuple
 import numpy as np
 from numpy.typing import NDArray
@@ -11,6 +12,8 @@ from enum import IntEnum
 from queue import Queue
 import copy
 from ..dp.metrics import tempo_and_pitch_metric
+
+logger = logging.getLogger(__name__)
 
 def accumulate_tester():
     score = [[0, {1, 2}], [1, {3, 4}], [2, {3, 4}], [3, {3, 4}]]  # onset_s, pitch set
@@ -609,7 +612,7 @@ class T_OLTW(object):
     def run(self, verbose: bool = False) -> np.ndarray:
         
         if verbose:
-            print("Start running OLTW")
+            logger.debug("Start running OLTW")
         self.initialize()
         self.handle_first_input()
         direction = self.select_next_direction()
@@ -621,21 +624,21 @@ class T_OLTW(object):
             # select direction and
             direction = self.select_next_direction()
             if verbose:
-                print("ACC DIST \n", self.acc_dist_matrix)
-                print("ACC LEN \n", self.acc_len_matrix)
-                print("TEMPO \n", self.acc_tempo_matrix)
-                print(
-                    "RECENT WARPING PATH (top s, bottom p) \n",
+                logger.debug("ACC DIST \n%s", self.acc_dist_matrix)
+                logger.debug("ACC LEN \n%s", self.acc_len_matrix)
+                logger.debug("TEMPO \n%s", self.acc_tempo_matrix)
+                logger.debug(
+                    "RECENT WARPING PATH (top s, bottom p) \n%s",
                     self.warping_path[:, -3:],
                 )
-                print("NEXT DIRECTION \n", direction)
-                print("RUN COUNT\n", self.run_count)
-                print("*" * 50)
+                logger.debug("NEXT DIRECTION \n%s", direction)
+                logger.debug("RUN COUNT\n%s", self.run_count)
+                logger.debug("%s", "*" * 50)
             self.handle_direction(direction)
 
         if verbose:
-            print("... and we're done.")
-            print(self.directions_chosen)
+            logger.debug("... and we're done.")
+            logger.debug("%s", self.directions_chosen)
         return self.warping_path
     
 
@@ -849,7 +852,7 @@ class SLT_OLTW(object):
                 new_features = self.get_new_input()
             return self.warping_path
         else:
-            print("standalone offline run requires a queue")
+            logger.warning("standalone offline run requires a queue")
 
     def get_new_input(self):
         """
