@@ -13,7 +13,6 @@ import scipy
 from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
-import progressbar
 
 from ..dp.metrics import element_of_set_metric_se, cdist_local
 

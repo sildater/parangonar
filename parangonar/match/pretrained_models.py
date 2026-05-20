@@ -7,19 +7,22 @@ loaded in matchers and online_matchers.
 """
 
 from typing import Optional, Tuple, Union
-
+import numpy as np
+TORCH_AVAILABLE = False
 try:
     import torch
     import torch.nn as nn
     from torch.nn import TransformerEncoder, TransformerEncoderLayer
     from torch.nn.modules.normalization import LayerNorm
     import torch.nn.functional as F
-
     TORCH_AVAILABLE = True
 except ImportError:
-    TORCH_AVAILABLE = False
-
-import numpy as np
+    torch = None
+    nn = None
+    TransformerEncoder = None
+    TransformerEncoderLayer = None
+    LayerNorm = None
+    F = None
 
 # ALIGNMENT TRANSFORMER
 

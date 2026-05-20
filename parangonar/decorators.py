@@ -12,34 +12,29 @@ import warnings
 
 try:
     from numba import jit as numba_jit
-
     NUMBA_AVAILABLE = True
+
 except ImportError:
     NUMBA_AVAILABLE = False
 
-    def numba_jit(func, *args, **kwargs):
+    def numba_jit(*jit_args, **jit_kwargs):
         """
-        Fallback decorator when numba is not available.
-
-        This decorator acts as an identity function - it returns the original
-        function unchanged. This allows code to run without numba acceleration,
-        albeit slower.
-
-        Usage:
-            @jit(nopython=True)
-            def my_function(x):
-                return x + 1
+        Fallback for numba.jit when numba is not installed.
+        Acts like a decorator factory so it matches @jit(nopython=True).
         """
 
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            warnings.warn(
-                f"numba is not installed. Function '{func.__name__}' will run "
-                f"without JIT compilation, which may be slower. Install with: "
-                f"pip install parangonar[accelerated]",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            return func(*args, **kwargs)
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                warnings.warn(
+                    f"Numba is not installed. Function '{func.__name__}' will run "
+                    f"without JIT compilation (slower). Install with: "
+                    f"pip install numba",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return func(*args, **kwargs)
 
-        return wrapper
+            return wrapper
+
+        return decorator
