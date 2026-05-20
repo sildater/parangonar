@@ -3,9 +3,10 @@
 """
 This module contains full note matcher classes.
 """
+import logging
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 from collections import defaultdict
 
 try:
@@ -42,6 +43,8 @@ from .preprocessors import (
 
 from .pretrained_models import AlignmentTransformer, TheGlueNote
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 ################################### SYMBOLIC MATCHERS ###################################
@@ -170,10 +173,9 @@ class SequenceAugmentedGreedyMatcher(object):
                             for n in range(cap_combinations)
                         ]
 
-                        print(
-                            "high number of combinations: ",
+                        logger.warning(
+                            "high number of combinations: %s, low number sampled %s",
                             combination_number,
-                            "low number sampled ",
                             len(combs),
                         )
                     else:
@@ -208,10 +210,9 @@ class SequenceAugmentedGreedyMatcher(object):
                             for n in range(cap_combinations)
                         ]
 
-                        print(
-                            "high number of combinations: ",
+                        logger.warning(
+                            "high number of combinations: %s, low number sampled %s",
                             combination_number,
-                            "low number sampled ",
                             len(combs),
                         )
                     else:
@@ -328,7 +329,7 @@ class OnsetGreedyMatcher(object):
                         break
 
                 except:
-                    print("next onset trial error in OnsetGreedyMatcher")
+                    logger.warning("next onset trial error in OnsetGreedyMatcher")
 
             if sid is not None:
                 alignment.append(
@@ -862,6 +863,7 @@ def pitch_and_onset_wise_times_simple(
         ]
     )
     unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
+    logger.debug("%s", unique_time_tuples)
 
     return (
         time_tuples_by_onset,
@@ -1765,7 +1767,7 @@ class PianoRollNoNodeMatcher(object):
         # cut arrays to windows
         t11 = time.time()
         if verbose_time:
-            print(format(t11 - t1, ".3f"), "sec : Initial coarse DTW pass")
+            logger.debug("%s sec : Initial coarse DTW pass", format(t11 - t1, ".3f"))
         score_note_arrays, performance_note_arrays = self.node_cutter(
             performance_note_array,
             score_note_array,
@@ -1782,7 +1784,7 @@ class PianoRollNoNodeMatcher(object):
 
         t2 = time.time()
         if verbose_time:
-            print(format(t2 - t11, ".3f"), "sec : Cutting")
+            logger.debug("%s sec : Cutting", format(t2 - t11, ".3f"))
 
         for window_id in range(len(score_note_arrays)):
             if self.alignment_type == "greedy":
@@ -1830,9 +1832,9 @@ class PianoRollNoNodeMatcher(object):
                 note_alignments.append(fine_local_alignment)
         t41 = time.time()
         if verbose_time:
-            print(
+            logger.debug(
+                "%s sec : Fine-grained DTW passes, symbolic matching",
                 format(t41 - t2, ".3f"),
-                "sec : Fine-grained DTW passes, symbolic matching",
             )
 
         # MEND windows to global alignment
@@ -1846,7 +1848,7 @@ class PianoRollNoNodeMatcher(object):
         )
         t5 = time.time()
         if verbose_time:
-            print(format(t5 - t41, ".3f"), "sec : Mending")
+            logger.debug("%s sec : Mending", format(t5 - t41, ".3f"))
 
         return global_alignment
 
@@ -1876,7 +1878,7 @@ class DualDTWNoteMatcher(object):
     ) -> List[Dict[str, Any]]:
         if process_ornaments:
             if score_part is None:
-                print("score part is required for ornament extraction")
+                logger.warning("score part is required for ornament extraction")
                 score_note_array_ornament = score_note_array
             else:
                 # add ornament tags to score_note_array
@@ -2104,8 +2106,8 @@ class TheGlueNoteMatcher(object):
             s1_exclusion_end,
         ) = get_local_path_from_confidence_matrix(full_similarity_matrix)
         then = time.time()
-        print("DTW local path time: ", then - now)
-        print("PATH length:", len(path), full_similarity_matrix.shape)
+        logger.debug("DTW local path time: %s", then - now)
+        logger.debug("PATH length: %s %s", len(path), full_similarity_matrix.shape)
 
         s1_to_s2_map = get_input_to_ref_map(
             note_array, note_array_ref, path, return_callable=False
