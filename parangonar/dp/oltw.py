@@ -4,6 +4,7 @@
 This module contains On-Line Time Warping.
 """
 
+import logging
 from typing import Optional, List, Callable, Any, Generator, Tuple
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
@@ -15,6 +16,8 @@ from scipy.spatial.distance import cdist
 import progressbar
 
 from ..dp.metrics import element_of_set_metric_se, cdist_local
+
+logger = logging.getLogger(__name__)
 
 
 class Direction(IntEnum):
@@ -431,7 +434,7 @@ class OLTW(object):
 
     def run(self, verbose: bool = False) -> np.ndarray:
         if verbose:
-            print("Start running OLTW")
+            logger.debug("Start running OLTW")
         self.initialize()
         self.handle_first_input()
         direction = self.select_next_direction()
@@ -442,15 +445,15 @@ class OLTW(object):
             self.add_candidate_to_path()
             direction = self.select_next_direction()
             if verbose:
-                print("ACC DIST \n", self.acc_dist_matrix)
-                print("ACC LEN \n", self.acc_len_matrix)
-                print("RECENT WARPING PATH \n", self.warping_path[:, -3:])
-                print("NEXT DIRECTION \n", direction)
-                print("RUN COUNT \n", self.run_count)
-                print("*" * 50)
+                logger.debug("ACC DIST \n%s", self.acc_dist_matrix)
+                logger.debug("ACC LEN \n%s", self.acc_len_matrix)
+                logger.debug("RECENT WARPING PATH \n%s", self.warping_path[:, -3:])
+                logger.debug("NEXT DIRECTION \n%s", direction)
+                logger.debug("RUN COUNT \n%s", self.run_count)
+                logger.debug("%s", "*" * 50)
             self.handle_direction(direction)
         if verbose:
-            print("... and we're done.")
+            logger.debug("... and we're done.")
         return self.warping_path
 
 
@@ -621,7 +624,7 @@ class SL_OLTW(object):
                 new_features = self.get_new_input()
             return self.warping_path
         else:
-            print("standalone offline run requires a queue")
+            logger.warning("standalone offline run requires a queue")
 
     def get_new_input(self):
         """
