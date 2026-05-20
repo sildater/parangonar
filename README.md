@@ -30,7 +30,7 @@ There is a `getting_started.ipynb` notebook which covers the main alignment func
 To demonstrate **Parangonar** the contents of performance and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)) are loaded, which returns a score object, a performance objects, and an alignment list. A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth.
 
 
-Documentation: Creation of Note Alignments
+Documentation: Creation of Alignments
 -------
 
 **Parangonar** contains implementations of note alignments algorithms:
