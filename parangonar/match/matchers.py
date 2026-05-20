@@ -13,6 +13,38 @@ import time
 from itertools import combinations
 from scipy.special import binom
 
+
+def _time_tuples_array(
+    time_tuples_by_onset,
+    fallbacks=(),
+):
+    """Build an Nx2 (score_onset, perf_onset) array, sorted by score onset.
+
+    interp1d below requires at least two anchor points. When the
+    refinement dict has 0 or 1 entries (degenerate inputs, e.g. very few
+    performance notes vs the score, or pitch-disjoint pairs) we fall back
+    to the supplied candidate arrays, and finally to an identity map.
+    This prevents IndexError on ``arr[:, 0].argsort()`` when ``arr`` is
+    empty (1-D), which crashes the matcher rather than producing a
+    degenerate-but-usable alignment.
+    """
+    if len(time_tuples_by_onset) >= 2:
+        arr = np.array(
+            [
+                (tup, time_tuples_by_onset[tup])
+                for tup in time_tuples_by_onset.keys()
+            ]
+        )
+    else:
+        arr = None
+        for cand in fallbacks:
+            if cand is not None and len(cand) >= 2:
+                arr = np.asarray(cand)
+                break
+        if arr is None:
+            arr = np.array([[0.0, 0.0], [1.0, 1.0]])
+    return arr[arr[:, 0].argsort()]
+
 from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
 from .. import THEGLUENOTE_CHECKPOINT
@@ -621,13 +653,7 @@ def pitch_and_onset_wise_times(
         s_onset: np.min(time_tuples_by_onset[s_onset])
         for s_onset in time_tuples_by_onset.keys()
     }
-    unique_time_tuples = np.array(
-        [
-            (tup, unique_time_tuples_by_onset[tup])
-            for tup in unique_time_tuples_by_onset.keys()
-        ]
-    )
-    unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
+    unique_time_tuples = _time_tuples_array(unique_time_tuples_by_onset)
 
     # unique_time_tuples_by_onset_id = {s_onset_no : np.min(time_tuples_by_onset_id[s_onset_no]) for s_onset_no in time_tuples_by_onset_id.keys()}
     # unique_time_tuples_id = np.array([(tup, unique_time_tuples_by_onset_id[tup]) for tup in unique_time_tuples_by_onset_id.keys()])
@@ -798,13 +824,7 @@ def pitch_and_onset_wise_times_ornament(
         s_onset: np.min(time_tuples_by_onset[s_onset])
         for s_onset in time_tuples_by_onset.keys()
     }
-    unique_time_tuples = np.array(
-        [
-            (tup, unique_time_tuples_by_onset[tup])
-            for tup in unique_time_tuples_by_onset.keys()
-        ]
-    )
-    unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
+    unique_time_tuples = _time_tuples_array(unique_time_tuples_by_onset)
 
     return (
         time_tuples_by_onset,
@@ -900,13 +920,7 @@ def pitch_and_onset_wise_times_simple(
         s_onset: np.min(time_tuples_by_onset[s_onset])
         for s_onset in time_tuples_by_onset.keys()
     }
-    unique_time_tuples = np.array(
-        [
-            (tup, unique_time_tuples_by_onset[tup])
-            for tup in unique_time_tuples_by_onset.keys()
-        ]
-    )
-    unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
+    unique_time_tuples = _time_tuples_array(unique_time_tuples_by_onset)
 
     return (
         time_tuples_by_onset,
@@ -1081,13 +1095,7 @@ def pitch_and_onset_wise_times_rev(
         s_onset: np.min(time_tuples_by_onset[s_onset])
         for s_onset in time_tuples_by_onset.keys()
     }
-    unique_time_tuples = np.array(
-        [
-            (tup, unique_time_tuples_by_onset[tup])
-            for tup in unique_time_tuples_by_onset.keys()
-        ]
-    )
-    unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
+    unique_time_tuples = _time_tuples_array(unique_time_tuples_by_onset)
 
     return (
         time_tuples_by_onset,
@@ -1219,13 +1227,12 @@ def get_score_to_perf_map(
                 additional_time_tuples_by_onset[s_onset]
             )
 
-    unique_time_tuples = np.array(
-        [
-            (tup, unique_time_tuples_by_onset[tup])
-            for tup in unique_time_tuples_by_onset.keys()
-        ]
+    # If refinement found no anchors, fall back to the per-direction
+    # tuples computed earlier in this function.
+    unique_time_tuples = _time_tuples_array(
+        unique_time_tuples_by_onset,
+        fallbacks=(unique_time_tuples_forward, unique_time_tuples_reverse),
     )
-    unique_time_tuples = unique_time_tuples[unique_time_tuples[:, 0].argsort()]
 
     # # DUAL MATCHER -----------------------------------------------------------------------------------
 
