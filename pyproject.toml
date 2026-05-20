@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=65", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,8 @@ description = "Music Alignment"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 keywords = ["match", "alignment", "midi", "performance", "score"]
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
