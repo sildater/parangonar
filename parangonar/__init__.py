@@ -22,6 +22,8 @@ from .match import (
     AutomaticNoteMatcher,
     DualDTWNoteMatcher,
     TheGlueNoteMatcher,
+    AudioToScoreMatcher,
+    AudioToScoreMatcherLimited,
 )
 
 from .match import (
@@ -49,6 +51,8 @@ __all__ = [
     "AutomaticNoteMatcher",
     "DualDTWNoteMatcher",
     "TheGlueNoteMatcher",
+    "AudioToScoreMatcher",
+    "AudioToScoreMatcherLimited",
     "OnlineTransformerMatcher",
     "OnlinePureTransformerMatcher",
     "TOLTWMatcher",
