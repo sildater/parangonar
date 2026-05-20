@@ -22,7 +22,7 @@ import warnings
 
 import numpy as np
 from scipy.ndimage import maximum_filter
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 
 from ..audio.spectrogram import IIRSpect
 from ..dp.spec_dp import ElasticSpecDP, ElasticSpecDPLimited
@@ -262,7 +262,6 @@ def _path_to_alignment(
     predicted_stime_to_ptime_map = interp1d(
         y=predicted_perf_times,
         x=unique_score_onsets,
-        bounds_error=False,
         fill_value="extrapolate",
     )
 
