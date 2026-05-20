@@ -56,7 +56,7 @@ Documentation: Creation of Note Alignments
     - `OnlinePureTransformerMatcher` 
         pre-trained neural network for local alignment decisions.
         no post-processing.
-    - `TempoOLTWMatcher`: 
+    - `TOLTWMatcher`: 
         symbolic dynamic programming akin to Online Time Warping
         based on a tempo and pitch-based metric.
     - `OLTWMatcher`:
