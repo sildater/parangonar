@@ -3,6 +3,7 @@
 """
 This module contains online note matcher classes.
 """
+import logging
 from typing import List, Dict, Any, Optional, Callable, Set
 from .. import ALIGNMENT_TRANSFORMER_CHECKPOINT
 import numpy as np
@@ -10,13 +11,15 @@ from collections import defaultdict
 from .pretrained_models import AlignmentTransformer
 import torch
 from .matchers import na_within
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 from ..dp.t_oltw import T_OLTW, SLT_OLTW
 from ..dp.oltw import OLTW, SL_OLTW
 from ..dp.metrics import bounded_recursion
 from queue import Queue
 from scipy import ndimage
 from collections import deque
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -662,10 +665,10 @@ class OnlineTransformerMatcher(object):
             # just jump forward
             self.current_position += 8
             self._warping_path[-1] = (self.current_position, self.input_index - 1)
-            print("STUCK with not options for 10 inputs at input idx:",self.input_index)
+            logger.warning("STUCK with no options for 10 inputs at input idx: %s", self.input_index)
         if self.stuck_with_no_options >= 30 and self.stuck_with_no_options < 31:
             # self.stuck_with_no_options = 0
-            print("STUCK with not options for 30 inputs at input idx:",self.input_index)
+            logger.warning("STUCK with no options for 30 inputs at input idx: %s", self.input_index)
 
         return self.current_position
     
@@ -848,9 +851,9 @@ class OnlinePureTransformerMatcher(object):
         # return current_idx
         max_jump_idx = 16
         max_backwards = 4
-        print("slice of backup matrix", self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
+        logger.debug("slice of backup matrix %s", self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
         idx_max = np.argmax(self.backup_cost_matrix[current_idx - max_backwards:current_idx + max_jump_idx])
-        print("jump index gain not very far:", self.backup_cost_matrix[current_idx + idx_max - max_backwards])
+        logger.debug("jump index gain not very far: %s", self.backup_cost_matrix[current_idx + idx_max - max_backwards])
         return current_idx + idx_max - max_backwards
               
     def prepare_lostness_tracker(self):
@@ -905,15 +908,15 @@ class OnlinePureTransformerMatcher(object):
 
         # if self.untracked_note_at_id[score_idx] > self.jump_trigger:
         if self.non_matched_theoretical_running_av >= self.jump_trigger:# and self.non_forward_running_av >= self.jump_trigger:
-            print("jump was triggered at: ", score_idx, self.unique_onsets[score_idx])
-            print("by performance note id:", p_id)
-            print("non matched buffer:",self.non_matched_buffer)
-            print("non forward buffer:",self.non_forward_buffer)
+            logger.debug("jump was triggered at: %s %s", score_idx, self.unique_onsets[score_idx])
+            logger.debug("by performance note id: %s", p_id)
+            logger.debug("non matched buffer: %s", self.non_matched_buffer)
+            logger.debug("non forward buffer: %s", self.non_forward_buffer)
             jump_idx = self.trigger_backup_and_jump(score_idx)
-            print("jumping to: ", jump_idx,self.unique_onsets[jump_idx])
-            print("set of still unmatched pitches at current position:",self.used_pitches_tracker[score_idx])
-            print("untracked notes counted at surrounding positions:",self.untracked_note_at_id[score_idx-3:score_idx+3])
-            print("*"*50)
+            logger.debug("jumping to: %s %s", jump_idx, self.unique_onsets[jump_idx])
+            logger.debug("set of still unmatched pitches at current position: %s", self.used_pitches_tracker[score_idx])
+            logger.debug("untracked notes counted at surrounding positions: %s", self.untracked_note_at_id[score_idx-3:score_idx+3])
+            logger.debug("%s", "*"*50)
             # reset backup
             self.backup_cost_matrix = np.zeros(len(self._unique_score_onsets))
             # reset lostness
