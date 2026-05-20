@@ -2,22 +2,30 @@
 # -*- coding: utf-8 -*-
 """
 This module contains pretrained pytorch models.
-checkpoints in assets. 
+checkpoints in assets.
 loaded in matchers and online_matchers.
 """
 
-import torch
-import torch.nn as nn
+from typing import Optional, Tuple, Union
+
+try:
+    import torch
+    import torch.nn as nn
+    from torch.nn import TransformerEncoder, TransformerEncoderLayer
+    from torch.nn.modules.normalization import LayerNorm
+    import torch.nn.functional as F
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 import numpy as np
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
-from torch.nn.modules.normalization import LayerNorm
-import torch.nn.functional as F
 
 # ALIGNMENT TRANSFORMER
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, dim_model, dropout_p, max_len):
+    def __init__(self, dim_model: int, dropout_p: float, max_len: int) -> None:
         super().__init__()
 
         self.dropout = nn.Dropout(dropout_p)
@@ -32,7 +40,7 @@ class PositionalEncoding(nn.Module):
         pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1)
         self.register_buffer("pos_encoding", pos_encoding)
 
-    def forward(self, token_embedding: torch.tensor) -> torch.tensor:
+    def forward(self, token_embedding: torch.Tensor) -> torch.Tensor:
         return self.dropout(
             token_embedding + self.pos_encoding[: token_embedding.size(0), :]
         )
@@ -44,13 +52,18 @@ class AlignmentTransformer(nn.Module):
     # Constructor
     def __init__(
         self,
-        token_number=91,
-        dim_model=128,
-        dim_class=2,
-        num_heads=4,
-        num_decoder_layers=6,
-        dropout_p=0.1,
-    ):
+        token_number: int = 91,
+        dim_model: int = 128,
+        dim_class: int = 2,
+        num_heads: int = 4,
+        num_decoder_layers: int = 6,
+        dropout_p: float = 0.1,
+    ) -> None:
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "The 'AlignmentTransformer' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         super().__init__()
 
         self.tokennumber = token_number
@@ -75,10 +88,16 @@ class AlignmentTransformer(nn.Module):
         self.transformerDECODER = TransformerEncoder(
             encoder_layer=D_layers,
             num_layers=num_decoder_layers,
+            enable_nested_tensor=False,
         )
         self.out = nn.Linear(self.dim_model, self.dim_class)
 
-    def forward(self, src, tgt_mask=None, tgt_pad_mask=None):
+    def forward(
+        self,
+        src: torch.Tensor,
+        tgt_mask: Optional[torch.Tensor] = None,
+        tgt_pad_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         src = self.embedding(src)
         src = torch.sum(src, dim=-2)
         src = src.permute(1, 0, 2)
@@ -90,13 +109,13 @@ class AlignmentTransformer(nn.Module):
 
         return out
 
-    def get_tgt_mask(self, size) -> torch.tensor:
+    def get_tgt_mask(self, size: int) -> torch.Tensor:
         mask = torch.zeros(size, size)
         return mask
 
     def create_pad_mask(
-        self, matrix: torch.tensor, pad_token: int = -1
-    ) -> torch.tensor:
+        self, matrix: torch.Tensor, pad_token: int = -1
+    ) -> torch.Tensor:
         return matrix == pad_token
 
 
@@ -112,17 +131,22 @@ class TheGlueNote(nn.Module):
     # Constructor
     def __init__(
         self,
-        device,
-        token_number=314,
-        position_number=512,
-        dim_model=128,
-        dim_feedforward=None,
-        num_heads=8,
-        num_decoder_layers=4,
-        dropout_p=0.0,
-        activation=nn.GELU(),
-        using_decoder=True,
-    ):
+        device: torch.device,
+        token_number: int = 314,
+        position_number: int = 512,
+        dim_model: int = 128,
+        dim_feedforward: Optional[int] = None,
+        num_heads: int = 8,
+        num_decoder_layers: int = 4,
+        dropout_p: float = 0.0,
+        activation: nn.Module = nn.GELU(),
+        using_decoder: bool = True,
+    ) -> None:
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "The 'TheGlueNote' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         super().__init__()
         self.device = device
         self.token_number = token_number
@@ -168,7 +192,9 @@ class TheGlueNote(nn.Module):
 
         self.embed_out = nn.Linear(self.dim_model, self.dim_model)
 
-    def forward(self, src, return_confidence_matrix=False):
+    def forward(
+        self, src: torch.Tensor, return_confidence_matrix: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         # # let's just only use pitch for now, no aggregation
         # src = src[:,1::4]
         src = self.embedding(src)

@@ -22,10 +22,20 @@ def _build_short_score():
     """Build a 4-measure C-major scale Part programmatically."""
     part = pscore.Part("P0", "scale", quarter_duration=4)
     part.add(pscore.TimeSignature(4, 4), start=0)
-    pitches = [("C", 4), ("D", 4), ("E", 4), ("F", 4),
-               ("G", 4), ("A", 4), ("B", 4), ("C", 5)]
+    pitches = [
+        ("C", 4),
+        ("D", 4),
+        ("E", 4),
+        ("F", 4),
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+    ]
     for i, (s, o) in enumerate(pitches):
-        part.add(pscore.Note(step=s, octave=o, alter=None), start=i * 4, end=(i + 1) * 4)
+        part.add(
+            pscore.Note(step=s, octave=o, alter=None), start=i * 4, end=(i + 1) * 4
+        )
     pscore.add_measures(part)
     return part
 

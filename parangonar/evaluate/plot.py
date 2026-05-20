@@ -4,6 +4,7 @@
 This module contains methods to visualize alignments
 """
 
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 import partitura as pt
 import matplotlib.pyplot as plt
@@ -11,13 +12,13 @@ import random
 
 
 def plot_alignment(
-    ppart_na,
-    part_na,
-    alignment,
-    save_file=False,
-    fname="note_alignment",
-    random_color=False,
-):
+    ppart_na: np.ndarray,
+    part_na: np.ndarray,
+    alignment: List[Dict[str, Any]],
+    save_file: bool = False,
+    fname: str = "note_alignment",
+    random_color: bool = False,
+) -> None:
     first_note_midi = np.min(ppart_na["onset_sec"])
     last_note_midi = np.max(ppart_na["onset_sec"] + ppart_na["duration_sec"])
     first_note_start = np.min(part_na["onset_beat"])
@@ -88,15 +89,15 @@ def plot_alignment(
 
 
 def plot_alignment_comparison(
-    ppart_na,
-    part_na,
-    alignment1,
-    alignment2,
-    save_file=False,
-    return_figure=False,
-    figsize=(100, 10),
-    fname="note_alignments",
-):
+    ppart_na: np.ndarray,
+    part_na: np.ndarray,
+    alignment1: List[Dict[str, Any]],
+    alignment2: List[Dict[str, Any]],
+    save_file: bool = False,
+    return_figure: bool = False,
+    figsize: Tuple[int, int] = (100, 10),
+    fname: str = "note_alignments",
+) -> Optional[Any]:
     first_note_midi = np.min(ppart_na["onset_sec"])
     last_note_midi = np.max(ppart_na["onset_sec"] + ppart_na["duration_sec"])
     first_note_start = np.min(part_na["onset_beat"])
@@ -203,13 +204,13 @@ def plot_alignment_comparison(
 
 
 def plot_alignment_mappings(
-    ppart_na,
-    part_na,
-    score_to_performance_mapping1,
-    score_to_performance_mapping2,
-    save_file=False,
-    fname="onset_alignments",
-):
+    ppart_na: np.ndarray,
+    part_na: np.ndarray,
+    score_to_performance_mapping1: Any,
+    score_to_performance_mapping2: Any,
+    save_file: bool = False,
+    fname: str = "onset_alignments",
+) -> None:
     first_note_midi = np.min(ppart_na["onset_sec"])
     last_note_midi = np.max(ppart_na["onset_sec"] + ppart_na["duration_sec"])
     first_note_start = np.min(part_na["onset_beat"])

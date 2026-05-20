@@ -3,10 +3,15 @@
 """
 This module contain methods for (repeat) structure identification
 """
+
+import logging
+from typing import List, Dict, Any, Optional, Tuple, Set, Union
 import partitura as pt
 import numpy as np
 from ..dp.nwtw import BoundedSmithWaterman
 import matplotlib.pyplot as plt
+
+logger = logging.getLogger(__name__)
 
 
 class RepeatIdentifier(object):
@@ -17,7 +22,7 @@ class RepeatIdentifier(object):
 
     """
 
-    def __init__(self, max_number_of_paths=100000):
+    def __init__(self, max_number_of_paths: int = 100000) -> None:
         self.directions = np.array([[1, 1], [1, 0]])
         self.dists = np.array([1, 1])
         self.matcher = BoundedSmithWaterman(
@@ -30,7 +35,7 @@ class RepeatIdentifier(object):
         )
         self.max_number_of_paths = max_number_of_paths
 
-    def prepare_score(self, score):
+    def prepare_score(self, score: Any) -> Tuple[Any, np.ndarray, List[Set[int]]]:
         # score representation
         # score = pt.load_musicxml(score_path)
         part = pt.score.merge_parts(score.parts)
@@ -44,19 +49,21 @@ class RepeatIdentifier(object):
             )
         return part, unique_onsets, score_pitches_at_onsets
 
-    def prepare_performance(self, perf):
+    def prepare_performance(self, perf: Any) -> Tuple[np.ndarray, np.ndarray]:
         # perf = pt.load_performance_midi(perf_path)
         # performance representation
         perf_note_array = perf.note_array()
         perf_pitches = perf_note_array["pitch"]
         return perf_note_array, perf_pitches
 
-    def extract_segments(self, part, unique_onsets, verbose=False):
+    def extract_segments(
+        self, part: Any, unique_onsets: np.ndarray, verbose: bool = False
+    ) -> Tuple[List[Any], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         if verbose:
-            print("*" * 20)
-            print("SEGMENTS")
-            print(pt.score.pretty_segments(part))
-            print("*" * 20)
+            logger.debug("%s", "*" * 20)
+            logger.debug("SEGMENTS")
+            logger.debug("%s", pt.score.pretty_segments(part))
+            logger.debug("%s", "*" * 20)
         # segments and paths
         pt.score.add_segments(part, force_new=True)
         segments = pt.score.get_segments(part)
@@ -189,7 +196,13 @@ class RepeatIdentifier(object):
 
         return path_gain, full_path, full_path_list[::-1]
 
-    def __call__(self, score, performance, verbose=False, plot=False):
+    def __call__(
+        self,
+        score: Any,
+        performance: Any,
+        verbose: bool = False,
+        plot: Union[bool, str] = False,
+    ) -> Optional[Tuple[str, Any]]:
         """
         Parameters
         ----------
@@ -210,15 +223,15 @@ class RepeatIdentifier(object):
         )
 
         if len(paths) < 2:
-            print("no structural variations!")
-            print("*" * 20)
-            return None
+            logger.warning("no structural variations!")
+            logger.warning("%s", "*" * 20)
+            return None, None
 
         path_gains = {}
         for path in paths:
             path_string = "".join(path.path)
             if verbose:
-                print("Testing path:", path_string)
+                logger.debug("Testing path: %s", path_string)
             path_gain, full_path, full_path_list = self.compute_path_gain(
                 cost, path, backtracking, segment_onset_idx, directions=self.directions
             )
@@ -227,7 +240,7 @@ class RepeatIdentifier(object):
         max_gain = max([k for k in path_gains.keys()])
         found_path, found_path_object, found_full_path_list = path_gains[max_gain]
         if verbose:
-            print("best fitting path: ", found_path)
+            logger.debug("best fitting path: %s", found_path)
 
         if plot:
             colors = ["r", "g", "b"]

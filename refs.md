@@ -44,7 +44,7 @@ The online `TOLTWMatcher` and `OLTWMatcher` are described in:
   title={Pairing Real-Time Piano Transcription with Symbol-level Tracking for Precise and Robust Score Following},
   author={{Peter, Silvan David and Hu, Patricia and Widmer, Gerhard},
   booktitle={Proceedings of the Sound and Music Computing Conference (SMC)}},
-  year={2024}
+  year={2025}
 }
 ```
 
@@ -55,6 +55,17 @@ The automatic `RepeatIdentifier` is described in:
   title={How to Infer Repeat Structures in MIDI Performances},
   author={{Peter, Silvan David and Hu, Patricia and Widmer, Gerhard},
   booktitle={Proceedings of the Music Encoding Conference (MEC)}},
-  year={2024}
+  year={2025}
+}
+```
+
+The offline audio `AudioToScoreMatcher` and `AudioToScoreMatcherLimited` are described in:
+
+```
+@inproceedings{peter-toltw2025,
+  title={Precise and Simple Audio-to-Score Alignment},
+  author={{Peter, Silvan David and Hu, Patricia and Widmer, Gerhard},
+  booktitle={Proceedings of the Music Encoding Conference (MEC)}},
+  year={2026}
 }
 ```

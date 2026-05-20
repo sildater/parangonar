@@ -7,9 +7,13 @@ name = "parangonar"
 version = "3.3.0"
 description = "Music Alignment"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 keywords = ["match", "alignment", "midi", "performance", "score"]
 license = { text = "Apache-2.0" }
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+]
 
 authors = [
   { name = "Silvan Peter" }
@@ -18,26 +22,30 @@ authors = [
 dependencies = [
   "numpy",
   "scipy",
-  "torch",
   "matplotlib",
-  "partitura>=1.6.0",
+  "partitura",
   "symusic",
   "miditok",
-  "numba",
 ]
 
-classifiers = [
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3",
+[project.optional-dependencies]
+accelerated = [
+  "torch",
+  "numba",
+  "symusic",
+  "miditok",
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/sildater/parangonar"
 
 [tool.setuptools]
+# package-dir = {"" = "src"}
 include-package-data = true
 
 [tool.setuptools.packages.find]
+# where = ["src"]
 exclude = ["tests*"]
 
 [tool.setuptools.package-data]
