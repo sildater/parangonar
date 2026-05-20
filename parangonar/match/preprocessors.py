@@ -4,14 +4,17 @@
 This module contains preprocessing methods
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Tuple, Callable
 import numpy as np
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 
 from partitura.utils.music import compute_pianoroll
 
 from ..dp.dtw import DTW
 from ..dp.nwtw import NW_DTW, NW
+
+logger = logging.getLogger(__name__)
 
 
 ################################### HELPERS ###################################
@@ -90,7 +93,6 @@ def alignment_times_from_dtw(
             x=u_times_score,
             y=u_times_performance,
             kind="linear",
-            bounds_error=False,
             fill_value="extrapolate",
         )
     except ValueError:
@@ -161,7 +163,7 @@ def traverse_the_alignment_graph(
             else:
                 continue
     elif counter == 150:
-        print("max recursion depth in note graph")
+        logger.warning("max recursion depth in note graph")
         pass
     else:
         pass
@@ -258,11 +260,6 @@ def mend_note_alignments(
     score_alignment = {"insertion": []}
     performance_alignment = {"deletion": []}
     alignment = []
-
-    # approximate_position = interp1d(node_times[:,0],node_times[:,1],fill_value="extrapolate")
-    # approximate_tempo = interp1d(node_times[:-1,0],np.diff(node_times[:,1])/np.diff(node_times[:,0]),fill_value="extrapolate")
-
-    # score_onsets_by_id = { snote["id"]:snote["onset_beat"] for snote in score_note_array}
 
     # combine all note alignments in two dictionaries
     for window_id in range(len(note_alignments)):
