@@ -4,15 +4,20 @@
 This module contains On-Line Time Warping.
 """
 
+import logging
+from typing import Optional, List, Callable, Any, Generator, Tuple
 import matplotlib.pyplot as plt
-
+from numpy.typing import NDArray
 import numpy as np
 import scipy
 from enum import IntEnum
 from queue import Queue
 from scipy.spatial.distance import cdist
+import progressbar
 
 from ..dp.metrics import element_of_set_metric_se, cdist_local
+
+logger = logging.getLogger(__name__)
 
 
 class Direction(IntEnum):
@@ -20,7 +25,7 @@ class Direction(IntEnum):
     INPUT = 1
     BOTH = 2
 
-    def toggle(self):
+    def toggle(self) -> "Direction":
         return Direction(self ^ 1) if self != Direction.BOTH else Direction.INPUT
 
 
@@ -59,16 +64,16 @@ class OLTW(object):
 
     def __init__(
         self,
-        reference_features=None,
-        queue=None,
-        window_size=10,  # shape of the acc cost matric
-        max_run_count=100,  # maximal number of steps
-        hop_size=1,  # number of seq items that get added at step
-        directional_weights=np.array([1, 1, 1]),  # down, diag, right
-        cdist_fun=cdist_local,
-        cdist_metric=element_of_set_metric_se,
-        **kwargs,
-    ):
+        reference_features: Optional[List[Any]] = None,
+        queue: Optional[Queue] = None,
+        window_size: int = 10,  # shape of the acc cost matric
+        max_run_count: int = 100,  # maximal number of steps
+        hop_size: int = 1,  # number of seq items that get added at step
+        directional_weights: np.ndarray = np.array([1, 1, 1]),  # down, diag, right
+        cdist_fun: Callable = cdist_local,
+        cdist_metric: Callable = element_of_set_metric_se,
+        **kwargs: Any,
+    ) -> None:
         self.queue = queue
         self.cdist_fun = cdist_fun
         self.cdist_metric = cdist_metric
@@ -84,12 +89,12 @@ class OLTW(object):
         self.hop_size = hop_size
         self.initialize()
 
-    def set_feature_arrays(self, reference_features):
+    def set_feature_arrays(self, reference_features: List[Any]) -> None:
         self.reference_features = reference_features
         self.N_ref = len(reference_features)
         self.input_features = list()
 
-    def initialize(self):
+    def initialize(self) -> None:
         self.ref_pointer = 0
         self.input_pointer = 0
         self.run_count = 0
@@ -98,16 +103,16 @@ class OLTW(object):
 
         self.ref_pointer += self.w  # window of ref shifted at start
         self.acc_dist_matrix = np.full((self.w, self.w), np.inf)
-        self.acc_dist_matrix[0, :] = 0
+        self.acc_dist_matrix[0, 0] = 0.0
         self.acc_len_matrix = np.zeros((self.w, self.w))
         self.queue_non_empty = True
         self.local_both_dist = np.zeros((self.w, self.w))
 
     @property
-    def warping_path(self):  # [shape=(2, T)]
+    def warping_path(self) -> np.ndarray:  # [shape=(2, T)]
         return self.wp[:, 1:]
 
-    def offset(self):
+    def offset(self) -> np.ndarray:
         offset_x = max(self.ref_pointer - self.w, 0)
         offset_y = max(self.input_pointer - self.w, 0)
         return np.array([offset_x, offset_y])
@@ -313,7 +318,7 @@ class OLTW(object):
         wx, wy = x + 1, y + 1  # append an extra column
         d = self.hop_size
         new_acc = np.full((wx, wy), np.inf, dtype=np.float32)
-        new_acc[0, 0] = 0  # starting point in corner
+        new_acc[0, 0] = 0.0  # starting point in corner
         new_len_acc = np.full((wx, wy), np.inf, dtype=np.float32)  # np.zeros((wx, wy))
         new_len_acc[0, 0] = 0  # starting point in corner
         x_seg = self.reference_features[0:x]  # [wx, feature_dim]
@@ -375,7 +380,7 @@ class OLTW(object):
             self.input_pointer += self.hop_size
 
         except:
-            print("empty queue")
+            # print("empty queue")
             self.queue_non_empty = False
 
     def is_still_following(self):
@@ -403,9 +408,9 @@ class OLTW(object):
         self.select_candidate()
         self.add_candidate_to_path()
 
-    def run(self, verbose=False):
+    def run(self, verbose: bool = False) -> np.ndarray:
         if verbose:
-            print("Start running OLTW")
+            logger.debug("Start running OLTW")
         self.initialize()
         self.handle_first_input()
         direction = self.select_next_direction()
@@ -416,15 +421,203 @@ class OLTW(object):
             self.add_candidate_to_path()
             direction = self.select_next_direction()
             if verbose:
-                print("ACC DIST \n", self.acc_dist_matrix)
-                print("ACC LEN \n", self.acc_len_matrix)
-                print("RECENT WARPING PATH \n", self.warping_path[:, -3:])
-                print("NEXT DIRECTION \n", direction)
-                print("*" * 50)
+                logger.debug("ACC DIST \n%s", self.acc_dist_matrix)
+                logger.debug("ACC LEN \n%s", self.acc_len_matrix)
+                logger.debug("RECENT WARPING PATH \n%s", self.warping_path[:, -3:])
+                logger.debug("NEXT DIRECTION \n%s", direction)
+                logger.debug("RUN COUNT \n%s", self.run_count)
+                logger.debug("%s", "*" * 50)
             self.handle_direction(direction)
         if verbose:
-            print("... and we're done.")
+            logger.debug("... and we're done.")
         return self.warping_path
+
+
+class SL_OLTW(object):
+    """
+    Single Loop OLTW version refactored
+    for update with __call__ and .run() API.
+    inspired by Matchmaker OnlineTimeWarpingArzt.
+    """
+
+    def __init__(
+        self,
+        reference_features: Optional[List[Any]] = None,
+        queue: Optional[Queue] = None,
+        window_size: int = 10,  # shape of the acc cost matric
+        max_run_count: int = 100,  # maximal number of steps
+        directional_weights: np.ndarray = np.array([1, 1, 1]),  # down, diag, right
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        cdist_metric: Callable = element_of_set_metric_se,
+    ) -> None:
+        self.queue = queue
+        self.cdist_metric = cdist_metric
+        self.directional_weights = directional_weights
+        self.directions = directions
+        if reference_features is not None:
+            self.set_feature_arrays(reference_features)
+        else:
+            self.reference_features = None
+            self.N_ref = None
+            self.input_features = None
+        self.window_size = window_size
+        self.max_run_count = max_run_count
+        self.initialize()
+
+    def set_feature_arrays(self, reference_features: List[Any]) -> None:
+        self.reference_features = reference_features
+        self.N_ref = len(reference_features)
+        self.input_features = list()
+
+    def initialize(self) -> None:
+        self.init_position: int = 0  # score/reference
+        self.current_position: int = 0  # score/reference/playhead pointer
+        self.positions: List[int] = []
+        self._warping_path: List = []
+        self.global_cost_matrix: NDArray[np.float32] = (
+            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32)
+        ).astype(np.float32)
+        self.global_path_length_matrix: NDArray[np.float32] = (
+            np.zeros((self.N_ref + 1, 2), dtype=np.float32)
+        ).astype(np.float32)
+        self.input_index: int = 0  # input pointer
+        if self.queue is not None:
+            self.queue_non_empty: bool = True
+        else:
+            self.queue_non_empty: bool = False
+
+    @property
+    def warping_path(self) -> np.ndarray:
+        wp = (np.array(self._warping_path).T).astype(np.int32)  # [shape=(2, T)]
+        return wp
+
+    def get_window(self) -> Tuple[int, int]:
+        w_size = self.window_size
+        window_start = max(self.window_index - w_size, 0)
+        window_end = min(self.window_index + w_size, self.N_ref)
+        return window_start, window_end
+
+    def __call__(self, input: np.ndarray) -> int:
+        self.step(input)
+        return self.current_position
+
+    def update_loop(self, window_start, window_end, min_index):
+        i = window_start  # score idx
+        j = self.input_index  # performance idx
+        min_cost = np.inf
+
+        if i == j == 0:
+            # default cost to get started
+            self.global_cost_matrix[1, 1] = 0.0
+            self.global_path_length_matrix[1, 1] = 0
+            min_cost = 0
+            min_index = 0
+
+        while i < window_end:
+            if not (i == j == 0):
+                min_local_cost = np.inf
+                min_local_path_len = 1
+                for d_idx, direction in enumerate(self.directions):
+                    istep, jstep = direction
+                    previ = i - istep  # score
+                    # prevj = j - jstep # performance
+                    jlocal = 1 - jstep
+                    input_f = self.input_features[j]
+                    ref_f = self.reference_features[i]
+                    prev_path_len = self.global_path_length_matrix[
+                        previ + 1, jlocal
+                    ]  # global matrices are shifted by 1 in score direction
+                    prev_cost = self.global_cost_matrix[previ + 1, jlocal]
+                    if prev_cost < np.inf:
+                        local_dist = self.cdist_metric(ref_f, input_f)
+
+                        cost = (
+                            prev_cost * prev_path_len
+                            + local_dist * self.directional_weights[d_idx]
+                        ) / (prev_path_len + 1)
+
+                        if cost < min_local_cost:
+                            min_local_cost = cost
+                            min_local_path_len = 1 + prev_path_len
+
+                self.global_cost_matrix[i + 1, 1] = min_local_cost
+                self.global_path_length_matrix[i + 1, 1] = min_local_path_len
+
+                if min_local_cost < min_cost:
+                    min_cost = min_local_cost
+                    min_index = i
+
+            i = i + 1
+
+        # rotate the columns for reuse
+        self.global_cost_matrix[:, 0] = self.global_cost_matrix[:, 1]
+        self.global_cost_matrix[:, 1] = np.inf
+        self.global_path_length_matrix[:, 0] = self.global_path_length_matrix[:, 1]
+        self.global_path_length_matrix[:, 1] = np.inf
+
+        return min_index
+
+    def step(self, input_features):
+        """
+        Update the current position and the warping path.
+        """
+        self.input_features += input_features
+        window_start, window_end = self.get_window()
+        min_index = window_start
+
+        min_index = self.update_loop(
+            window_start=window_start, window_end=window_end, min_index=min_index
+        )
+
+        # adapt current_position: do not go backwards,
+        # but also go a maximum of self.max_run_count steps forward
+        if self.input_index == 0:
+            pass
+        else:
+            self.current_position = min(
+                max(self.current_position, min_index),
+                self.current_position + self.max_run_count,
+            )
+
+        self._warping_path.append((self.current_position, self.input_index))
+        # update input index
+        self.input_index += 1
+
+    def run(self) -> np.ndarray:
+        """
+        Run the online alignment process in an offline loop.
+        """
+        self.initialize()
+        if self.queue_non_empty:
+            new_features = self.get_new_input()
+            while self.is_still_following():
+                # for offline usage
+                self.step(new_features)
+                new_features = self.get_new_input()
+            return self.warping_path
+        else:
+            logger.warning("standalone offline run requires a queue")
+
+    def get_new_input(self):
+        """
+        queue.get wrapper for graceful exit when used offline.
+        """
+        try:
+            input_feature = self.queue.get(block=False)
+            return input_feature
+
+        except:
+            # print("empty queue")
+            self.queue_non_empty = False
+            return None
+
+    def is_still_following(self):
+        is_still_following = self.current_position < self.N_ref
+        return is_still_following and self.queue_non_empty
+
+    @property
+    def window_index(self) -> int:
+        return self.current_position
 
 
 if __name__ == "__main__":
@@ -440,16 +633,32 @@ if __name__ == "__main__":
     for tt in t:
         queue.put([tt])
 
-    o = OLTW(
+    o1 = OLTW(
         reference_features=r,
         input_feature_shape=1,
         queue=queue,
         frame_per_seg=HOP_SIZE,
         window_size=WINDOW_SIZE,
-        max_run_count=3,
-        directional_weights=np.array([1.05, 1.1, 1]),
+        max_run_count=71,
+        directional_weights=np.array([1.05, 1, 1.05]),
         cdist_fun=cdist_local,
         cdist_metric=element_of_set_metric_se,
     )
-    # p = o.run(verbose = True)
-    # print("path \n", p)
+    p = o1.run(verbose=True)
+    print("path 1\n", p)
+
+    print("*" * 50)
+    queue2 = Queue()
+    for tt in t:
+        queue2.put([tt])
+    o2 = SL_OLTW(
+        reference_features=r,
+        queue=queue2,
+        window_size=WINDOW_SIZE,
+        max_run_count=71,
+        directional_weights=np.array([1.05, 1, 1.05]),
+        cdist_metric=element_of_set_metric_se,
+    )
+
+    p2 = o2.run()
+    print("path 2\n", p2)

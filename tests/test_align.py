@@ -3,6 +3,7 @@
 """
 This module includes tests for alignment utilities.
 """
+
 import unittest
 import numpy as np
 from parangonar.dp.dtw import DTW, WDTW, DTWSL, FDTW

@@ -1,8 +1,8 @@
 Parangonar
 ==========
 
-**Parangonar** is a Python package for note alignment and of symbolic music. 
-**Parangonar** contains offline and online note alignment algorithms as well as task-agnostic dynamic programming sequence alignment algorithms.
+**Parangonar** is a Python package for music alignment. 
+**Parangonar** contains methods for offline and online note alignment, real-time tracking, offline audio alignment, repeat identification, and sub-part alignment as well as task-agnostic dynamic programming algorithms.
 Note alignments produced by **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
 
@@ -15,18 +15,22 @@ Package Index)](https://pypi.org/project/parangonar/):
 ```shell
 pip install parangonar
 ```
-This will install the latest release of the package and will install all dependencies automatically.
+This will install the latest release of the package and all necessary dependencies automatically.
 
+```shell
+pip install parangonar[accelerated]
+```
+This will install the latest release of the package including optional dependencies (numba, torch, c externals).
 
 Getting Started
 -------
 
-There is a `getting_started.ipynb` notebook which covers the basic note alignment functions.
+There is a `getting_started.ipynb` notebook which covers the main alignment functions.
 
 To demonstrate **Parangonar** the contents of performance and score alignment file (encoded in the [match file format](https://cpjku.github.io/matchfile/)) are loaded, which returns a score object, a performance objects, and an alignment list. A new alignment is computed using different note matchers and the predicted alignment are compared to the ground truth.
 
 
-Documentation: Creation of Note Alignments
+Documentation: Creation of Alignments
 -------
 
 **Parangonar** contains implementations of note alignments algorithms:
@@ -45,7 +49,6 @@ Documentation: Creation of Note Alignments
     - `AnchorPointNoteMatcher`: 
         semi-automatic version of the `AutomaticNoteMatcher`, useful if annotations can be leveraged as anchor points. 
 
-
 2. Online / Real-time Note Matching: 
     - `OnlineTransformerMatcher`::
         pre-trained neural network for local alignment decisions.
@@ -53,7 +56,7 @@ Documentation: Creation of Note Alignments
     - `OnlinePureTransformerMatcher` 
         pre-trained neural network for local alignment decisions.
         no post-processing.
-    - `TempoOLTWMatcher`: 
+    - `TOLTWMatcher`: 
         symbolic dynamic programming akin to Online Time Warping
         based on a tempo and pitch-based metric.
     - `OLTWMatcher`:
@@ -66,6 +69,12 @@ Documentation: Creation of Note Alignments
     - `SubPartMatcher`: 
         note matcher which matches a monophonic voice from the score
         to a performance.
+
+4. Audio Matching: 
+    - `AudioToScoreMatcher`:
+        match a score to an audio file.
+    - `AudioToScoreMatcherLimited`: 
+        faster but less accurate audio alignment
 
 Documentation: Dynamic Programming Algorithms
 -------
@@ -89,7 +98,9 @@ Documentation: Dynamic Programming Algorithms
     - On-Line Time Warping: standard OLTW, Dixon et al.
     - Tempo OLTW: path-wise tempo models
 
-
+4. Audio DP
+    - semi-symbolic, elastic score to frame sequence matching with limited band
+    - semi-symbolic, elastic score to frame sequence matching with limited points
 
 Documentation: Note Alignment Utilities
 -------
@@ -127,8 +138,10 @@ Documentation: Note Alignment Utilities
     - partitura.io.importmatch.load_match
     - partitura.io.exportmatch.save_match
 
-    For [Piano Precision](https://github.com/yucongj/piano-precision) and [Sonic Visualizer](https://www.sonicvisualiser.org/)
+    For [Piano Precision](https://github.com/yucongj/piano-precision) 
     - parangonar.save_piano_precision_csv
+
+    For [Sonic Visualizer](https://www.sonicvisualiser.org/)
     - parangonar.save_sonic_visualizer_csvs
 
     For the MAPS JSON format:

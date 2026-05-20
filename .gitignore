@@ -149,3 +149,6 @@ static
 
 # vscode
 .vscode
+
+# line breaks
+*.py text eol=lf

@@ -20,5 +20,9 @@ from .online_matchers import (
     TOLTWMatcher,
     OLTWMatcher,
 )
+from .audio_matchers import (
+    AudioToScoreMatcher,
+    AudioToScoreMatcherLimited,
+)
 from .utils import node_array, save_parangonada_csv
 from .pretrained_models import AlignmentTransformer, TheGlueNote

@@ -4,26 +4,30 @@
 This module contains preprocessing methods
 """
 
+import logging
+from typing import List, Dict, Any, Optional, Tuple, Callable
 import numpy as np
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 
 from partitura.utils.music import compute_pianoroll
 
 from ..dp.dtw import DTW
 from ..dp.nwtw import NW_DTW, NW
 
+logger = logging.getLogger(__name__)
+
 
 ################################### HELPERS ###################################
 
 
 def alignment_times_from_dtw(
-    score_note_array,
-    performance_note_array,
-    matcher=DTW(),
-    SCORE_FINE_NODE_LENGTH=1.0,
-    s_time_div=16,
-    p_time_div=16,
-):
+    score_note_array: np.ndarray,
+    performance_note_array: np.ndarray,
+    matcher: Any = DTW(),
+    SCORE_FINE_NODE_LENGTH: float = 1.0,
+    s_time_div: int = 16,
+    p_time_div: int = 16,
+) -> np.ndarray:
     """
 
     Coarse time warping to generate anchor points
@@ -85,15 +89,10 @@ def alignment_times_from_dtw(
     )
 
     try:
-        # Use a mapping to deal with missing values (due to
-        # insertions and deletions in NW-related methods)
-        # It should not affect the behavior of DTW methods
-        # CC: I will check this just in case ;)
         stime_to_ptime_map = interp1d(
             x=u_times_score,
             y=u_times_performance,
             kind="linear",
-            bounds_error=False,
             fill_value="extrapolate",
         )
     except ValueError:
@@ -129,14 +128,14 @@ def alignment_times_from_dtw(
 
 
 def traverse_the_alignment_graph(
-    start_id,
-    score_ids,
-    performance_ids,
-    performance_alignment,
-    score_alignment,
-    counter,
-    max_depth=150,
-):
+    start_id: Any,
+    score_ids: List[Any],
+    performance_ids: List[Any],
+    performance_alignment: Dict[Any, List[Any]],
+    score_alignment: Dict[Any, List[Any]],
+    counter: int,
+    max_depth: int = 150,
+) -> None:
     # score_ids = [input_id]
     # performance_id = []
     if start_id not in score_ids and counter < max_depth:
@@ -164,25 +163,24 @@ def traverse_the_alignment_graph(
             else:
                 continue
     elif counter == 150:
-        print("max recursion depth in note graph")
+        logger.warning("max recursion depth in note graph")
         pass
     else:
         pass
-        # print("done")
 
 
 ################################### SEGMENT CUTTING ###################################
 
 
 def cut_note_arrays(
-    performance_note_array,
-    score_note_array,
-    alignment,
-    sfuzziness=0.0,
-    pfuzziness=0.0,
-    window_size=1,
-    pfuzziness_relative_to_tempo=False,
-):
+    performance_note_array: np.ndarray,
+    score_note_array: np.ndarray,
+    alignment: np.ndarray,
+    sfuzziness: float = 0.0,
+    pfuzziness: float = 0.0,
+    window_size: int = 1,
+    pfuzziness_relative_to_tempo: bool = False,
+) -> Tuple[List[np.ndarray], List[np.ndarray]]:
     """
     cut note arrays into two lists of corresponding
     note array segments based on anchor points given
@@ -246,13 +244,13 @@ def cut_note_arrays(
 
 
 def mend_note_alignments(
-    note_alignments,
-    performance_note_array,
-    score_note_array,
-    node_times,
-    symbolic_note_matcher,
-    max_traversal_depth=150,
-):
+    note_alignments: List[List[Dict[str, Any]]],
+    performance_note_array: np.ndarray,
+    score_note_array: np.ndarray,
+    node_times: np.ndarray,
+    symbolic_note_matcher: Any,
+    max_traversal_depth: int = 150,
+) -> Tuple[List[Dict[str, Any]], Dict[Any, List[Any]], Dict[Any, List[Any]]]:
     """
     mend note alignments in (overlapping) windows.
     creates a global dictionary of MAPS style alignments
@@ -262,11 +260,6 @@ def mend_note_alignments(
     score_alignment = {"insertion": []}
     performance_alignment = {"deletion": []}
     alignment = []
-
-    # approximate_position = interp1d(node_times[:,0],node_times[:,1],fill_value="extrapolate")
-    # approximate_tempo = interp1d(node_times[:-1,0],np.diff(node_times[:,1])/np.diff(node_times[:,0]),fill_value="extrapolate")
-
-    # score_onsets_by_id = { snote["id"]:snote["onset_beat"] for snote in score_note_array}
 
     # combine all note alignments in two dictionaries
     for window_id in range(len(note_alignments)):
@@ -451,7 +444,7 @@ def mend_note_alignments(
 ################################### NOTE ARRAY ###################################
 
 
-def note_per_ons_encoding(sarray):
+def note_per_ons_encoding(sarray: np.ndarray) -> np.ndarray:
     """
     create an onset-wise pitch based encoding
     of score note arrays
