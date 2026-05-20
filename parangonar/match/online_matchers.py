@@ -139,7 +139,27 @@ class DummyTempoModel(object):
 
 
 class OnlineTransformerMatcher(object):
-    def __init__(self, score_note_array_full: np.ndarray) -> None:
+    def __init__(
+        self,
+        score_note_array_full: np.ndarray,
+        token_number: int = 91,
+        dim_model: int = 64,
+        dim_class: int = 2,
+        num_heads: int = 8,
+        num_decoder_layers: int = 6,
+        dropout_p: float = 0.1,
+        init_beat_period: float = 0.5,
+        lookback: int = 1,
+    ) -> None:
+        self.token_number = token_number
+        self.dim_model = dim_model
+        self.dim_class = dim_class
+        self.num_heads = num_heads
+        self.num_decoder_layers = num_decoder_layers
+        self.dropout_p = dropout_p
+        self.init_beat_period = init_beat_period
+        self.lookback = lookback
+
         self.score_note_array_full = np.sort(score_note_array_full, order="onset_beat")
         self.first_p_onset = None
         self.tempo_model = None
@@ -196,12 +216,16 @@ class OnlineTransformerMatcher(object):
         # aligned notes at each onset
         self.aligned_notes_at_onset = defaultdict(list)
 
-    def prepare_performance(self, first_onset: float, init_beat_period: float = 0.5) -> None:
+    def prepare_performance(self, first_onset: float, init_beat_period: Optional[float] = None) -> None:
+        if init_beat_period is not None:
+            beat_period = init_beat_period
+        else:
+            beat_period = self.init_beat_period
         self.tempo_model = TempoModel(
-            init_beat_period=init_beat_period,
+            init_beat_period=beat_period,
             init_score_onset=self.score_note_array_full["onset_beat"][0],
             init_perf_onset=first_onset,
-            lookback=1,
+            lookback=self.lookback,
         )
 
     def prepare_model(self):
@@ -213,12 +237,12 @@ class OnlineTransformerMatcher(object):
                 "Please install it with: pip install parangonar[accelerated]"
             )
         self.model = AlignmentTransformer(
-            token_number=91,
-            dim_model=64,
-            dim_class=2,
-            num_heads=8,
-            num_decoder_layers=6,
-            dropout_p=0.1,
+            token_number=self.token_number,
+            dim_model=self.dim_model,
+            dim_class=self.dim_class,
+            num_heads=self.num_heads,
+            num_decoder_layers=self.num_decoder_layers,
+            dropout_p=self.dropout_p,
         )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(
@@ -1089,10 +1113,18 @@ class TOLTWMatcher(object):
     or
     SLT_OLTW score follower object that plugs into matchmaker API
     """
-    def __init__(self, 
-                 score_note_array: np.ndarray, 
-                 tracker_type: str = "T_OLTW",
-                 init_tempo: Optional[float] = None):
+    def __init__(
+        self,
+        score_note_array: np.ndarray,
+        tracker_type: str = "T_OLTW",
+        init_tempo: Optional[float] = None,
+        hop_size: int = 1,
+        window_size: int = 40,
+        max_run_count: int = 10,
+        tempo_factor: float = 0.1,
+        time_weight: float = 2.0,
+        directional_weights: np.ndarray = np.array([2.0, 1.0, 1.0]),
+    ):
         
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         if init_tempo is not None:
@@ -1112,13 +1144,13 @@ class TOLTWMatcher(object):
             self.tracker = T_OLTW(
                     reference_features=self.features_s,
                     queue=self.queue,
-                    hop_size=1,
-                    window_size=40,
-                    max_run_count=10,
+                    hop_size=hop_size,
+                    window_size=window_size,
+                    max_run_count=max_run_count,
                     init_tempo=self.init_tempo,
-                    tempo_factor=0.1,
-                    time_weight=2.0,
-                    directional_weights=np.array([2.0, 1.0, 1.0]),
+                    tempo_factor=tempo_factor,
+                    time_weight=time_weight,
+                    directional_weights=directional_weights,
                 )
 
         # single loop TempoOLTW which interfaces with matchmaker
@@ -1126,12 +1158,12 @@ class TOLTWMatcher(object):
             self.tracker = SLT_OLTW(
                 reference_features=self.features_s,
                 queue=self.queue,
-                window_size=40,
-                max_run_count=10,
+                window_size=window_size,
+                max_run_count=max_run_count,
                 init_tempo=self.init_tempo,
-                tempo_factor=0.1,
-                time_weight=2.0,
-                directional_weights=np.array([2.0, 1.0, 1.0]),
+                tempo_factor=tempo_factor,
+                time_weight=time_weight,
+                directional_weights=directional_weights,
             )
 
         # note alignment compatibility
@@ -1249,9 +1281,15 @@ class TOLTWMatcher(object):
         return tracking_path
 
 class OLTWMatcher(object):
-    def __init__(self, 
-                 score_note_array: np.ndarray,
-                 tracker_type: str = "OLTW"):
+    def __init__(
+        self,
+        score_note_array: np.ndarray,
+        tracker_type: str = "OLTW",
+        hop_size: int = 1,
+        window_size: int = 40,
+        max_run_count: int = 10,
+        directional_weights: np.ndarray = np.array([2.0, 1.0, 1.0]),
+    ):
         self.score_note_array_full = np.sort(score_note_array, order="onset_beat")
         self.features_s = self.prepare_score(self.score_note_array_full)
         self.features_p = None
@@ -1263,19 +1301,19 @@ class OLTWMatcher(object):
             self.tracker = OLTW(
                 reference_features=self.features_s,
                 queue=self.queue,
-                hop_size=1,
-                window_size=40,
-                max_run_count=10,
-                directional_weights=np.array([2.0, 1.0, 1.0]),
+                hop_size=hop_size,
+                window_size=window_size,
+                max_run_count=max_run_count,
+                directional_weights=directional_weights,
             )
 
         # single loop OLTW which interfaces with matchmaker
         elif tracker_type == "SL_OLTW":
             self.tracker = SL_OLTW(
                 reference_features=self.features_s,
-                window_size=40,
-                max_run_count=10,
-                directional_weights=np.array([2.0, 1.0, 1.0]),
+                window_size=window_size,
+                max_run_count=max_run_count,
+                directional_weights=directional_weights,
             )
 
         # alignment collectors
