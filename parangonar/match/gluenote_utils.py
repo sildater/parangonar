@@ -26,7 +26,7 @@ except ImportError:
 from ..dp.dtw import WDTW
 from ..dp.metrics import invert_matrix
 from collections import defaultdict
-from scipy.interpolate import interp1d
+from partitura.utils.generic import interp1d
 
 DEFAULT_NOTE = [
     196,  # 'TimeShift_1.0.8'
