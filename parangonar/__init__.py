@@ -1,16 +1,22 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-The top level of the package 
+The top level of the package
 contains functions to
 align music data.
 """
+
+import logging
 
 from importlib.metadata import version
 from importlib.resources import files
 
 # define a version variable
 __version__ = version("parangonar")
+
+# package-level logger; library users can configure it via
+#   import logging; logging.getLogger("parangonar").setLevel(logging.DEBUG)
+logger = logging.getLogger("parangonar")
 
 #: An example MusicXML file for didactic purposes
 EXAMPLE = str(files("parangonar") / "assets" / "mozart_k265_var1.match")
