@@ -20,8 +20,12 @@ logger = logging.getLogger("parangonar")
 
 #: An example MusicXML file for didactic purposes
 EXAMPLE = str(files("parangonar") / "assets" / "mozart_k265_var1.match")
-ALIGNMENT_TRANSFORMER_CHECKPOINT = str(files("parangonar") / "assets" / "alignment_transformer_checkpoint.pt")
-THEGLUENOTE_CHECKPOINT = str(files("parangonar") / "assets" / "thegluenote_small_checkpoint.pt")
+ALIGNMENT_TRANSFORMER_CHECKPOINT = str(
+    files("parangonar") / "assets" / "alignment_transformer_checkpoint.pt"
+)
+THEGLUENOTE_CHECKPOINT = str(
+    files("parangonar") / "assets" / "thegluenote_small_checkpoint.pt"
+)
 
 from .match import (
     AnchorPointNoteMatcher,
@@ -37,7 +41,7 @@ from .match import (
     OnlinePureTransformerMatcher,
     TOLTWMatcher,
     OLTWMatcher,
-) 
+)
 
 
 from .mismatch import RepeatIdentifier, SubPartMatcher
@@ -49,7 +53,7 @@ from .evaluate import (
     save_piano_precision_csv,
     save_sonic_visualizer_csvs,
     save_maps,
-    match_midis
+    match_midis,
 )
 
 __all__ = [
@@ -72,5 +76,5 @@ __all__ = [
     "save_piano_precision_csv",
     "save_sonic_visualizer_csvs",
     "save_maps",
-    "match_midis"
+    "match_midis",
 ]

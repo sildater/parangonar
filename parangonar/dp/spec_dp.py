@@ -14,7 +14,7 @@ The two flavours differ in how they prune the candidate set at each step:
 * :class:`ElasticSpecDP` — evaluates *all* candidates within the stretch
   window and then prunes high-cost columns via an absolute cost threshold.
 * :class:`ElasticSpecDPLimited` — retains only the top-N candidates per step
-  using a soft-min (log-sum-exp) and discards the rest, trading accuracy for 
+  using a soft-min (log-sum-exp) and discards the rest, trading accuracy for
   speed and memory on long sequences.
 """
 
@@ -23,7 +23,6 @@ from typing import Optional
 import numpy as np
 
 from ..decorators import numba_jit as jit
-
 
 # ---------------------------------------------------------------------------
 # Internal JIT-compiled forward-backward functions
@@ -122,11 +121,23 @@ def _elastic_forward_and_backward_pitch_onset(
             if D[i, j] < np.inf:
                 beat_period = BP[i, j]
                 lower_bound = max(
-                    min(j + np.floor(beat_period * (1 - max_stretch_shorter) * spike_period[i]), N - 1),
+                    min(
+                        j
+                        + np.floor(
+                            beat_period * (1 - max_stretch_shorter) * spike_period[i]
+                        ),
+                        N - 1,
+                    ),
                     j + 1,
                 )
                 upper_bound = max(
-                    min(j + np.ceil(beat_period * (1 + max_stretch_longer)) * spike_period[i] + 1, N),
+                    min(
+                        j
+                        + np.ceil(beat_period * (1 + max_stretch_longer))
+                        * spike_period[i]
+                        + 1,
+                        N,
+                    ),
                     lower_bound + 1,
                 )
                 candidate_slice = np.arange(lower_bound, upper_bound, dtype=np.int64)
@@ -145,12 +156,14 @@ def _elastic_forward_and_backward_pitch_onset(
                             (candidate_j - j) / (beat_period * spike_period[i]),
                             (beat_period * spike_period[i]) / (candidate_j - j),
                         )
-                        stretch_c = min((stretch ** 2 - 1), 1)
+                        stretch_c = min((stretch**2 - 1), 1)
 
                         # onset activation
                         activation = onsets[pitch, candidate_j]
                         # spec slice
-                        spec_slice = spec[pitch, candidate_j: candidate_j + spec_slice_len]
+                        spec_slice = spec[
+                            pitch, candidate_j : candidate_j + spec_slice_len
+                        ]
                         spec_fit = np.min(spec_slice)
 
                         # total cost for this candidate
@@ -167,8 +180,10 @@ def _elastic_forward_and_backward_pitch_onset(
                     if D[i + 1, candidate_j] > candidate_j_cost:
                         D[i + 1, candidate_j] = candidate_j_cost
                         BP[i + 1, candidate_j] = (
-                            (1 - alpha) * beat_period
-                            + alpha * min(max(float(candidate_j - j) / spike_period[i], min_bp), max_bp)
+                            1 - alpha
+                        ) * beat_period + alpha * min(
+                            max(float(candidate_j - j) / spike_period[i], min_bp),
+                            max_bp,
                         )
                         B[i + 1, candidate_j] = j
 
@@ -283,11 +298,23 @@ def _elastic_forward_and_backward_pitch_onset_limit(
             if D[i, j] < np.inf:
                 beat_period = BP[i, j]
                 lower_bound = max(
-                    min(j + np.floor(beat_period * (1 - max_stretch_shorter) * spike_period[i]), N - 1),
+                    min(
+                        j
+                        + np.floor(
+                            beat_period * (1 - max_stretch_shorter) * spike_period[i]
+                        ),
+                        N - 1,
+                    ),
                     j + 1,
                 )
                 upper_bound = max(
-                    min(j + np.ceil(beat_period * (1 + max_stretch_longer)) * spike_period[i] + 1, N),
+                    min(
+                        j
+                        + np.ceil(beat_period * (1 + max_stretch_longer))
+                        * spike_period[i]
+                        + 1,
+                        N,
+                    ),
                     lower_bound + 1,
                 )
                 candidate_slice = np.arange(lower_bound, upper_bound, dtype=np.int64)
@@ -304,12 +331,14 @@ def _elastic_forward_and_backward_pitch_onset_limit(
                             (candidate_j - j) / (beat_period * spike_period[i]),
                             (beat_period * spike_period[i]) / (candidate_j - j),
                         )
-                        stretch_c = min((stretch ** 2 - 1), 1)
+                        stretch_c = min((stretch**2 - 1), 1)
 
                         # onset activation
                         activation = onsets[pitch, candidate_j]
                         # spec slice
-                        spec_slice = spec[pitch, candidate_j: candidate_j + spec_slice_len]
+                        spec_slice = spec[
+                            pitch, candidate_j : candidate_j + spec_slice_len
+                        ]
                         spec_fit = np.min(spec_slice)
 
                         # total cost for this candidate
@@ -332,10 +361,13 @@ def _elastic_forward_and_backward_pitch_onset_limit(
                             if D[i + 1, min_candidate_j] > min_candidate_j_cost:
                                 D[i + 1, min_candidate_j] = min_candidate_j_cost
                                 BP[i + 1, min_candidate_j] = (
-                                    (1 - alpha) * beat_period
-                                    + alpha * min(
-                                        max(float(min_candidate_j - j) / spike_period[i], min_bp), max_bp
-                                    )
+                                    1 - alpha
+                                ) * beat_period + alpha * min(
+                                    max(
+                                        float(min_candidate_j - j) / spike_period[i],
+                                        min_bp,
+                                    ),
+                                    max_bp,
                                 )
                                 B[i + 1, min_candidate_j] = j
                     else:
@@ -345,10 +377,12 @@ def _elastic_forward_and_backward_pitch_onset_limit(
                         if D[i + 1, min_candidate_j] > min_candidate_j_cost:
                             D[i + 1, min_candidate_j] = min_candidate_j_cost
                             BP[i + 1, min_candidate_j] = (
-                                (1 - alpha) * beat_period
-                                + alpha * min(
-                                    max(float(min_candidate_j - j) / spike_period[i], min_bp), max_bp
-                                )
+                                1 - alpha
+                            ) * beat_period + alpha * min(
+                                max(
+                                    float(min_candidate_j - j) / spike_period[i], min_bp
+                                ),
+                                max_bp,
                             )
                             B[i + 1, min_candidate_j] = j
 

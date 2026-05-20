@@ -15,6 +15,7 @@ from ..dp.metrics import tempo_and_pitch_metric
 
 logger = logging.getLogger(__name__)
 
+
 def accumulate_tester():
     score = [[0, {1, 2}], [1, {3, 4}], [2, {3, 4}], [3, {3, 4}]]  # onset_s, pitch set
     perf = [
@@ -43,7 +44,7 @@ def accumulate_tester():
             mincost = np.inf
             besttempo = init_tempo
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
 
@@ -233,7 +234,7 @@ class T_OLTW(object):
 
                 else:
                     for d_idx, direction in enumerate(self.directions):
-                        (istep, jstep) = direction
+                        istep, jstep = direction
                         previ = i - istep
                         prevj = j - jstep
                         prev_onset_p = perf_features[prevj + 1][
@@ -313,7 +314,7 @@ class T_OLTW(object):
 
                 else:
                     for d_idx, direction in enumerate(self.directions):
-                        (istep, jstep) = direction
+                        istep, jstep = direction
                         previ = i - istep
                         prevj = j - jstep
                         prev_onset_p = perf_features[prevj + 1][
@@ -413,7 +414,7 @@ class T_OLTW(object):
 
                 elif i >= wx - d or j >= wy - d:
                     for d_idx, direction in enumerate(self.directions):
-                        (istep, jstep) = direction
+                        istep, jstep = direction
                         previ = i - istep
                         prevj = j - jstep
                         prev_onset_p = perf_features[prevj + 1][
@@ -610,7 +611,7 @@ class T_OLTW(object):
         self.add_candidate_to_path()
 
     def run(self, verbose: bool = False) -> np.ndarray:
-        
+
         if verbose:
             logger.debug("Start running OLTW")
         self.initialize()
@@ -640,8 +641,6 @@ class T_OLTW(object):
             logger.debug("... and we're done.")
             logger.debug("%s", self.directions_chosen)
         return self.warping_path
-    
-
 
 
 class SLT_OLTW(object):
@@ -687,31 +686,30 @@ class SLT_OLTW(object):
         self.input_features = list()
 
     def initialize(self) -> None:
-        self.init_position: int = 0 # score/reference 
-        self.current_position: int = 0 # score/reference/playhead pointer
-        
+        self.init_position: int = 0  # score/reference
+        self.current_position: int = 0  # score/reference/playhead pointer
+
         self.positions: List[int] = []
         self._warping_path: List = []
         self.global_cost_matrix: NDArray[np.float32] = (
-            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32) 
+            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32)
         ).astype(np.float32)
         self.global_path_length_matrix: NDArray[np.float32] = (
-            np.zeros((self.N_ref + 1, 2), dtype=np.float32) 
+            np.zeros((self.N_ref + 1, 2), dtype=np.float32)
         ).astype(np.float32)
         self.global_tempo_matrix: NDArray[np.float32] = (
-            np.full((self.N_ref + 1, 2), self.init_tempo, dtype=np.float32) 
+            np.full((self.N_ref + 1, 2), self.init_tempo, dtype=np.float32)
         ).astype(np.float32)
- 
-        self.input_index: int = 0 # input pointer
+
+        self.input_index: int = 0  # input pointer
         if self.queue is not None:
             self.queue_non_empty: bool = True
         else:
             self.queue_non_empty: bool = False
 
-
     @property
     def warping_path(self) -> np.ndarray:
-        wp = (np.array(self._warping_path).T).astype(np.int32) # [shape=(2, T)]
+        wp = (np.array(self._warping_path).T).astype(np.int32)  # [shape=(2, T)]
         return wp
 
     def get_window(self) -> Tuple[int, int]:
@@ -723,16 +721,11 @@ class SLT_OLTW(object):
     def __call__(self, input: np.ndarray) -> int:
         self.step(input)
         return self.current_position
-    
-    def update_loop(self,
-                    window_start,
-                    window_end,
-                    min_index
-        ):
-        i = window_start # score idx
-        j = self.input_index # performance idx
-        min_cost = np.inf
 
+    def update_loop(self, window_start, window_end, min_index):
+        i = window_start  # score idx
+        j = self.input_index  # performance idx
+        min_cost = np.inf
 
         if i == j == 0:
             # default cost to get started
@@ -740,7 +733,7 @@ class SLT_OLTW(object):
             self.global_path_length_matrix[1, 1] = 0
             min_cost = 0
             min_index = 0
-        
+
         local_cost_collector = list()
         while i < window_end:
             if not (i == j == 0):
@@ -748,20 +741,24 @@ class SLT_OLTW(object):
                 min_local_tempo = self.init_tempo
                 min_local_path_len = 1
                 for d_idx, direction in enumerate(self.directions):
-                    (istep, jstep) = direction
+                    istep, jstep = direction
                     previ = i - istep
                     prevj = j - jstep
                     jlocal = 1 - jstep
                     input_f = self.input_features[j]
                     ref_f = self.reference_features[i]
-                    prev_onset_p = self.input_features[prevj][0]  # previous onset in p direction
+                    prev_onset_p = self.input_features[prevj][
+                        0
+                    ]  # previous onset in p direction
                     prev_onset_s = self.reference_features[previ][0]
                     tempo = self.global_tempo_matrix[previ + 1, jlocal]
-                    prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
+                    prev_path_len = self.global_path_length_matrix[
+                        previ + 1, jlocal
+                    ]  # global matrices are shifted by 1 in score direction
                     prev_cost = self.global_cost_matrix[previ + 1, jlocal]
 
                     if prev_cost < np.inf:
-                    
+
                         local_dist, new_tempo = self.cdist_metric(
                             pitch_set_s=ref_f[1],
                             pitch_p=input_f[1],
@@ -771,29 +768,29 @@ class SLT_OLTW(object):
                             prev_onset_p=prev_onset_p,
                             tempo=tempo,  # sec / beat
                             time_weight=self.time_weight,
-                            tempo_factor=self.tempo_factor
-                            )
+                            tempo_factor=self.tempo_factor,
+                        )
                         new_tempo = np.clip(new_tempo, 0.05, 10.0)
-        
+
                         cost = (
-                            prev_cost * prev_path_len 
+                            prev_cost * prev_path_len
                             + local_dist * self.directional_weights[d_idx]
-                            ) / (prev_path_len + 1)
+                        ) / (prev_path_len + 1)
 
                         if cost < min_local_cost:
-                            local_cost_collector.append((i,local_dist))
+                            local_cost_collector.append((i, local_dist))
                             min_local_cost = cost
                             min_local_tempo = new_tempo
                             min_local_path_len = 1 + prev_path_len
 
-                self.global_cost_matrix[i+1, 1] = min_local_cost
-                self.global_path_length_matrix[i+1, 1] = min_local_path_len
-                self.global_tempo_matrix[i+1, 1] = min_local_tempo
+                self.global_cost_matrix[i + 1, 1] = min_local_cost
+                self.global_path_length_matrix[i + 1, 1] = min_local_path_len
+                self.global_tempo_matrix[i + 1, 1] = min_local_tempo
 
                 if min_local_cost < min_cost:
                     min_cost = min_local_cost
                     min_index = i
-            
+
             i = i + 1
         # print("local dists:\n",np.array(local_cost_collector).T)
         # print("global cost:\n",self.global_cost_matrix[:10,:].T)
@@ -810,12 +807,12 @@ class SLT_OLTW(object):
         self.global_tempo_matrix[:, 1] = self.init_tempo
 
         return min_index
-        
+
     def step(self, input_features):
         """
         Update the current position and the warping path.
         """
-        self.input_features += input_features 
+        self.input_features += input_features
         window_start, window_end = self.get_window()
         min_index = window_start
 
@@ -832,14 +829,14 @@ class SLT_OLTW(object):
         else:
             self.current_position = min(
                 max(self.current_position - self.max_run_count, min_index),
-                self.current_position + self.max_run_count
+                self.current_position + self.max_run_count,
             )
 
         self._warping_path.append((self.current_position, self.input_index))
         # update input index
         self.input_index += 1
-    
-    def run(self) -> np.ndarray: 
+
+    def run(self) -> np.ndarray:
         """
         Run the online alignment process in an offline loop.
         """
@@ -866,7 +863,7 @@ class SLT_OLTW(object):
             # print("empty queue")
             self.queue_non_empty = False
             return None
-    
+
     def is_still_following(self):
         is_still_following = self.current_position < self.N_ref
         return is_still_following and self.queue_non_empty
@@ -875,7 +872,9 @@ class SLT_OLTW(object):
     def window_index(self) -> int:
         return self.current_position
 
+
 #####################################################
+
 
 def testfeatures_t_oltw():
     score = [
@@ -903,8 +902,16 @@ def testfeatures_t_oltw_2():
         [0.6, {6}],
         [0.7, {7}],
     ]
-    perf = [[0.0, 0], [0.1, 1], [0.2, 2], [0.3, 3], [0.4, 4], 
-            [0.5, 5], [0.6, 6], [0.7, 7]]
+    perf = [
+        [0.0, 0],
+        [0.1, 1],
+        [0.2, 2],
+        [0.3, 3],
+        [0.4, 4],
+        [0.5, 5],
+        [0.6, 6],
+        [0.7, 7],
+    ]
     return score, perf
 
 
@@ -916,7 +923,7 @@ if __name__ == "__main__":
 
     # r, t = testfeatures_t_oltw()
     # queue1 = Queue()
-    
+
     # for tt in t:
     #     queue1.put([tt])
 
@@ -949,9 +956,8 @@ if __name__ == "__main__":
         init_tempo=2,
         tempo_factor=0.1,
         time_weight=0.5,
-        directional_weights=np.array([1.0, 1.0, 1.0])
-        )
-
+        directional_weights=np.array([1.0, 1.0, 1.0]),
+    )
 
     p2 = o2.run()
     print("path single loop T_OLTW \n", p2)

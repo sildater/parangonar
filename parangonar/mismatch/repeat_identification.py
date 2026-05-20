@@ -3,6 +3,7 @@
 """
 This module contain methods for (repeat) structure identification
 """
+
 import logging
 from typing import List, Dict, Any, Optional, Tuple, Set, Union
 import partitura as pt
@@ -56,9 +57,7 @@ class RepeatIdentifier(object):
         return perf_note_array, perf_pitches
 
     def extract_segments(
-        self, part: Any, 
-        unique_onsets: np.ndarray, 
-        verbose: bool = False
+        self, part: Any, unique_onsets: np.ndarray, verbose: bool = False
     ) -> Tuple[List[Any], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         if verbose:
             logger.debug("%s", "*" * 20)
@@ -169,11 +168,7 @@ class RepeatIdentifier(object):
         return output_path, path_cost
 
     def compute_path_gain(
-        self, 
-        cost, 
-        path, 
-        backtracking, 
-        segment_onset_idx, directions
+        self, cost, path, backtracking, segment_onset_idx, directions
     ):
         ending_m = cost.shape[0] - 1  # the end of the performance
         starting_m = 0
@@ -202,11 +197,11 @@ class RepeatIdentifier(object):
         return path_gain, full_path, full_path_list[::-1]
 
     def __call__(
-        self, 
-        score: Any, 
-        performance: Any, 
-        verbose: bool = False, 
-        plot: Union[bool, str] = False
+        self,
+        score: Any,
+        performance: Any,
+        verbose: bool = False,
+        plot: Union[bool, str] = False,
     ) -> Optional[Tuple[str, Any]]:
         """
         Parameters

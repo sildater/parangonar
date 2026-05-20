@@ -84,9 +84,7 @@ class IIRSpect:
             n_bins + 1,
             base=2,
         )
-        self.center_freqs = np.logspace(
-            np.log2(f_min), np.log2(f_max), n_bins, base=2
-        )
+        self.center_freqs = np.logspace(np.log2(f_min), np.log2(f_max), n_bins, base=2)
         self.filter_order = 2
         self.nyq = 0.5 * self.sample_rate
         self.filters = []
@@ -98,8 +96,9 @@ class IIRSpect:
             )
             self.filters.append(coeff_array)
 
-    def apply_sos_and_max_filter(self, x: np.ndarray, coeff_array: np.ndarray,
-                                 num_windows: int) -> np.ndarray:
+    def apply_sos_and_max_filter(
+        self, x: np.ndarray, coeff_array: np.ndarray, num_windows: int
+    ) -> np.ndarray:
         """
         Apply a single SOS bandpass filter and take the max-absolute value
         within each hop frame.
@@ -123,7 +122,7 @@ class IIRSpect:
         for j in range(num_windows):
             start = j * self.hop_length
             start_past = max(0, start + self.view_to_the_past)
-            segment = filtered_signal[start_past:start + self.hop_length]
+            segment = filtered_signal[start_past : start + self.hop_length]
             output_max_filt_signal.append(np.max(np.abs(segment)))
         return np.array(output_max_filt_signal)
 

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 This module contains pretrained pytorch models.
-checkpoints in assets. 
+checkpoints in assets.
 loaded in matchers and online_matchers.
 """
 
@@ -14,6 +14,7 @@ try:
     from torch.nn import TransformerEncoder, TransformerEncoderLayer
     from torch.nn.modules.normalization import LayerNorm
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -24,10 +25,7 @@ import numpy as np
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, 
-                 dim_model: int, 
-                 dropout_p: float, 
-                 max_len: int) -> None:
+    def __init__(self, dim_model: int, dropout_p: float, max_len: int) -> None:
         super().__init__()
 
         self.dropout = nn.Dropout(dropout_p)

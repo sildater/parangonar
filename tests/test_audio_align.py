@@ -26,6 +26,7 @@ from tests import MATCH_FILES
 
 try:
     from numba import jit  # noqa: F401  (just probes availability)
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -34,6 +35,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Synthetic-audio helper
 # ---------------------------------------------------------------------------
+
 
 def _sine_audio_from_score_note_array(
     score_note_array: np.ndarray,
@@ -108,7 +110,10 @@ def _sine_audio_from_score_note_array(
 # Test class
 # ---------------------------------------------------------------------------
 
-@unittest.skipUnless(NUMBA_AVAILABLE, "numba not installed; audio DP tests require numba")
+
+@unittest.skipUnless(
+    NUMBA_AVAILABLE, "numba not installed; audio DP tests require numba"
+)
 class TestAudioAlignment(unittest.TestCase):
     """Tests for AudioToScoreMatcher and AudioToScoreMatcherLimited."""
 

@@ -12,7 +12,6 @@ from scipy.spatial.distance import euclidean, cdist
 from .metrics import cdist_local, element_of_set_metric
 from ..decorators import numba_jit as jit
 
-
 # DTW / DP classes
 
 
@@ -45,11 +44,13 @@ class WeightedDynamicTimeWarping(object):
         self.metric = metric
         self.cdist_fun = cdist_fun
 
-    def __call__(self, 
-                 X: np.ndarray, 
-                 Y: np.ndarray, 
-                 return_matrices: bool=False, 
-                 return_cost: bool=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_matrices: bool = False,
+        return_cost: bool = False,
+    ):
         """
         Parameters
         ----------
@@ -78,10 +79,9 @@ class WeightedDynamicTimeWarping(object):
         )
         return out
 
-    def from_distance_matrix(self, 
-                             pwD: np.ndarray, 
-                             return_matrices: bool=False, 
-                             return_cost: bool=False):
+    def from_distance_matrix(
+        self, pwD: np.ndarray, return_matrices: bool = False, return_cost: bool = False
+    ):
         """
             Parameters
         ----------
@@ -127,9 +127,7 @@ class DynamicTimeWarping(object):
     """
 
     def __init__(
-        self, 
-        metric: Callable = euclidean, 
-        cdist_fun: Callable = cdist
+        self, metric: Callable = euclidean, cdist_fun: Callable = cdist
     ) -> None:
         self.metric = metric
         self.cdist_fun = cdist_fun
@@ -363,7 +361,7 @@ def weighted_dtw_forward_and_backward(
             bestiprev = -1
             bestjprev = -1
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
                 if previ >= 0 and prevj >= 0:
@@ -518,9 +516,7 @@ def dtw_dmatrix_from_pairwise_dmatrix(D: np.ndarray) -> np.ndarray:
 
 
 def cdist_dtw_single_loop(
-    arr1: np.ndarray, 
-    arr2: np.ndarray, 
-    metric: Callable
+    arr1: np.ndarray, arr2: np.ndarray, metric: Callable
 ) -> np.ndarray:
     """
 
@@ -626,7 +622,7 @@ def flexdtw_forward_and_backward(
             bestiprev = -1
             bestjprev = -1
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
                 if previ >= 0 and prevj >= 0:
@@ -704,8 +700,7 @@ def flexdtw_forward_and_backward(
 
 
 def flexdtw_dmatrix_from_pairwise_dmatrix(
-    pwD: np.ndarray, 
-    directional_weights: np.ndarray = np.array([1, 1, 1])
+    pwD: np.ndarray, directional_weights: np.ndarray = np.array([1, 1, 1])
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     compute felxDTW cost matrix,
@@ -762,10 +757,7 @@ def flexdtw_dmatrix_from_pairwise_dmatrix(
 
 
 def flexdtw_backtracking(
-    D: np.ndarray, 
-    B: np.ndarray, 
-    S: np.ndarray, 
-    buffer: int = 1
+    D: np.ndarray, B: np.ndarray, S: np.ndarray, buffer: int = 1
 ) -> np.ndarray:
     """
     Decode path from the accumulated dtw cost matrix,

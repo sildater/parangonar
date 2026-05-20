@@ -3,6 +3,7 @@
 """
 This module includes tests for alignment utilities.
 """
+
 import unittest
 import numpy as np
 from parangonar import (

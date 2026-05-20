@@ -3,6 +3,7 @@
 """
 This module contains alignment utilities.
 """
+
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 from partitura.utils.music import ensure_notearray
 import partitura
@@ -364,10 +365,11 @@ def notewise_to_onsetwise(
     return onsetwise_inputs
 
 
-def expand_grace_notes(note_array: np.ndarray, 
-                       backwards_time: float = 0.2) -> np.ndarray:
+def expand_grace_notes(
+    note_array: np.ndarray, backwards_time: float = 0.2
+) -> np.ndarray:
     """
-    expand the duration of gracenotes in a note_array and 
+    expand the duration of gracenotes in a note_array and
     reset their onset by a timespan called backwards_time
     """
     grace_note_onsets = np.unique(
@@ -386,7 +388,9 @@ def expand_grace_notes(note_array: np.ndarray,
     return note_array
 
 
-def convert_grace_to_insertions(alignment: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def convert_grace_to_insertions(
+    alignment: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
     relabel all ornament alignments as insertions
     """

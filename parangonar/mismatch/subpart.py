@@ -3,6 +3,7 @@
 """
 This module contains methods to align subparts of a performance.
 """
+
 import numpy as np
 from ..dp.nwtw import SubPartDynamicProgramming
 import partitura as pt
@@ -22,9 +23,7 @@ class SubPartMatcher(object):
         return pt.score.Score(bass_line)
 
     def preprocess_performance(
-        self, 
-        pna: np.ndarray, 
-        sna: np.ndarray
+        self, pna: np.ndarray, sna: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         max_score_pitch = np.max(sna["pitch"])
         min_score_pitch = np.min(sna["pitch"])
@@ -73,10 +72,7 @@ class SubPartMatcher(object):
         return alignment
 
     def from_note_arrays(
-        self, 
-        sna: np.ndarray, 
-        pna_original: np.ndarray, 
-        preprocess_pna: bool = True
+        self, sna: np.ndarray, pna_original: np.ndarray, preprocess_pna: bool = True
     ) -> List[Dict[str, Any]]:
         """
         compute subpart alignment from note arrays.
@@ -103,10 +99,7 @@ class SubPartMatcher(object):
         return alignment
 
     def __call__(
-        self, 
-        score_path: str, 
-        performance_path: str, 
-        preprocess_pna: bool = True
+        self, score_path: str, performance_path: str, preprocess_pna: bool = True
     ) -> List[Dict[str, Any]]:
         """
         compute subpart alignment from score

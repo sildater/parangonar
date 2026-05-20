@@ -3,6 +3,7 @@
 """
 This module contains pairwise distance metrics and other DP helpers.
 """
+
 from typing import Union, Set, List, Callable, Tuple
 import numpy as np
 from ..decorators import numba_jit as jit
@@ -15,7 +16,9 @@ def element_of_metric(vec1: np.ndarray, vec2: np.ndarray) -> float:
     return 1 - np.sum(vec2 == vec1)
 
 
-def element_of_set_metric(element_: Union[int, float], set_: Set[Union[int, float]]) -> float:
+def element_of_set_metric(
+    element_: Union[int, float], set_: Set[Union[int, float]]
+) -> float:
     """
     metric that evaluates occurence of an element in a set
     """
@@ -25,7 +28,9 @@ def element_of_set_metric(element_: Union[int, float], set_: Set[Union[int, floa
         return 1.0
 
 
-def element_of_set_metric_se(set_: Set[Union[int, float]], element_: Union[int, float]) -> float:
+def element_of_set_metric_se(
+    set_: Set[Union[int, float]], element_: Union[int, float]
+) -> float:
     """
     metric that evaluates occurence of an element in a set
     """
@@ -43,9 +48,7 @@ def l2(vec1: np.ndarray, vec2: np.ndarray) -> float:
 
 
 def invert_matrix(
-    S: np.ndarray, 
-    inversion: str = "reciprocal", 
-    positive: bool = False
+    S: np.ndarray, inversion: str = "reciprocal", positive: bool = False
 ) -> np.ndarray:
     """
     simple converter from similarity to distance matrix
@@ -74,11 +77,7 @@ def dnw(vec1: np.ndarray, vec2: np.ndarray) -> float:
     return dn * dampening_factor
 
 
-def cdist_local(
-    arr1: np.ndarray, 
-    arr2: np.ndarray, 
-    metric: Callable
-) -> np.ndarray:
+def cdist_local(arr1: np.ndarray, arr2: np.ndarray, metric: Callable) -> np.ndarray:
     """
     compute array of pairwise distances between
     the elements of two arrays given a metric
@@ -109,10 +108,7 @@ def cdist_local(
 
 @jit(nopython=True)
 def bounded_recursion(
-    prev_val: float, 
-    min_val: float = 0, 
-    max_val: float = 10, 
-    slope_at_min: float = 1
+    prev_val: float, min_val: float = 0, max_val: float = 10, slope_at_min: float = 1
 ) -> float:
     """
     a recursive function which when starting at min_val,

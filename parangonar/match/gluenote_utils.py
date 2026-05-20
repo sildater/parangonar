@@ -3,25 +3,31 @@
 """
 utilities for the thegluenote
 """
+
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 import numpy as np
 
 try:
     from symusic import Score, Note, Track
+
     SYMUSIC_AVAILABLE = True
 except ImportError:
     SYMUSIC_AVAILABLE = False
+
     # Create dummy classes for type hints
     class Score:
         pass
+
     class Note:
         @staticmethod
         def from_numpy(**kwargs):
             raise ImportError(
                 "symusic is not installed. Please install it with: pip install parangonar[accelerated]"
             )
+
     class Track:
         pass
+
 
 from ..dp.dtw import WDTW
 from ..dp.metrics import invert_matrix
@@ -145,7 +151,7 @@ def stretch(
 
 
 def velocity_and_duration_agnostic_note_info(
-    note_info: Dict[str, np.ndarray]
+    note_info: Dict[str, np.ndarray],
 ) -> Dict[str, np.ndarray]:
     new_duration = np.full_like(note_info["duration"], 100)
     new_velocity = np.full_like(note_info["velocity"], 63)
@@ -208,10 +214,10 @@ def note_array_to_symusic_score(note_array: np.ndarray) -> Score:
 
 
 def get_local_path_from_confidence_matrix(
-    confidence_matrix: np.ndarray
+    confidence_matrix: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, bool, bool]:
     path = get_path_from_confidence_matrix(confidence_matrix)
-    (new_path, starting_path, ending_path, startpoints, endpoints) = get_path_endpoints(
+    new_path, starting_path, ending_path, startpoints, endpoints = get_path_endpoints(
         path, confidence_matrix.shape, cutoff=1
     )
 

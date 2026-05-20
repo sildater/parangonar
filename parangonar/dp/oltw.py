@@ -103,7 +103,7 @@ class OLTW(object):
 
         self.ref_pointer += self.w  # window of ref shifted at start
         self.acc_dist_matrix = np.full((self.w, self.w), np.inf)
-        self.acc_dist_matrix[0, 0] = 0.0 
+        self.acc_dist_matrix[0, 0] = 0.0
         self.acc_len_matrix = np.zeros((self.w, self.w))
         self.queue_non_empty = True
         self.local_both_dist = np.zeros((self.w, self.w))
@@ -117,13 +117,7 @@ class OLTW(object):
         offset_y = max(self.input_pointer - self.w, 0)
         return np.array([offset_x, offset_y])
 
-    def update_ref_direction(self, 
-                             dist, 
-                             new_acc, 
-                             new_len_acc, 
-                             wx, 
-                             wy, 
-                             d):
+    def update_ref_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
         update_x0 = wx - d
         for i in range(d):
             for j in range(wy):
@@ -155,13 +149,7 @@ class OLTW(object):
                     new_len_acc[update_x0 + i, j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_input_direction(self, 
-                               dist, 
-                               new_acc, 
-                               new_len_acc, 
-                               wx, 
-                               wy, 
-                               d):
+    def update_input_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
         update_y0 = wy - d
         for i in range(wx):
             for j in range(d):
@@ -193,13 +181,7 @@ class OLTW(object):
                     new_len_acc[i, update_y0 + j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_both_direction(self, 
-                              dist, 
-                              new_acc, 
-                              new_len_acc, 
-                              wx, 
-                              wy, 
-                              d):
+    def update_both_direction(self, dist, new_acc, new_len_acc, wx, wy, d):
         for i in range(wx):
             for j in range(wy):
                 local_dist = dist[i, j]
@@ -230,13 +212,7 @@ class OLTW(object):
                     new_len_acc[i, j] = 1 + len_compares[local_direction]
         return new_acc, new_len_acc
 
-    def update_both_direction_new(self, 
-                                  dist, 
-                                  new_acc, 
-                                  new_len_acc, 
-                                  wx, 
-                                  wy, 
-                                  d):
+    def update_both_direction_new(self, dist, new_acc, new_len_acc, wx, wy, d):
         for j in range(wy - d, wy):
             new_acc[0, j] = dist[0, j] * self.directional_weights[2] + new_acc[0, j - 1]
             new_len_acc[0, j] = 1 + new_len_acc[0, j - 1]
@@ -463,6 +439,7 @@ class SL_OLTW(object):
     for update with __call__ and .run() API.
     inspired by Matchmaker OnlineTimeWarpingArzt.
     """
+
     def __init__(
         self,
         reference_features: Optional[List[Any]] = None,
@@ -493,17 +470,17 @@ class SL_OLTW(object):
         self.input_features = list()
 
     def initialize(self) -> None:
-        self.init_position: int = 0 # score/reference 
-        self.current_position: int = 0 # score/reference/playhead pointer
+        self.init_position: int = 0  # score/reference
+        self.current_position: int = 0  # score/reference/playhead pointer
         self.positions: List[int] = []
         self._warping_path: List = []
         self.global_cost_matrix: NDArray[np.float32] = (
-            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32) 
+            np.full((self.N_ref + 1, 2), np.inf, dtype=np.float32)
         ).astype(np.float32)
         self.global_path_length_matrix: NDArray[np.float32] = (
-            np.zeros((self.N_ref + 1, 2), dtype=np.float32) 
+            np.zeros((self.N_ref + 1, 2), dtype=np.float32)
         ).astype(np.float32)
-        self.input_index: int = 0 # input pointer
+        self.input_index: int = 0  # input pointer
         if self.queue is not None:
             self.queue_non_empty: bool = True
         else:
@@ -511,7 +488,7 @@ class SL_OLTW(object):
 
     @property
     def warping_path(self) -> np.ndarray:
-        wp = (np.array(self._warping_path).T).astype(np.int32) # [shape=(2, T)]
+        wp = (np.array(self._warping_path).T).astype(np.int32)  # [shape=(2, T)]
         return wp
 
     def get_window(self) -> Tuple[int, int]:
@@ -523,14 +500,10 @@ class SL_OLTW(object):
     def __call__(self, input: np.ndarray) -> int:
         self.step(input)
         return self.current_position
-    
-    def update_loop(self,
-                    window_start,
-                    window_end,
-                    min_index
-        ):
-        i = window_start # score idx
-        j = self.input_index # performance idx
+
+    def update_loop(self, window_start, window_end, min_index):
+        i = window_start  # score idx
+        j = self.input_index  # performance idx
         min_cost = np.inf
 
         if i == j == 0:
@@ -539,40 +512,41 @@ class SL_OLTW(object):
             self.global_path_length_matrix[1, 1] = 0
             min_cost = 0
             min_index = 0
-            
+
         while i < window_end:
             if not (i == j == 0):
                 min_local_cost = np.inf
                 min_local_path_len = 1
                 for d_idx, direction in enumerate(self.directions):
-                    (istep, jstep) = direction
-                    previ = i - istep # score
+                    istep, jstep = direction
+                    previ = i - istep  # score
                     # prevj = j - jstep # performance
                     jlocal = 1 - jstep
                     input_f = self.input_features[j]
                     ref_f = self.reference_features[i]
-                    prev_path_len = self.global_path_length_matrix[previ + 1, jlocal] # global matrices are shifted by 1 in score direction
+                    prev_path_len = self.global_path_length_matrix[
+                        previ + 1, jlocal
+                    ]  # global matrices are shifted by 1 in score direction
                     prev_cost = self.global_cost_matrix[previ + 1, jlocal]
                     if prev_cost < np.inf:
-                        local_dist = self.cdist_metric(ref_f,input_f)
+                        local_dist = self.cdist_metric(ref_f, input_f)
 
                         cost = (
-                            prev_cost * prev_path_len 
+                            prev_cost * prev_path_len
                             + local_dist * self.directional_weights[d_idx]
                         ) / (prev_path_len + 1)
-                 
 
                         if cost < min_local_cost:
                             min_local_cost = cost
                             min_local_path_len = 1 + prev_path_len
 
-                self.global_cost_matrix[i+1, 1] = min_local_cost
-                self.global_path_length_matrix[i+1, 1] = min_local_path_len
+                self.global_cost_matrix[i + 1, 1] = min_local_cost
+                self.global_path_length_matrix[i + 1, 1] = min_local_path_len
 
                 if min_local_cost < min_cost:
                     min_cost = min_local_cost
                     min_index = i
-    
+
             i = i + 1
 
         # rotate the columns for reuse
@@ -582,19 +556,17 @@ class SL_OLTW(object):
         self.global_path_length_matrix[:, 1] = np.inf
 
         return min_index
-        
+
     def step(self, input_features):
         """
         Update the current position and the warping path.
         """
-        self.input_features += input_features 
+        self.input_features += input_features
         window_start, window_end = self.get_window()
         min_index = window_start
 
         min_index = self.update_loop(
-            window_start=window_start,
-            window_end=window_end,
-            min_index=min_index
+            window_start=window_start, window_end=window_end, min_index=min_index
         )
 
         # adapt current_position: do not go backwards,
@@ -604,14 +576,14 @@ class SL_OLTW(object):
         else:
             self.current_position = min(
                 max(self.current_position, min_index),
-                self.current_position + self.max_run_count
+                self.current_position + self.max_run_count,
             )
 
         self._warping_path.append((self.current_position, self.input_index))
         # update input index
         self.input_index += 1
 
-    def run(self) -> np.ndarray: 
+    def run(self) -> np.ndarray:
         """
         Run the online alignment process in an offline loop.
         """
@@ -647,10 +619,6 @@ class SL_OLTW(object):
     def window_index(self) -> int:
         return self.current_position
 
-    
-
-
-
 
 if __name__ == "__main__":
     RANGE_L = 6
@@ -676,10 +644,10 @@ if __name__ == "__main__":
         cdist_fun=cdist_local,
         cdist_metric=element_of_set_metric_se,
     )
-    p = o1.run(verbose = True)
+    p = o1.run(verbose=True)
     print("path 1\n", p)
 
-    print("*"*50)
+    print("*" * 50)
     queue2 = Queue()
     for tt in t:
         queue2.put([tt])
@@ -691,6 +659,6 @@ if __name__ == "__main__":
         directional_weights=np.array([1.05, 1, 1.05]),
         cdist_metric=element_of_set_metric_se,
     )
-    
+
     p2 = o2.run()
     print("path 2\n", p2)

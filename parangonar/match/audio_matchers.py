@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _prepare_score(s_array: np.ndarray) -> tuple:
     """
     Convert a structured score note array into onset-grouped pitch-set
@@ -135,7 +136,9 @@ def _compute_audio_features(
 
     # Normalise onset features
     iirlspec4_row_max = iirlspec4.max(axis=1, keepdims=True)
-    iirlspec4_norm = iirlspec4 / np.where(iirlspec4_row_max == 0, 1.0, iirlspec4_row_max)
+    iirlspec4_norm = iirlspec4 / np.where(
+        iirlspec4_row_max == 0, 1.0, iirlspec4_row_max
+    )
 
     # Normalise spectrogram features
     iirspec_row_max = iirspec.max(axis=1, keepdims=True)
@@ -456,14 +459,23 @@ class AudioToScoreMatcher:
                 frame_rate=self.frame_rate,
             )
             if estimated is not None:
-                est_start_sec, est_end_sec, est_first_frame, est_last_frame, n_frames = estimated
+                (
+                    est_start_sec,
+                    est_end_sec,
+                    est_first_frame,
+                    est_last_frame,
+                    n_frames,
+                ) = estimated
                 slice_start = est_first_frame
                 slice_end = est_last_frame + 1
                 logger.info(
                     "AudioToScoreMatcher: estimated audio window %.3f s – %.3f s "
                     "(frames %d – %d of %d, frame_rate=%d Hz).",
-                    est_start_sec, est_end_sec,
-                    est_first_frame, est_last_frame, n_frames,
+                    est_start_sec,
+                    est_end_sec,
+                    est_first_frame,
+                    est_last_frame,
+                    n_frames,
                     self.frame_rate,
                 )
             else:
@@ -481,9 +493,7 @@ class AudioToScoreMatcher:
 
         # --- initial beat-period estimate ---
         # frames per score beat  (audio_frames / score_beats)
-        bp_average = (slice_end - slice_start) / (
-            unique_onsets[-1] - unique_onsets[0]
-        )
+        bp_average = (slice_end - slice_start) / (unique_onsets[-1] - unique_onsets[0])
 
         # --- run DP ---
         _D, _B, _BP, path = self.dp_algo(
@@ -673,14 +683,23 @@ class AudioToScoreMatcherLimited:
                 frame_rate=self.frame_rate,
             )
             if estimated is not None:
-                est_start_sec, est_end_sec, est_first_frame, est_last_frame, n_frames = estimated
+                (
+                    est_start_sec,
+                    est_end_sec,
+                    est_first_frame,
+                    est_last_frame,
+                    n_frames,
+                ) = estimated
                 slice_start = est_first_frame
                 slice_end = est_last_frame + 1
                 logger.info(
                     "AudioToScoreMatcherLimited: estimated audio window %.3f s – %.3f s "
                     "(frames %d – %d of %d, frame_rate=%d Hz).",
-                    est_start_sec, est_end_sec,
-                    est_first_frame, est_last_frame, n_frames,
+                    est_start_sec,
+                    est_end_sec,
+                    est_first_frame,
+                    est_last_frame,
+                    n_frames,
                     self.frame_rate,
                 )
             else:
@@ -696,9 +715,7 @@ class AudioToScoreMatcherLimited:
         onsets_slice = onsets[:, slice_start:slice_end]
         spec_slice = spec[:, slice_start:slice_end]
 
-        bp_average = (slice_end - slice_start) / (
-            unique_onsets[-1] - unique_onsets[0]
-        )
+        bp_average = (slice_end - slice_start) / (unique_onsets[-1] - unique_onsets[0])
 
         _D, _B, _BP, path = self.dp_algo(
             onsets=onsets_slice,

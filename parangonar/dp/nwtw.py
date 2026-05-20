@@ -3,6 +3,7 @@
 """
 Implementation of Needleman Wunsch and derived algorithms
 """
+
 from typing import Tuple, Union, List, Callable, Optional, Dict, Any
 import numpy as np
 from collections import defaultdict
@@ -52,9 +53,9 @@ class NWDistanceMatrix(object):
         else:
             return self.val_dict[i, j]
 
-    def __setitem__(self, 
-                    indices: Tuple[int, int], 
-                    values: Tuple[float, Tuple[int, int], int]) -> None:
+    def __setitem__(
+        self, indices: Tuple[int, int], values: Tuple[float, Tuple[int, int], int]
+    ) -> None:
         if indices[0] > self.xdim:
             self.xdim = indices[0]
         if indices[1] > self.ydim:
@@ -92,9 +93,7 @@ class NeedlemanWunsch(object):
     Needleman-Wunsch algorithm for aligning sequences.
     """
 
-    def __init__(self, 
-                 metric: Callable=euclidean, 
-                 gamma: float=0.1):
+    def __init__(self, metric: Callable = euclidean, gamma: float = 0.1):
         self.metric = metric
         self.gamma = gamma
 
@@ -159,9 +158,7 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
     Needleman-Wunsch Dynamic Time Warping as introduced by Grachten et al.
     """
 
-    def __init__(self, 
-                 metric: Callable = euclidean, 
-                 gamma: float = 0.1) -> None:
+    def __init__(self, metric: Callable = euclidean, gamma: float = 0.1) -> None:
         super().__init__(metric=metric, gamma=gamma)
 
     def __call__(
@@ -269,7 +266,11 @@ class WeightedNeedlemanWunschTimeWarping(object):
         self,
         directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
         directional_penalties: np.ndarray = np.array([1, 0, 1]),
-        directional_distances: List[np.ndarray] = [np.array([]), np.array([[0, 0]]), np.array([])],
+        directional_distances: List[np.ndarray] = [
+            np.array([]),
+            np.array([[0, 0]]),
+            np.array([]),
+        ],
         directional_weights: np.ndarray = np.array([1, 1, 1]),
         metric: Callable = euclidean,
         cdist_fun: Callable = cdist,
@@ -283,11 +284,13 @@ class WeightedNeedlemanWunschTimeWarping(object):
         self.directional_penalties = directional_penalties
         self.directional_distances = directional_distances
 
-    def __call__(self, 
-                 X: np.ndarray, 
-                 Y: np.ndarray, 
-                 return_matrices: bool=True, 
-                 return_cost: bool=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_matrices: bool = True,
+        return_cost: bool = False,
+    ):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
 
@@ -315,7 +318,11 @@ def weighted_nwdtw_forward_and_backward(
     directional_weights: np.ndarray = np.array([1, 1, 1]),
     directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
     directional_penalties: np.ndarray = np.array([1, 0, 1]),
-    directional_distances: List[np.ndarray] = [np.array([]), np.array([[0, 0]]), np.array([])],
+    directional_distances: List[np.ndarray] = [
+        np.array([]),
+        np.array([[0, 0]]),
+        np.array([]),
+    ],
     gamma: float = 1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -367,7 +374,7 @@ def weighted_nwdtw_forward_and_backward(
             bestiprev = -1
             bestjprev = -1
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
                 if previ >= 0 and prevj >= 0:
@@ -453,11 +460,13 @@ class OriginalNeedlemanWunsch(object):
         self.threshold = threshold
         self.smith_waterman = smith_waterman
 
-    def __call__(self, 
-                 X: np.ndarray, 
-                 Y: np.ndarray, 
-                 return_matrices: bool=True, 
-                 return_cost: bool=False):
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        return_matrices: bool = True,
+        return_cost: bool = False,
+    ):
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
 
@@ -539,7 +548,7 @@ def onw_forward_and_backward(
             maxGain = -np.inf
             maxidx = -1
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
                 if previ >= 0 and prevj >= 0:
@@ -625,9 +634,7 @@ class BoundedSmithWaterman(object):
         self.gain_max_val = gain_max_val
         self.gain_slope_at_min = gain_slope_at_min
 
-    def __call__(self, 
-                 X: np.ndarray, 
-                 Y: np.ndarray)->Tuple[np.ndarray, np.ndarray]:
+    def __call__(self, X: np.ndarray, Y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         X = np.asanyarray(X)
         Y = np.asanyarray(Y)
 
@@ -649,8 +656,7 @@ class BoundedSmithWaterman(object):
         out = (cost, B)
         return out
 
-    def from_similarity_matrix(self, 
-                               pwD: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def from_similarity_matrix(self, pwD: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         cost, B = bsw_forward(
             pwD,
             self.gamma_penalty,
@@ -722,7 +728,7 @@ def bsw_forward(
             maxPrevGain = -np.inf
             gamma = gamma_match if pwD[i - 1, j - 1] < threshold else gamma_penalty
             for directionsidx, direction in enumerate(directions):
-                (istep, jstep) = direction
+                istep, jstep = direction
                 previ = i - istep
                 prevj = j - jstep
                 if previ >= 0 and prevj >= 0:
@@ -776,9 +782,7 @@ class SubPartDynamicProgramming(object):
     """
 
     def __init__(
-        self, 
-        weights: np.ndarray = np.array([1, 0.5, 2]), 
-        tempo_factor: float = 0.1
+        self, weights: np.ndarray = np.array([1, 0.5, 2]), tempo_factor: float = 0.1
     ) -> None:
         self.weights = weights
         self.tempo_factor = tempo_factor

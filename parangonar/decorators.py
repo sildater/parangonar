@@ -10,9 +10,9 @@ from typing import Any, Callable
 from functools import wraps
 import warnings
 
-
 try:
     from numba import jit as numba_jit
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -20,16 +20,17 @@ except ImportError:
     def numba_jit(func, *args, **kwargs):
         """
         Fallback decorator when numba is not available.
-        
+
         This decorator acts as an identity function - it returns the original
         function unchanged. This allows code to run without numba acceleration,
         albeit slower.
-        
+
         Usage:
             @jit(nopython=True)
             def my_function(x):
                 return x + 1
         """
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             warnings.warn(
@@ -37,8 +38,8 @@ except ImportError:
                 f"without JIT compilation, which may be slower. Install with: "
                 f"pip install parangonar[accelerated]",
                 RuntimeWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             return func(*args, **kwargs)
-        return wrapper
 
+        return wrapper

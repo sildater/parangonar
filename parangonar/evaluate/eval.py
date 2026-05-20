@@ -5,6 +5,7 @@ This module contains methods to evaluate
 - note matching via f scores for match, insertion, and deletion
 - score following / temporal alignment via asynchrony
 """
+
 from typing import List, Dict, Tuple, Union, Optional, Any
 import numpy as np
 import partitura as pt
@@ -93,7 +94,7 @@ def evaluate_score_following(
     performance_note_array: np.ndarray,
     score_note_array: np.ndarray,
     gt_alignment: List[Dict[str, Any]],
-    alignment:List[Dict[str, Any]],
+    alignment: List[Dict[str, Any]],
     out_dir: str = "",
     file_suffix: str = "",
     write_to_file: bool = False,

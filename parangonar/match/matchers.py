@@ -3,6 +3,7 @@
 """
 This module contains full note matcher classes.
 """
+
 import logging
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
@@ -12,6 +13,7 @@ from collections import defaultdict
 try:
     import miditok
     import symusic
+
     MIDI_AVAILABLE = True
 except ImportError:
     MIDI_AVAILABLE = False
@@ -37,10 +39,7 @@ def _time_tuples_array(
     """
     if len(time_tuples_by_onset) >= 2:
         arr = np.array(
-            [
-                (tup, time_tuples_by_onset[tup])
-                for tup in time_tuples_by_onset.keys()
-            ]
+            [(tup, time_tuples_by_onset[tup]) for tup in time_tuples_by_onset.keys()]
         )
     else:
         arr = None
@@ -51,6 +50,7 @@ def _time_tuples_array(
         if arr is None:
             arr = np.array([[0.0, 0.0], [1.0, 1.0]])
     return arr[arr[:, 0].argsort()]
+
 
 from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
@@ -87,7 +87,9 @@ class SimplestGreedyMatcher(object):
     Create alignment in MAPS format (dict) by greedy pitch matching from performance and score note_array
     """
 
-    def __call__(self, score_note_array: np.ndarray, performance_note_array: np.ndarray):
+    def __call__(
+        self, score_note_array: np.ndarray, performance_note_array: np.ndarray
+    ):
         alignment = []
         s_aligned = []
         p_aligned = []
@@ -413,9 +415,7 @@ class OnsetGreedyMatcher(object):
 
 
 def unique_alignments(
-    xs: np.ndarray, 
-    ys: np.ndarray, 
-    threshold: Optional[float] = None
+    xs: np.ndarray, ys: np.ndarray, threshold: Optional[float] = None
 ) -> List[Tuple[int, int]]:
     """
     From two sequences of numbers, return the unique ID
@@ -508,7 +508,12 @@ def pitch_and_onset_wise_times(
     performance_note_array: np.ndarray,
     score_note_array: np.ndarray,
     alignment_ids: List[Tuple[int, int]],
-) -> Tuple[Dict[float, List[float]], Dict[float, float], Dict[int, List[Tuple[float, float]]], np.ndarray]:
+) -> Tuple[
+    Dict[float, List[float]],
+    Dict[float, float],
+    Dict[int, List[Tuple[float, float]]],
+    np.ndarray,
+]:
     """
     from a performed MIDI note to score onset alignment
     create a list of tuples of (score_onset, performance_onset)
@@ -679,7 +684,12 @@ def pitch_and_onset_wise_times_ornament(
     performance_note_array: np.ndarray,
     score_note_array: np.ndarray,
     alignment_ids: List[Tuple[int, int]],
-) -> Tuple[Dict[float, List[float]], Dict[float, float], Dict[int, List[Tuple[float, float]]], np.ndarray]:
+) -> Tuple[
+    Dict[float, List[float]],
+    Dict[float, float],
+    Dict[int, List[Tuple[float, float]]],
+    np.ndarray,
+]:
     """
     from a performed MIDI note to score onset alignment
     create a list of tuples of (score_onset, performance_onset)
@@ -773,7 +783,6 @@ def pitch_and_onset_wise_times_ornament(
         else:
             time_tuples_by_onset[s_onset] = list(sorted_times)
 
-
     unique_time_tuples_by_onset = {
         s_onset: np.min(time_tuples_by_onset[s_onset])
         for s_onset in time_tuples_by_onset.keys()
@@ -792,7 +801,12 @@ def pitch_and_onset_wise_times_simple(
     performance_note_array: np.ndarray,
     score_note_array: np.ndarray,
     alignment_ids: List[Tuple[int, int]],
-) -> Tuple[Dict[float, List[float]], Dict[float, float], Dict[int, List[Tuple[float, float]]], np.ndarray]:
+) -> Tuple[
+    Dict[float, List[float]],
+    Dict[float, float],
+    Dict[int, List[Tuple[float, float]]],
+    np.ndarray,
+]:
     """
     from a performed MIDI note to score onset alignment
     create a list of tuples of (score_onset, performance_onset)
@@ -891,7 +905,12 @@ def pitch_and_onset_wise_times_rev(
     score_note_array: np.ndarray,
     alignment_ids: List[Tuple[int, int]],
     backwards: bool = True,
-) -> Tuple[Dict[float, List[float]], Dict[float, float], Dict[int, List[Tuple[float, float]]], np.ndarray]:
+) -> Tuple[
+    Dict[float, List[float]],
+    Dict[float, float],
+    Dict[int, List[Tuple[float, float]]],
+    np.ndarray,
+]:
     """
     from a performed MIDI note to score onset alignment
     create a list of tuples of (score_onset, performance_onset)
@@ -1938,7 +1957,7 @@ class DualDTWNoteMatcher(object):
             onset_alignment_path_reverse,
             onset_threshold=1.5,
             process_ornaments=process_ornaments,
-        )  
+        )
 
         return global_alignment
 
@@ -1970,7 +1989,7 @@ class TheGlueNoteMatcher(object):
         checkpoint = torch.load(
             THEGLUENOTE_CHECKPOINT,
             weights_only=True,
-            map_location=torch.device(self.device)
+            map_location=torch.device(self.device),
         )
         self.model = TheGlueNote(device=self.device)
         self.model.load_state_dict(checkpoint["state_dict"])

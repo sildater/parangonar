@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-This module contains dynamic programming methods 
+This module contains dynamic programming methods
 for sequence alignment.
 """
 
