@@ -14,7 +14,10 @@ from partitura.musicanalysis.performance_codec import (
 
 import numpy as np
 import os
-from scipy.interpolate import interp1d
+import logging
+from partitura.utils.generic import interp1d
+
+logger = logging.getLogger(__name__)
 
 ################################### PARANGONADA EXPORT ###################################
 
@@ -296,7 +299,7 @@ def beat_times_from_matched_score(
     max_beat = np.floor(x.max())  # +node_interval
 
     if start_beat is not None:
-        print("first node at ", start_beat, " first beat at ", min_beat)
+        logger.debug("first node at %s, first beat at %s", start_beat, min_beat)
         min_beat = start_beat
 
     sbeat_times = np.arange(min_beat, max_beat, node_interval)
