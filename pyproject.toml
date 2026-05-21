@@ -25,6 +25,7 @@ dependencies = [
   "scipy",
   "matplotlib",
   "partitura",
+  "joblib"
 ]
 
 [project.optional-dependencies]

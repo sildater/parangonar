@@ -25,4 +25,9 @@ from .audio_matchers import (
     AudioToScoreMatcherLimited,
 )
 from .utils import node_array, save_parangonada_csv
-from .pretrained_models import AlignmentTransformer, TheGlueNote
+
+try:
+    from .pretrained_models import AlignmentTransformer, TheGlueNote
+except ImportError:
+    AlignmentTransformer = None
+    TheGlueNote = None

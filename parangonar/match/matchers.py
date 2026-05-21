@@ -9,49 +9,16 @@ from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
 from partitura.utils.generic import interp1d
 from collections import defaultdict
-
 try:
     import miditok
     import symusic
-
     MIDI_AVAILABLE = True
 except ImportError:
     MIDI_AVAILABLE = False
-
 import time
 from itertools import combinations
 from scipy.special import binom
-
-
-def _time_tuples_array(
-    time_tuples_by_onset,
-    fallbacks=(),
-):
-    """Build an Nx2 (score_onset, perf_onset) array, sorted by score onset.
-
-    interp1d below requires at least two anchor points. When the
-    refinement dict has 0 or 1 entries (degenerate inputs, e.g. very few
-    performance notes vs the score, or pitch-disjoint pairs) we fall back
-    to the supplied candidate arrays, and finally to an identity map.
-    This prevents IndexError on ``arr[:, 0].argsort()`` when ``arr`` is
-    empty (1-D), which crashes the matcher rather than producing a
-    degenerate-but-usable alignment.
-    """
-    if len(time_tuples_by_onset) >= 2:
-        arr = np.array(
-            [(tup, time_tuples_by_onset[tup]) for tup in time_tuples_by_onset.keys()]
-        )
-    else:
-        arr = None
-        for cand in fallbacks:
-            if cand is not None and len(cand) >= 2:
-                arr = np.asarray(cand)
-                break
-        if arr is None:
-            arr = np.array([[0.0, 0.0], [1.0, 1.0]])
-    return arr[arr[:, 0].argsort()]
-
-
+## local imports
 from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
 from .. import THEGLUENOTE_CHECKPOINT
@@ -61,7 +28,6 @@ from .gluenote_utils import (
     minimal_note_array_from_symusic,
     note_array_to_symusic_score,
     format_score_performance_alignment,
-    format_note_array_alignment,
     DEFAULT_NOTE,
     get_local_path_from_confidence_matrix,
     get_input_to_ref_map,
@@ -70,13 +36,15 @@ from .preprocessors import (
     mend_note_alignments,
     cut_note_arrays,
     alignment_times_from_dtw,
-    note_per_ons_encoding,
 )
 
-from .pretrained_models import AlignmentTransformer, TheGlueNote
-import torch
+try:
+    from .pretrained_models import TheGlueNote
+except ImportError:
+    TheGlueNote = None
 
 logger = logging.getLogger(__name__)
+
 
 
 ################################### SYMBOLIC MATCHERS ###################################
@@ -1212,6 +1180,35 @@ def na_within(
             return masked_note_array
 
 
+def _time_tuples_array(
+    time_tuples_by_onset,
+    fallbacks=(),
+):
+    """Build an Nx2 (score_onset, perf_onset) array, sorted by score onset.
+
+    interp1d below requires at least two anchor points. When the
+    refinement dict has 0 or 1 entries (degenerate inputs, e.g. very few
+    performance notes vs the score, or pitch-disjoint pairs) we fall back
+    to the supplied candidate arrays, and finally to an identity map.
+    This prevents IndexError on ``arr[:, 0].argsort()`` when ``arr`` is
+    empty (1-D), which crashes the matcher rather than producing a
+    degenerate-but-usable alignment.
+    """
+    if len(time_tuples_by_onset) >= 2:
+        arr = np.array(
+            [(tup, time_tuples_by_onset[tup]) for tup in time_tuples_by_onset.keys()]
+        )
+    else:
+        arr = None
+        for cand in fallbacks:
+            if cand is not None and len(cand) >= 2:
+                arr = np.asarray(cand)
+                break
+        if arr is None:
+            arr = np.array([[0.0, 0.0], [1.0, 1.0]])
+    return arr[arr[:, 0].argsort()]
+
+
 class CleanOrnamentMatcher(object):
     """
     Create alignment in MAPS format (dict)
@@ -1972,24 +1969,26 @@ class TheGlueNoteMatcher(object):
                 "The 'TheGlueNoteMatcher' class requires symusic and miditok, but they are not installed. "
                 "Please install them with: pip install parangonar[accelerated]"
             )
+        try:
+            import torch
+            self.torch = torch
+        except ImportError:
+            raise ImportError(
+                "The 'TheGlueNoteMatcher' class requires torch, but it is not installed. "
+                "Please install it with: pip install parangonar[accelerated]"
+            )
         self.prepare_model()
         self.tokenizer = miditok.Structured()
         self.unmatched_idx = 100000000
         self.matching_threshold = (0.5,)
 
     def prepare_model(self) -> None:
-        try:
-            import torch
-        except ImportError:
-            raise ImportError(
-                "The 'TheGlueNoteMatcher' class requires torch, but it is not installed. "
-                "Please install it with: pip install parangonar[accelerated]"
-            )
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        checkpoint = torch.load(
+        
+        self.device = self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
+        checkpoint = self.torch.load(
             THEGLUENOTE_CHECKPOINT,
             weights_only=True,
-            map_location=torch.device(self.device),
+            map_location=self.torch.device(self.device),
         )
         self.model = TheGlueNote(device=self.device)
         self.model.load_state_dict(checkpoint["state_dict"])
@@ -2101,7 +2100,7 @@ class TheGlueNoteMatcher(object):
                 s1 = np.concatenate((np.zeros(4), s1)).astype(int)
                 s2 = np.concatenate((np.zeros(4), s2)).astype(int)
                 sequences = (
-                    torch.from_numpy(np.concatenate((s1, s2)).astype(int))
+                    self.torch.from_numpy(np.concatenate((s1, s2)).astype(int))
                     .contiguous()
                     .unsqueeze(0)
                 )
