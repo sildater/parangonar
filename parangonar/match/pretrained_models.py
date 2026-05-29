@@ -14,6 +14,14 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn.modules.normalization import LayerNorm
 import torch.nn.functional as F
 
+# Referenced by `if not TORCH_AVAILABLE:` guards in AlignmentTransformer.__init__
+# and TheGlueNote.__init__ — without this definition those guards raise NameError
+# (regression first shipped in 3.3.2). The imports above are unconditional, so
+# reaching this line implies torch is importable; truly-optional torch would
+# also require wrapping the imports in try/except and guarding the nn.Module
+# class bodies, which is a larger refactor left to a follow-up.
+TORCH_AVAILABLE = True
+
 
 # ALIGNMENT TRANSFORMER
 
