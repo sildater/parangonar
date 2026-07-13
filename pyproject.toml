@@ -26,6 +26,7 @@ dependencies = [
   "matplotlib",
   "partitura",
   "joblib",
+  "pandas",
 ]
 
 [project.optional-dependencies]
