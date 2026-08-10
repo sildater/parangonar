@@ -2063,20 +2063,20 @@ class SwitchSnapOuterHMM(object):
     def save_alignment_plot(
         self,
         performance_file_name: str,
-        results_dir: str = None,
+        out_dir: str = None,
         ):
         '''
         Save only the alignment plot.
         Parameters:
         -----------
-            results_dir: The directory where the plot should be saved.
+            out_dir: The directory where the plot should be saved.
 
             performance_file_name: The name of the performance file, used for naming the plot.
         '''
         
         # Check if results directory exists, if not create it
-        if results_dir is not None and not os.path.exists(results_dir):
-            os.makedirs(results_dir)
+        if out_dir is not None and not os.path.exists(out_dir):
+            os.makedirs(out_dir)
 
         alignment_to_plot = self.snapped_alignment_dict.copy()
 
@@ -2108,7 +2108,7 @@ class SwitchSnapOuterHMM(object):
         plt.legend(fontsize=32, markerscale=4, loc='upper right')
         plt.grid()
 
-        if results_dir is not None:
-            plt.savefig(os.path.join(results_dir, plot_filename))
+        if out_dir is not None:
+            plt.savefig(os.path.join(out_dir, plot_filename))
         else:
             plt.show()
