@@ -2193,7 +2193,9 @@ class SwitchingOuterHMMMatcher(object):
         gamma: float = np.log(10),
         score_metadata_folder_path: Optional[str] = None,
         score_identifier: Optional[str] = None,
-        output_dir: Optional[str] = None
+        output_dir: Optional[str] = None,
+        consider_parallel_sections: bool = True,
+        section_omit_reason: Optional[str] = None
         ) -> None:
 
         '''
@@ -2208,6 +2210,10 @@ class SwitchingOuterHMMMatcher(object):
             A score_identifier is required if score_metadata_folder_path is provided.
 
         output_dir: Optional path to a directory where the matcher can save alignment files. Provide this to store a match file that stores section and omitted section information. If not provided, the matcher will not save any alignment files.
+        
+        consider_parallel_sections: Boolean flag to indicate whether to align performance sections to multiple score sections that are musically identical.
+        
+        section_omit_reason: Optional string to provide a reason for omitting a section. This is used when saving the match file to indicate why a section was omitted. If not provided, "not_performed" will be saved.
         '''
 
         self.transitions = transitions
@@ -2229,7 +2235,11 @@ class SwitchingOuterHMMMatcher(object):
         # Score metadata folder for caching pre-computed score metadata.
         self.score_metadata_folder = score_metadata_folder_path
         self.score_identifier = score_identifier
+
         self.output_dir = output_dir
+        self.section_omit_reason = section_omit_reason
+
+        self.consider_parallel_sections = consider_parallel_sections
 
         if self.score_metadata_folder is not None and self.score_identifier is None:
             raise ValueError(
@@ -2320,7 +2330,7 @@ class SwitchingOuterHMMMatcher(object):
             np.savez(metadata_fn, ids_association_dict=ids_association_dict, minimum_ref_id_dict=minimum_ref_id_dict, onset_beat_associations_dict=onset_beat_associations_dict, min_ref_onset_beat_dict=min_ref_onset_beat_dict, diagonals_beats_to_num_dict=diagonals_beats_to_num_dict, diagonal_borders_dict=diagonal_borders_dict, num_diagonals=num_diagonals)
             print(f"Metadata saved to {metadata_fn}.")
 
-        switchSnapOuterHMM = SwitchSnapOuterHMM(
+        self.switchSnapOuterHMM = SwitchSnapOuterHMM(
             reference_features=sna,
             performance_note_array=pna,
             score_measure_number_map=score_measure_number_map,
@@ -2347,32 +2357,37 @@ class SwitchingOuterHMMMatcher(object):
             diagonals_beats_to_num_dict=diagonals_beats_to_num_dict,
             diagonal_borders_dict=diagonal_borders_dict,
             average_notes_per_measure=avg_notes_per_measure,
+            section_omit_reason=self.section_omit_reason,
         )
 
-        alignment, alignment_dict = switchSnapOuterHMM.run()
+        alignment, alignment_dict = self.switchSnapOuterHMM.run()
 
         print("Post-processing alignment to clean quick to-fro jumps...")
-        processed_alignment, processed_alignment_dict = switchSnapOuterHMM.clean_quick_to_fro_jumps()
+        processed_alignment, processed_alignment_dict = self.switchSnapOuterHMM.clean_quick_to_fro_jumps()
                         
-        snapped_alignment, snapped_alignment_dict = switchSnapOuterHMM.snap_to_most_likely_diagonal()
+        snapped_alignment, snapped_alignment_dict = self.switchSnapOuterHMM.snap_to_most_likely_diagonal()
 
-        print("Creating alignment with musically identical segments...")
-        switchSnapOuterHMM.create_parallel_alignment()
+        output_alignment = snapped_alignment
+
+        if self.consider_parallel_sections:
+            print("Creating alignment with musically identical segments...")
+            self.switchSnapOuterHMM.create_parallel_alignment()
+            output_alignment = self.switchSnapOuterHMM.parallel_alignment
 
         print("Creating sections. The section lines and omitted section lines will only be printed if you save the match file using the output_dir parameter.")
-        sections = switchSnapOuterHMM.create_section_lines()
-        omitted_sections = switchSnapOuterHMM.create_omitted_section_lines()
+        sections = self.switchSnapOuterHMM.create_section_lines()
+        omitted_sections = self.switchSnapOuterHMM.create_omitted_section_lines()
 
         if self.output_dir is not None:
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
 
-            switchSnapOuterHMM.save_parangonada_csv(
+            self.switchSnapOuterHMM.save_parangonada_csv(
                 self.output_dir,     
             )
 
             pt.save_match(
-                alignment=switchSnapOuterHMM.parallel_alignment,
+                alignment=output_alignment,
                 performance_data=performance,
                 score_data=score_part,
                 out=os.path.join(self.output_dir, f"{self.score_identifier}_parallel_alignment.match"),
@@ -2384,6 +2399,6 @@ class SwitchingOuterHMMMatcher(object):
 
         print("Alignment complete!")
 
-        return switchSnapOuterHMM.parallel_alignment
+        return output_alignment
 
 

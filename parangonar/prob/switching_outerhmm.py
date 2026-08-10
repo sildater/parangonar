@@ -687,6 +687,7 @@ class SwitchSnapOuterHMM(object):
             diagonals_beats_to_num_dict: Optional[dict[tuple[float, float], int]] = None,
             diagonal_borders_dict: Optional[dict[int, tuple[float, float]]] = None,
             average_notes_per_measure: int = None,
+            section_omit_reason: Optional[str] = None,
         ) -> None:
         '''
         INITIALIZE THE OUTER HMM MATCHER
@@ -758,6 +759,14 @@ class SwitchSnapOuterHMM(object):
             onset_beat_associations_dict: A dictionary mapping reference score onset beats to sets of equivalent onset beats.
 
             min_ref_onset_beat_dict: A dictionary mapping equivalent score onset beats to their corresponding minimum reference score onset beats.    
+
+            diagonals_beats_to_num_dict: A dictionary mapping diagonal borders (tuples of start and end beats) to their corresponding diagonal numbers.
+
+            diagonal_borders_dict: A dictionary mapping diagonal numbers to their corresponding diagonal borders (tuples of start and end beats).
+
+            average_notes_per_measure: The average number of notes per measure in the score. This is used for snapping to diagonals.
+
+            section_omit_reason: A string indicating the reason for omitting a section in the performance.
 
         '''
 
@@ -836,6 +845,7 @@ class SwitchSnapOuterHMM(object):
 
         ######### SECTION VARIABLES #########
         self.sections = []
+        self.section_omit_reason = section_omit_reason
 
         ######### EVALUATION VARIABLES #########
         self.evaluate_post_processed_alignment = evaluate_post_processed_alignment
@@ -1457,6 +1467,9 @@ class SwitchSnapOuterHMM(object):
         next_unique_onset = None
         omitted_section = None
 
+        if self.section_omit_reason is None:
+            self.section_omit_reason = 'not_performed'
+
         for i, beat in enumerate(omitted_beats):
             sid = str(self.reference_features[self.reference_features['onset_beat'] == beat]['id'][0])
             sid_duration_beat_array = self.reference_features[self.reference_features['onset_beat'] == beat]['duration_beat']
@@ -1483,7 +1496,7 @@ class SwitchSnapOuterHMM(object):
                 omitted_section['end_in_beats_unfolded'] = beat_offset
                 omitted_section['start_in_beats_original'] = start_in_beats_original
                 omitted_section['end_in_beats_original'] = end_in_beats_original
-                omitted_section['section_attr_list'] = ['not_rehearsed']
+                omitted_section['section_attr_list'] = [self.section_omit_reason]
                 last_beat = beat
                 next_unique_onset = self.unique_score_onsets[self.unique_score_onsets > beat][0] if len(self.unique_score_onsets[self.unique_score_onsets > beat]) > 0 else self.unique_score_onsets[-1]
                 continue
@@ -1504,7 +1517,7 @@ class SwitchSnapOuterHMM(object):
                 omitted_section['end_in_beats_unfolded'] = beat_offset
                 omitted_section['start_in_beats_original'] = start_in_beats_original
                 omitted_section['end_in_beats_original'] = end_in_beats_original
-                omitted_section['section_attr_list'] = ['not_rehearsed']
+                omitted_section['section_attr_list'] = [self.section_omit_reason]
                 last_beat = beat
                 next_unique_onset = self.unique_score_onsets[self.unique_score_onsets > beat][0] if len(self.unique_score_onsets[self.unique_score_onsets > beat]) > 0 else self.unique_score_onsets[-1]
 
@@ -2047,71 +2060,10 @@ class SwitchSnapOuterHMM(object):
         print("---------")
         print()
 
-
-    def save_alignment_plot_old(
-        self,
-        results_dir: str,
-        rehearsal_file_name: str,
-        score_file_name: str,
-        evaluate_processed_alignment: bool = True,
-    ):
-        '''
-        Save only the alignment plot.
-        Parameters:
-        -----------
-            results_dir: The directory where the plot should be saved.
-
-            rehearsal_file_name: The name of the rehearsal file, used for naming the plot.
-
-            score_file_name: The name of the score file, used for naming the plot.
-
-            evaluate_processed_alignment: Whether to save the plot for the processed alignment after cleaning quick to-fro jumps. 
-                If False, the plot for the original alignment is saved. Default is True.
-        '''
-        
-        # Check if results directory exists, if not create it
-        if not os.path.exists(results_dir):
-            os.makedirs(results_dir)
-
-        if evaluate_processed_alignment:
-            alignment_to_plot = self.processed_alignment_dict
-        else:
-            alignment_to_plot = self.alignment_dict
-
-        # convert the Performance Note IDs in alignment_to_plot to integers for plotting, after removing the 'n' prefix
-        alignment_to_plot_int = {int(pid[1:]): beat for pid, beat in alignment_to_plot.items()}
-
-        print("Saving plot...")
-        # print("---------")
-        # print()
-
-        
-        plt.figure(figsize=(20, 15))
-        if self.annotation_beat_dict is not None:
-
-            # convert the Performance Note IDs in annotation_beat_dict to integers for plotting, after removing the 'n' prefix
-            annotation_beat_dict_int = {int(pid[1:]): beat for pid, beat in self.annotation_beat_dict.items()}
-            plt.scatter(list(annotation_beat_dict_int.keys()), list(annotation_beat_dict_int.values()), label='Annotation', color='yellow', s=10, alpha=0.3)
-            plt.xlim(0, max(max(alignment_to_plot_int.keys()), max(annotation_beat_dict_int.keys())) + 10)
-            plot_filename = f"{rehearsal_file_name}_alignment_result_plot.png"
-        else:
-            plt.xlim(0, max(alignment_to_plot_int.keys()) + 10)
-            plot_filename = f"{rehearsal_file_name}_alignment_plot.png"
-        plt.scatter(list(alignment_to_plot_int.keys()), list(alignment_to_plot_int.values()), label='Predicted Alignment', color='blue', s=7, alpha=0.1)
-        plt.ylim(0, max(alignment_to_plot_int.values()) + 10)
-        plt.xlabel('Performance Note ID')
-        plt.ylabel('Score Time in Beats')
-        plt.title('Rehearsal: ' + rehearsal_file_name + ' and Score: ' + score_file_name)
-        plt.legend()
-        plt.grid()
-        plt.savefig(os.path.join(results_dir, plot_filename))
-
     def save_alignment_plot(
         self,
-        results_dir: str,
-        rehearsal_file_name: str,
-        score_file_name: str,
-        ablation: Optional[str] = None,
+        performance_file_name: str,
+        results_dir: str = None,
         ):
         '''
         Save only the alignment plot.
@@ -2119,24 +2071,14 @@ class SwitchSnapOuterHMM(object):
         -----------
             results_dir: The directory where the plot should be saved.
 
-            rehearsal_file_name: The name of the rehearsal file, used for naming the plot.
-
-            score_file_name: The name of the score file, used for naming the plot.
-
-            evaluate_processed_alignment: Whether to save the plot for the processed alignment after cleaning quick to-fro jumps. 
-                If False, the plot for the original alignment is saved. Default is True.
+            performance_file_name: The name of the performance file, used for naming the plot.
         '''
         
         # Check if results directory exists, if not create it
-        if not os.path.exists(results_dir):
+        if results_dir is not None and not os.path.exists(results_dir):
             os.makedirs(results_dir)
 
-        if ablation == 'vanilla':
-            alignment_to_plot = self.alignment_dict.copy()
-        elif ablation == 'switching_OPHMM':
-            alignment_to_plot = self.processed_alignment_dict.copy()
-        else:
-            alignment_to_plot = self.snapped_alignment_dict.copy()
+        alignment_to_plot = self.snapped_alignment_dict.copy()
 
         # convert the Performance Note IDs in alignment_to_plot to integers
         alignment_to_plot_int = {int(pid[1:]): beat for pid, beat in alignment_to_plot.items()}
@@ -2145,59 +2087,8 @@ class SwitchSnapOuterHMM(object):
 
         plt.figure(figsize=(20, 15))
 
-        if self.annotation_beat_dict is not None:
-
-            # --- Yellow annotation points ---
-            annotation_beat_dict_int = {int(pid[1:]): beat for pid, beat in self.annotation_beat_dict.items()}
-            plt.scatter(
-                list(annotation_beat_dict_int.keys()),
-                list(annotation_beat_dict_int.values()),
-                label='Ground Truth Annotations',
-                color='darkred',
-                s=14,
-                alpha=0.7
-            )
-
-            # --- Lightgreen associated (non-main-diagonal) points ---
-            annot_x_values = []
-            annot_y_values = []
-
-            for pid, beat in self.annotation_beat_dict.items():
-                pid_int = int(pid[1:])
-
-                if beat in self.min_ref_onset_beat_dict:
-                    lookup_beat = self.min_ref_onset_beat_dict[beat]
-
-                    # remove the main mapping explicitly
-                    associated_beats = self.onset_beat_associations_dict[lookup_beat]
-
-                    for plot_beat in associated_beats:
-                        if plot_beat != beat:
-                            annot_x_values.append(pid_int)
-                            annot_y_values.append(plot_beat)
-
-            plt.scatter(
-                annot_x_values,
-                annot_y_values,
-                label='Musically Identical to Ground Truth Annotations',
-                color='lightgreen',
-                s=14,
-                alpha=1
-            )
-
-            plt.xlim(
-                0,
-                max(
-                    max(alignment_to_plot_int.keys()),
-                    max(annotation_beat_dict_int.keys())
-                ) + 10
-            )
-
-            plot_filename = f"{rehearsal_file_name}_alignment_result_plot.png"
-
-        else:
-            plt.xlim(0, max(alignment_to_plot_int.keys()) + 10)
-            plot_filename = f"{rehearsal_file_name}_alignment_plot.png"
+        plt.xlim(0, max(alignment_to_plot_int.keys()) + 10)
+        plot_filename = f"{performance_file_name}_alignment_plot.png"
 
 
         # --- Blue predicted alignment ---
@@ -2212,12 +2103,12 @@ class SwitchSnapOuterHMM(object):
         )
 
         plt.ylim(0, max(alignment_to_plot_int.values()) + 10)
-        #plt.ylim(0, 250)
         plt.xlabel('Rehearsal Note Event', fontsize=32)
         plt.ylabel('Score Time in Beats', fontsize=32)
-        #plt.title('Rehearsal: ' + rehearsal_file_name + ' and Score: ' + score_file_name, fontsize=26)
-        #plt.title(f"Alignment Plot for a rehearsal of Rachmaninoff's Piano Concerto No. 3", fontsize=26)
         plt.legend(fontsize=32, markerscale=4, loc='upper right')
         plt.grid()
 
-        plt.savefig(os.path.join(results_dir, plot_filename))
+        if results_dir is not None:
+            plt.savefig(os.path.join(results_dir, plot_filename))
+        else:
+            plt.show()
