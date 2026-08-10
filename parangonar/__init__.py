@@ -34,6 +34,7 @@ from .match import (
     TheGlueNoteMatcher,
     AudioToScoreMatcher,
     AudioToScoreMatcherLimited,
+    SwitchingOuterHMMMatcher,
 )
 
 from .match import (
@@ -67,6 +68,7 @@ __all__ = [
     "OnlinePureTransformerMatcher",
     "TOLTWMatcher",
     "OLTWMatcher",
+    "SwitchingOuterHMMMatcher",
     "RepeatIdentifier",
     "SubPartMatcher",
     "fscore_alignments",
