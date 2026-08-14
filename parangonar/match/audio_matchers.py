@@ -144,7 +144,9 @@ def _compute_audio_features(
         onset_activations_single_row = _onsets_from_spectral_rise_fractions(iirspec)    
         onset_activations_single_row = _locally_normalize_across_vector(onset_activations_single_row)
         onset_activations = np.tile(onset_activations_single_row, (iirspec.shape[0], 1))
-
+    else:
+        raise ValueError(f"onset extractor must be one of 'superflux' and 'spectral_rise'")
+        
 
     # Invert so that "low cost" = "high activation" in the DP
     onsets = 1.0 - onset_activations
@@ -158,7 +160,6 @@ def _onsets_from_superflux(iirlspec):
     # half wave rectified diff
     iirlspec4 = np.maximum(0, iirlspec[:, 1:] - iirlspec3[:, :-1])
     return iirlspec4
-
 
 
 def _onsets_from_spectral_rise_fractions(spec, history_length=5, rise_db=2.0,
