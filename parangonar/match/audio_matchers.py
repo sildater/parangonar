@@ -134,7 +134,8 @@ def _compute_audio_features(
     iirlspec = np.log1p(log_multiplier * iirspec)
 
     # Normalise spectrogram features
-    iirlspec_norm = _normalize_across_f_bins(iirlspec)
+    # iirlspec_norm = _normalize_across_f_bins(iirlspec)
+    iirspec_norm = _normalize_across_f_bins(iirspec)
 
     if onset_extractor == "superflux":
         onset_activations_raw = _onsets_from_superflux(iirlspec)
@@ -152,7 +153,7 @@ def _compute_audio_features(
 
     # Invert so that "low cost" = "high activation" in the DP
     onsets = 1.0 - onset_activations
-    spec = 1.0 - iirlspec_norm
+    spec = 1.0 - iirspec_norm
 
     return onsets, spec
 
@@ -455,6 +456,7 @@ class AudioToScoreMatcher:
         score_note_array: np.ndarray,
         sample_rate: Optional[int] = None,
         audio_window: Optional[tuple] = None,
+        return_everything: Optional[bool] = False,
     ) -> List[Dict[str, Any]]:
         """
         Align ``audio_np`` to ``score_note_array``.
@@ -582,8 +584,10 @@ class AudioToScoreMatcher:
             slice_start=slice_start,
             score_note_array=score_note_array,
         )
-
-        return alignment, _D, onsets, spec, path
+        if return_everything:
+            return alignment, _D, onsets, spec, path
+        else:
+            return alignment
 
 
 class AudioToScoreMatcherLimited:
