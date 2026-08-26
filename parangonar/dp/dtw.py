@@ -4,13 +4,26 @@
 This module contains dynamic time warping methods.
 """
 
-from typing import Tuple, Union, Callable, Optional
+from typing import Tuple, Callable
 import numpy as np
 from scipy.spatial.distance import euclidean, cdist
 
 # helpers and metrics
 from .metrics import cdist_local, element_of_set_metric
 from ..decorators import numba_jit as jit
+
+ReturnType02 = (
+    tuple[float]
+    | tuple[float, np.ndarray]
+    | tuple[float, np.ndarray, np.ndarray]
+)
+ReturnType04 = (
+    tuple[np.ndarray]
+    | tuple[np.ndarray, np.ndarray,np.ndarray,np.ndarray]
+    | tuple[np.ndarray, float]
+    | tuple[np.ndarray, np.ndarray,np.ndarray,np.ndarray,float]
+)
+
 
 # DTW / DP classes
 
@@ -138,7 +151,7 @@ class DynamicTimeWarping(object):
         Y: np.ndarray,
         return_path: bool = True,
         return_cost_matrix: bool = False,
-    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
+    ) -> ReturnType02:
         X = np.asanyarray(X, dtype=float)
         Y = np.asanyarray(Y, dtype=float)
         # Compute pairwise distance
@@ -182,7 +195,7 @@ class DynamicTimeWarpingSingleLoop(object):
         Y: np.ndarray,
         return_path: bool = True,
         return_cost_matrix: bool = False,
-    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
+    ) -> ReturnType02:
         # Compute the pw distances and accumulated cost matrix
         dtwd_matrix = cdist_dtw_single_loop(X, Y, self.metric)
         # dtwd_matrix = dtw_dmatrix_from_pairwise_dmatrix(D)
@@ -243,7 +256,7 @@ class FlexDynamicTimeWarping(object):
         Y: np.ndarray,
         return_matrices: bool = False,
         return_cost: bool = False,
-    ) -> Union[Tuple[np.ndarray, ...], np.ndarray]:
+    ) -> ReturnType04:
         """
         Parameters
         ----------
@@ -278,7 +291,7 @@ class FlexDynamicTimeWarping(object):
         pwD: np.ndarray,
         return_matrices: bool = False,
         return_cost: bool = False,
-    ) -> Union[Tuple[np.ndarray, ...], np.ndarray]:
+    ) -> ReturnType04:
         """
             Parameters
         ----------

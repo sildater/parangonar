@@ -18,6 +18,13 @@ from .metrics import (
 )
 from ..decorators import numba_jit as jit
 
+ReturnType02 = (
+    tuple[float]
+    | tuple[float, np.ndarray]
+    | tuple[float, np.ndarray, np.ndarray]
+)
+
+
 
 class NWDistanceMatrix(object):
     """
@@ -168,7 +175,7 @@ class NeedlemanWunschDynamicTimeWarping(NeedlemanWunsch):
         return_path: bool = True,
         window: Optional[List[Tuple[int, int]]] = None,
         return_cost_matrix: bool = False,
-    ) -> Union[Tuple[float, np.ndarray, ...], Tuple[float, ...]]:
+    ) -> ReturnType02:
         X = X.astype(float)
         Y = Y.astype(float)
         len_X, len_Y = len(X), len(Y)
@@ -806,7 +813,7 @@ def subpart_DP_forward_and_backward(
     sna: np.ndarray,
     weights: np.ndarray = np.array([1, 0.5, 2]),
     tempo_factor: float = 0.1,
-) -> Tuple[np.ndarray, ...]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Parameters
     ----------
