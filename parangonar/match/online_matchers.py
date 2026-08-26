@@ -9,11 +9,12 @@ from typing import List, Dict, Any, Optional, Callable, Set
 from .. import ALIGNMENT_TRANSFORMER_CHECKPOINT
 import numpy as np
 from collections import defaultdict
+
 try:
     from .pretrained_models import AlignmentTransformer
 except ImportError:
     AlignmentTransformer = None
-    
+
 from .matchers import na_within
 from partitura.utils.generic import interp1d
 from ..dp.t_oltw import T_OLTW, SLT_OLTW
@@ -164,6 +165,7 @@ class OnlineTransformerMatcher(object):
 
         try:
             import torch
+
             self.torch = torch
         except ImportError:
             raise ImportError(
@@ -251,7 +253,9 @@ class OnlineTransformerMatcher(object):
             num_decoder_layers=self.num_decoder_layers,
             dropout_p=self.dropout_p,
         )
-        self.device = self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
+        self.device = self.torch.device(
+            "cuda" if self.torch.cuda.is_available() else "cpu"
+        )
         checkpoint = self.torch.load(
             ALIGNMENT_TRANSFORMER_CHECKPOINT,
             weights_only=True,
@@ -324,7 +328,9 @@ class OnlineTransformerMatcher(object):
             self.torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
         pred_ids = (
-            self.torch.argsort(self.torch.softmax(out.squeeze(1), dim=0)[:, 1], descending=True)
+            self.torch.argsort(
+                self.torch.softmax(out.squeeze(1), dim=0)[:, 1], descending=True
+            )
             .cpu()
             .numpy()
         )
@@ -402,7 +408,11 @@ class OnlineTransformerMatcher(object):
         out = self.model(
             self.torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
-        pred_id = self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=0)[:, 1]).cpu().numpy()
+        pred_id = (
+            self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=0)[:, 1])
+            .cpu()
+            .numpy()
+        )
         new_pred_id = (
             pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
         )
@@ -559,7 +569,9 @@ class OnlineTransformerMatcher(object):
         )
         # softmax is along 0 dimension here, unlike pure transformer
         pred_ids = (
-            self.torch.argsort(self.torch.softmax(out.squeeze(1), dim=0)[:, 1], descending=True)
+            self.torch.argsort(
+                self.torch.softmax(out.squeeze(1), dim=0)[:, 1], descending=True
+            )
             .cpu()
             .numpy()
         )
@@ -653,7 +665,11 @@ class OnlineTransformerMatcher(object):
         out = self.model(
             self.torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
-        pred_id = self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=0)[:, 1]).cpu().numpy()
+        pred_id = (
+            self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=0)[:, 1])
+            .cpu()
+            .numpy()
+        )
         new_pred_id = (
             pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
         )
@@ -834,6 +850,7 @@ class OnlinePureTransformerMatcher(object):
     ) -> None:
         try:
             import torch
+
             self.torch = torch
         except ImportError:
             raise ImportError(
@@ -1094,7 +1111,9 @@ class OnlinePureTransformerMatcher(object):
             num_decoder_layers=6,
             dropout_p=0.1,
         )
-        self.device = self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
+        self.device = self.torch.device(
+            "cuda" if self.torch.cuda.is_available() else "cpu"
+        )
         checkpoint = self.torch.load(
             ALIGNMENT_TRANSFORMER_CHECKPOINT,
             weights_only=True,
@@ -1145,7 +1164,11 @@ class OnlinePureTransformerMatcher(object):
         out = self.model(
             self.torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
-        pred_id = self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
+        pred_id = (
+            self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=1)[:, 1])
+            .cpu()
+            .numpy()
+        )
         new_pred_id = (
             pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
         )
@@ -1219,7 +1242,11 @@ class OnlinePureTransformerMatcher(object):
         out = self.model(
             self.torch.from_numpy(tokenized_score_seq).unsqueeze(0).to(self.device)
         )
-        pred_id = self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=1)[:, 1]).cpu().numpy()
+        pred_id = (
+            self.torch.argmax(self.torch.softmax(out.squeeze(1), dim=1)[:, 1])
+            .cpu()
+            .numpy()
+        )
         new_pred_id = pred_id - len(perf_seq) - 1 + np.max((current_id - 7, 0))
         if self.allow_jump:
             new_pred_id = self.update_lostness_tracker(

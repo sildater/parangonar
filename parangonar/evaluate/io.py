@@ -77,14 +77,15 @@ def convert_alignment_to_list(
     measure_sorting_idx = measure_starts_divs.argsort()
     measure_starts_divs = measure_starts_divs[measure_sorting_idx]
     measures = measures[measure_sorting_idx]
-    
 
     if measure_starts_beats.min() < 0:
-        start_measure_num = 0  
-        full_measure_length_in_divs = measures[1].end.t - measures[1].start.t 
-        anacrusis_measure_length_in_divs = measures[0].end.t - measures[0].start.t 
-        measure_starts_divs[0] -= full_measure_length_in_divs - anacrusis_measure_length_in_divs
-        
+        start_measure_num = 0
+        full_measure_length_in_divs = measures[1].end.t - measures[1].start.t
+        anacrusis_measure_length_in_divs = measures[0].end.t - measures[0].start.t
+        measure_starts_divs[0] -= (
+            full_measure_length_in_divs - anacrusis_measure_length_in_divs
+        )
+
     else:
         start_measure_num = 1
     # start_measure_num = 1

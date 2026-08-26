@@ -13,15 +13,13 @@ from .metrics import cdist_local, element_of_set_metric
 from ..decorators import numba_jit as jit
 
 ReturnType02 = (
-    tuple[float]
-    | tuple[float, np.ndarray]
-    | tuple[float, np.ndarray, np.ndarray]
+    tuple[float] | tuple[float, np.ndarray] | tuple[float, np.ndarray, np.ndarray]
 )
 ReturnType04 = (
     tuple[np.ndarray]
-    | tuple[np.ndarray, np.ndarray,np.ndarray,np.ndarray]
+    | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     | tuple[np.ndarray, float]
-    | tuple[np.ndarray, np.ndarray,np.ndarray,np.ndarray,float]
+    | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]
 )
 
 

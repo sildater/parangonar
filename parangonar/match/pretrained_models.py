@@ -14,7 +14,6 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn.modules.normalization import LayerNorm
 import torch.nn.functional as F
 
-
 # ALIGNMENT TRANSFORMER
 
 

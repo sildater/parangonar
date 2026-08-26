@@ -133,26 +133,29 @@ def _compute_audio_features(
     iirspec = processor(audio_np)
     iirlspec = np.log1p(log_multiplier * iirspec)
 
-
     # Normalise spectrogram features
     iirlspec_norm = _normalize_across_f_bins(iirlspec)
 
     if onset_extractor == "superflux":
-        onset_activations_raw = _onsets_from_superflux(iirlspec)    
+        onset_activations_raw = _onsets_from_superflux(iirlspec)
         onset_activations = _normalize_across_f_bins(onset_activations_raw)
     elif onset_extractor == "spectral_rise":
-        onset_activations_single_row = _onsets_from_spectral_rise_fractions(iirspec)    
-        onset_activations_single_row = _locally_normalize_across_vector(onset_activations_single_row)
+        onset_activations_single_row = _onsets_from_spectral_rise_fractions(iirspec)
+        onset_activations_single_row = _locally_normalize_across_vector(
+            onset_activations_single_row
+        )
         onset_activations = np.tile(onset_activations_single_row, (iirspec.shape[0], 1))
     else:
-        raise ValueError(f"onset extractor must be one of 'superflux' and 'spectral_rise'")
-        
+        raise ValueError(
+            f"onset extractor must be one of 'superflux' and 'spectral_rise'"
+        )
 
     # Invert so that "low cost" = "high activation" in the DP
     onsets = 1.0 - onset_activations
     spec = 1.0 - iirlspec_norm
 
     return onsets, spec
+
 
 def _onsets_from_superflux(iirlspec):
     # compute max filter across vertical 3 neighborhood
@@ -162,14 +165,15 @@ def _onsets_from_superflux(iirlspec):
     return iirlspec4
 
 
-def _onsets_from_spectral_rise_fractions(spec, history_length=5, rise_db=2.0,
-                             noise_floor_db=-70.0, bin_lo=0, bin_hi=None):
+def _onsets_from_spectral_rise_fractions(
+    spec, history_length=5, rise_db=2.0, noise_floor_db=-70.0, bin_lo=0, bin_hi=None
+):
     """
     Spectral rise; ratio of bins that rise above a baseline at the beginning
     of the window, any rise within the window will do
     the spectral rise ratio corresponds to the window center position.
 
-    Inspired by SpectralLevelRise::process()/extractFraction() of 
+    Inspired by SpectralLevelRise::process()/extractFraction() of
     expressive means https://github.com/cannam/expressive-means
     """
     n_bins_total, n_frames = spec.shape
@@ -177,22 +181,21 @@ def _onsets_from_spectral_rise_fractions(spec, history_length=5, rise_db=2.0,
         bin_hi = n_bins_total
 
     rise_ratio = 10.0 ** (rise_db / 10.0)
-    noise_floor_mag = 10.0 ** (noise_floor_db / 20.0) # 0.0003162
+    noise_floor_mag = 10.0 ** (noise_floor_db / 20.0)  # 0.0003162
 
     fractions = []
     offset = history_length // 2
     for offset_idx in range(offset):
         fractions.append(0)
     for start in range(0, n_frames - history_length + 1):
-        window = spec[bin_lo:bin_hi, start:start + history_length]
+        window = spec[bin_lo:bin_hi, start : start + history_length]
         baseline = window[:, 0]
         middle = window[:, 1:-1]  # exclude baseline frame and newest frame
-        if middle.shape[1] == 0: 
-            fractions.append(0.0) 
+        if middle.shape[1] == 0:
+            fractions.append(0.0)
             continue
         risen = np.any(
-            (middle > baseline[:, None] * rise_ratio) &
-            (middle > noise_floor_mag),
+            (middle > baseline[:, None] * rise_ratio) & (middle > noise_floor_mag),
             axis=1,
         )
         fractions.append(risen.mean())
@@ -200,21 +203,20 @@ def _onsets_from_spectral_rise_fractions(spec, history_length=5, rise_db=2.0,
     fractions = fractions[:-offset]
     return np.array(fractions)
 
+
 def _normalize_across_f_bins(spec):
     # Normalise onset features across freq bins
     spec_row_max = spec.max(axis=1, keepdims=True)
-    spec_norm = spec / np.where(
-        spec_row_max == 0, 1.0, spec_row_max
-    )
+    spec_norm = spec / np.where(spec_row_max == 0, 1.0, spec_row_max)
     return spec_norm
 
-def _locally_normalize_across_vector(vec, window = 100):
+
+def _locally_normalize_across_vector(vec, window=100):
     # Normalise onset features across freq bins
-    vec_loc_max = maximum_filter(vec, size=window, mode='reflect')
-    vec_norm = vec / np.where(
-        vec_loc_max == 0, 1.0, vec_loc_max
-    )
+    vec_loc_max = maximum_filter(vec, size=window, mode="reflect")
+    vec_norm = vec / np.where(vec_loc_max == 0, 1.0, vec_loc_max)
     return vec_norm
+
 
 def _estimate_audio_window(
     onsets: np.ndarray,

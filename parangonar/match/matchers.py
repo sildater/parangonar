@@ -9,15 +9,18 @@ from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
 from partitura.utils.generic import interp1d
 from collections import defaultdict
+
 try:
     import miditok
     import symusic
+
     MIDI_AVAILABLE = True
 except ImportError:
     MIDI_AVAILABLE = False
 import time
 from itertools import combinations
 from scipy.special import binom
+
 ## local imports
 from ..dp.dtw import DTW, DTWSL
 from ..dp.nwtw import NW_DTW, NW
@@ -44,7 +47,6 @@ except ImportError:
     TheGlueNote = None
 
 logger = logging.getLogger(__name__)
-
 
 
 ################################### SYMBOLIC MATCHERS ###################################
@@ -1971,6 +1973,7 @@ class TheGlueNoteMatcher(object):
             )
         try:
             import torch
+
             self.torch = torch
         except ImportError:
             raise ImportError(
@@ -1983,8 +1986,10 @@ class TheGlueNoteMatcher(object):
         self.matching_threshold = (0.5,)
 
     def prepare_model(self) -> None:
-        
-        self.device = self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
+
+        self.device = self.torch.device(
+            "cuda" if self.torch.cuda.is_available() else "cpu"
+        )
         checkpoint = self.torch.load(
             THEGLUENOTE_CHECKPOINT,
             weights_only=True,

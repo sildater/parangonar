@@ -19,11 +19,8 @@ from .metrics import (
 from ..decorators import numba_jit as jit
 
 ReturnType02 = (
-    tuple[float]
-    | tuple[float, np.ndarray]
-    | tuple[float, np.ndarray, np.ndarray]
+    tuple[float] | tuple[float, np.ndarray] | tuple[float, np.ndarray, np.ndarray]
 )
-
 
 
 class NWDistanceMatrix(object):
