@@ -127,7 +127,7 @@ Documentation: Note Alignment Utilities
     - partitura.io.exportparangonada.save_parangonada_alignment
     - partitura.io.exportparangonada.save_parangonada_csv
 
-    and a basic interface for saving parangonada-ready csv files is also available in parangonagar:
+    and a basic interface for saving parangonada-ready csv files is also available in parangonar:
     - parangonar.match.save_parangonada_csv
 
     For [(n)ASAP alignments](https://github.com/CPJKU/asap-dataset)

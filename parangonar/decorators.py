@@ -12,6 +12,7 @@ import warnings
 
 try:
     from numba import jit as numba_jit
+
     NUMBA_AVAILABLE = True
 
 except ImportError:
