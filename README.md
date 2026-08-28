@@ -5,6 +5,7 @@ Parangonar
 **Parangonar** contains methods for offline and online note alignment, real-time tracking, offline audio alignment, repeat identification, and sub-part alignment as well as task-agnostic dynamic programming algorithms.
 Note alignments produced by **Parangonar** can be visualized using the web tool [Parangonda](https://sildater.github.io/parangonada/).
 **Parangonar** uses [Partitura](https://github.com/CPJKU/partitura) as file I/O utility.
+**Parangonar** real-time trackers are available through the [Matchmaker](https://github.com/pymatchmaker/matchmaker) interface for real-time usage.
 
 
 Installation
@@ -113,8 +114,6 @@ Documentation: Note Alignment Utilities
     - parangonar.evaluate.plot_alignment_mappings  
 
 2. Alignment Evaluation
-    - parangonar.evaluate.fscore_alignments
-    - parangonar.evaluate.fscore_alignments
     - parangonar.evaluate.fscore_alignments
 
 3. File I/O for note alignments
