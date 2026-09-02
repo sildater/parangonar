@@ -20,6 +20,9 @@ logger = logging.getLogger("parangonar")
 
 #: An example MusicXML file for didactic purposes
 EXAMPLE = str(files("parangonar") / "assets" / "mozart_k265_var1.match")
+EXAMPLE_SCORE = str(files("parangonar") / "assets" / "mozart_k265_var1.musicxml")
+EXAMPLE_MIDI_PERFORMANCE = str(files("parangonar") / "assets" / "mozart_k265_var1.mid")
+
 ALIGNMENT_TRANSFORMER_CHECKPOINT = str(
     files("parangonar") / "assets" / "alignment_transformer_checkpoint.pt"
 )
@@ -34,7 +37,6 @@ from .match import (
     TheGlueNoteMatcher,
     AudioToScoreMatcher,
     AudioToScoreMatcherLimited,
-    SwitchingOuterHMMMatcher,
 )
 
 from .match import (
@@ -45,7 +47,7 @@ from .match import (
 )
 
 
-from .mismatch import RepeatIdentifier, SubPartMatcher
+from .mismatch import RepeatIdentifier, SubPartMatcher, SwitchingOuterHMMMatcher
 from .evaluate import (
     fscore_alignments,
     print_fscore_alignments,

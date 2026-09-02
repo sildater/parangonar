@@ -2062,7 +2062,7 @@ class SwitchSnapOuterHMM(object):
 
     def save_alignment_plot(
         self,
-        performance_file_name: str,
+        performance_file_name: str = None,
         out_dir: str = None,
         ):
         '''
@@ -2078,6 +2078,7 @@ class SwitchSnapOuterHMM(object):
         if out_dir is not None and not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
+
         alignment_to_plot = self.snapped_alignment_dict.copy()
 
         # convert the Performance Note IDs in alignment_to_plot to integers
@@ -2088,8 +2089,6 @@ class SwitchSnapOuterHMM(object):
         plt.figure(figsize=(20, 15))
 
         plt.xlim(0, max(alignment_to_plot_int.keys()) + 10)
-        plot_filename = f"{performance_file_name}_alignment_plot.png"
-
 
         # --- Blue predicted alignment ---
         plt.scatter(
@@ -2108,7 +2107,8 @@ class SwitchSnapOuterHMM(object):
         plt.legend(fontsize=32, markerscale=4, loc='upper right')
         plt.grid()
 
-        if out_dir is not None:
+        if out_dir is not None and performance_file_name is not None:
+            plot_filename = f"{performance_file_name}_alignment_plot.png"
             plt.savefig(os.path.join(out_dir, plot_filename))
         else:
             plt.show()
