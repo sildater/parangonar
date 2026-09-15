@@ -38,6 +38,7 @@ class SwitchingOuterHMMMatcher(object):
         gamma: float = np.log(10),
         score_metadata_folder_path: Optional[str] = None,
         score_identifier: Optional[str] = None,
+        unfold_score: bool = True,
         output_dir: Optional[str] = None,
         output_filename: Optional[str] = None,
         consider_parallel_sections: bool = True,
@@ -83,7 +84,7 @@ class SwitchingOuterHMMMatcher(object):
         # Score metadata folder for caching pre-computed score metadata.
         self.score_metadata_folder = score_metadata_folder_path
         self.score_identifier = score_identifier
-
+        self.unfold_score = unfold_score
         self.output_dir = output_dir
         self.output_filename = output_filename
         self.section_omit_reason = section_omit_reason
@@ -111,7 +112,8 @@ class SwitchingOuterHMMMatcher(object):
             return
 
         score_part = score.parts[0]
-        score_part = pt.score.unfold_part_maximal(score_part)
+        if self.unfold_score:
+            score_part = pt.score.unfold_part_maximal(score_part)
         score_measure_number_map = score_part.measure_number_map
         print("Expanding grace notes in the score...")
         sna = expand_grace_notes_from_local_grace_order(score_part, grace_offset_quarter=1/4, include_metrical_position=True)
