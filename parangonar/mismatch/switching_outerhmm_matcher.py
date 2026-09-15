@@ -39,6 +39,7 @@ class SwitchingOuterHMMMatcher(object):
         score_metadata_folder_path: Optional[str] = None,
         score_identifier: Optional[str] = None,
         output_dir: Optional[str] = None,
+        output_filename: Optional[str] = None,
         consider_parallel_sections: bool = True,
         section_omit_reason: Optional[str] = None
         ) -> None:
@@ -55,6 +56,8 @@ class SwitchingOuterHMMMatcher(object):
             A score_identifier is required if score_metadata_folder_path is provided.
 
         output_dir: Optional path to a directory where the matcher can save alignment files. Provide this to store a match file that stores section and omitted section information. If not provided, the matcher will not save any alignment files.
+        
+        output_filename: Optional filename for the output match file. If not provided, the filename will be generated based on the score_identifier.
         
         consider_parallel_sections: Boolean flag to indicate whether to align performance sections to multiple score sections that are musically identical.
         
@@ -82,6 +85,7 @@ class SwitchingOuterHMMMatcher(object):
         self.score_identifier = score_identifier
 
         self.output_dir = output_dir
+        self.output_filename = output_filename
         self.section_omit_reason = section_omit_reason
 
         self.consider_parallel_sections = consider_parallel_sections
@@ -227,6 +231,14 @@ class SwitchingOuterHMMMatcher(object):
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
 
+            if self.output_filename is None:
+                self.output_filename = f"{self.score_identifier}_alignment.match"
+            else:
+                if self.output_filename.endswith(".match"):
+                    self.output_filename = self.output_filename
+                else:
+                    self.output_filename = f"{self.output_filename}.match"
+
             self.switchSnapOuterHMM.save_parangonada_csv(
                 self.output_dir,     
             )
@@ -235,7 +247,7 @@ class SwitchingOuterHMMMatcher(object):
                 alignment=output_alignment,
                 performance_data=performance,
                 score_data=score_part,
-                out=os.path.join(self.output_dir, f"{self.score_identifier}_parallel_alignment.match"),
+                out=os.path.join(self.output_dir, self.output_filename),
                 mpq=mpq,
                 ppq=ppq,
                 sections=sections,
