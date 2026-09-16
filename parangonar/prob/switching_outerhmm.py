@@ -958,6 +958,9 @@ class SwitchSnapOuterHMM(object):
                                             s_aligned.append(sid)
                                     else:
                                         pid_alignment_map[pid2] = {"label": "insertion", "performance_id": str(pid2)}
+
+                                else:
+                                    pid_alignment_map[pid2] = {"label": "match", "score_id": str(sid), "performance_id": str(pid2)}
                             else: 
                                 # mark both as insertions 
                                 # (since there would definitely be an earlier performance note that is aligned to this score note)
