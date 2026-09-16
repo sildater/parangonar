@@ -151,7 +151,11 @@ class SwitchingOuterHMMMatcher(object):
                     if metadata_score_identifier == self.score_identifier:
                         print(f"Found existing score metadata file {score_metadata_file} for {self.score_identifier}. Loading metadata...")
                         metadata_fn = os.path.join(self.score_metadata_folder, score_metadata_file)
-                        loaded_metadata = np.load(metadata_fn, allow_pickle=True)
+                        try:
+                            loaded_metadata = np.load(metadata_fn, allow_pickle=True)
+                        except Exception as e:
+                            print(f"Error loading metadata file {metadata_fn}: {e}. Starting diagonal length optimization process...")
+                            break
                         ids_association_dict = loaded_metadata['ids_association_dict'].item()
                         minimum_ref_id_dict = loaded_metadata['minimum_ref_id_dict'].item()
                         onset_beat_associations_dict = loaded_metadata['onset_beat_associations_dict'].item()
@@ -175,11 +179,11 @@ class SwitchingOuterHMMMatcher(object):
                 else:
                     optimum_diagonal_length_found = True
 
-        if self.score_metadata_folder is not None and self.score_identifier is not None:
-            # Save the metadata for future use
-            metadata_fn = os.path.join(self.score_metadata_folder, f"{self.score_identifier}_metadata.npz")
-            np.savez(metadata_fn, ids_association_dict=ids_association_dict, minimum_ref_id_dict=minimum_ref_id_dict, onset_beat_associations_dict=onset_beat_associations_dict, min_ref_onset_beat_dict=min_ref_onset_beat_dict, diagonals_beats_to_num_dict=diagonals_beats_to_num_dict, diagonal_borders_dict=diagonal_borders_dict, num_diagonals=num_diagonals)
-            print(f"Metadata saved to {metadata_fn}.")
+            if self.score_metadata_folder is not None and self.score_identifier is not None:
+                # Save the metadata for future use
+                metadata_fn = os.path.join(self.score_metadata_folder, f"{self.score_identifier}_metadata.npz")
+                np.savez(metadata_fn, ids_association_dict=ids_association_dict, minimum_ref_id_dict=minimum_ref_id_dict, onset_beat_associations_dict=onset_beat_associations_dict, min_ref_onset_beat_dict=min_ref_onset_beat_dict, diagonals_beats_to_num_dict=diagonals_beats_to_num_dict, diagonal_borders_dict=diagonal_borders_dict, num_diagonals=num_diagonals)
+                print(f"Metadata saved to {metadata_fn}.")
 
         self.switchSnapOuterHMM = SwitchSnapOuterHMM(
             reference_features=sna,
