@@ -9,3 +9,4 @@ e.g.:
 
 from .repeat_identification import RepeatIdentifier
 from .subpart import SubPartMatcher
+from .switching_outerhmm_matcher import SwitchingOuterHMMMatcher

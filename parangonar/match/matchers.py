@@ -4,9 +4,17 @@
 This module contains full note matcher classes.
 """
 
+import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Set
 import numpy as np
+
+import warnings
+
+import partitura as pt
+
+warnings.filterwarnings("ignore", category=UserWarning, module="partitura")
+
 from partitura.utils.generic import interp1d
 from collections import defaultdict
 
@@ -35,6 +43,7 @@ from .gluenote_utils import (
     get_local_path_from_confidence_matrix,
     get_input_to_ref_map,
 )
+
 from .preprocessors import (
     mend_note_alignments,
     cut_note_arrays,
