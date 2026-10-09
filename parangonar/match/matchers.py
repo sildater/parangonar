@@ -12,6 +12,7 @@ import numpy as np
 import warnings
 
 import partitura as pt
+
 warnings.filterwarnings("ignore", category=UserWarning, module="partitura")
 
 from partitura.utils.generic import interp1d
@@ -2167,6 +2168,3 @@ class TheGlueNoteMatcher(object):
             midi_0, midi_1, return_formatted_alignment=False
         )
         return alignment
-
-
-

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def create_match_from_alignment_dict(alignment_dict, sids):
     pids = list(alignment_dict.keys())
     pids_int = [int(pid[1:]) for pid in pids]
@@ -9,24 +10,31 @@ def create_match_from_alignment_dict(alignment_dict, sids):
         pid = f"n{pid_int}"
         sid = alignment_dict.get(pid)
         if sid is not None:
-            match.append({
-                "label": "match",
-                "score_id": sid,
-                "performance_id": pid,
-            })
+            match.append(
+                {
+                    "label": "match",
+                    "score_id": sid,
+                    "performance_id": pid,
+                }
+            )
         else:
-            match.append({
-                "label": "insertion",
-                "performance_id": pid,
-            })
+            match.append(
+                {
+                    "label": "insertion",
+                    "performance_id": pid,
+                }
+            )
 
     for sid in sids:
         if sid not in alignment_dict.values():
-            match.append({
-                "label": "deletion",
-                "score_id": sid,
-            })
+            match.append(
+                {
+                    "label": "deletion",
+                    "score_id": sid,
+                }
+            )
     return match
+
 
 def calc_avg_notes_per_measure(sna):
     notes_per_measure_list = []
@@ -34,11 +42,11 @@ def calc_avg_notes_per_measure(sna):
     note_count = 0
 
     for idx, row in enumerate(sna):
-        if row['onset_beat'] < 0:
+        if row["onset_beat"] < 0:
             continue
 
-        if row['rel_onset_div'] == 0:
-            if row['is_grace']:
+        if row["rel_onset_div"] == 0:
+            if row["is_grace"]:
                 note_count += 1
                 continue
             if still_measure_beat:
@@ -54,8 +62,9 @@ def calc_avg_notes_per_measure(sna):
     avg_notes_per_measure = round(np.mean(notes_per_measure_list))
     return avg_notes_per_measure
 
+
 def calc_avg_unique_onsets_per_measure(sna):
-    unique_onsets = np.unique(sna['onset_beat'])
+    unique_onsets = np.unique(sna["onset_beat"])
     onsets_per_measure_list = []
     onset_count = 0
     num_of_measures = 0
@@ -64,9 +73,9 @@ def calc_avg_unique_onsets_per_measure(sna):
         if onset < 0:
             continue
 
-        row = sna[sna['onset_beat'] == onset][0]
-        is_grace = row['is_grace']
-        is_measure_beat = row['rel_onset_div'] == 0
+        row = sna[sna["onset_beat"] == onset][0]
+        is_grace = row["is_grace"]
+        is_measure_beat = row["rel_onset_div"] == 0
 
         if is_measure_beat:
             if not is_grace:
@@ -112,10 +121,11 @@ def find_diagonal_runs_with_coords(matrix, min_length=100):
 
     return results
 
+
 def remove_subset_runs(runs):
     # Sort by descending length (longest first)
     runs_sorted = sorted(runs, key=len, reverse=True)
-    
+
     filtered = []
     filtered_sets = []
 
@@ -134,9 +144,10 @@ def remove_subset_runs(runs):
 
     return filtered
 
+
 def remove_overlaps_with_simple_trimming(runs, min_length=20):
     runs_sorted = sorted(runs, key=len, reverse=True)
-    
+
     accepted = []
     occupied = set()
 
@@ -169,26 +180,34 @@ def remove_overlaps_with_simple_trimming(runs, min_length=20):
 
     return accepted
 
+
 def is_subrange(sub_start, sub_end, super_start, super_end):
     return super_start <= sub_start and sub_end <= super_end
 
+
 def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_limit=50):
-    s_pitches = sna['pitch']
+    s_pitches = sna["pitch"]
     score_ssm = np.zeros((len(s_pitches), len(s_pitches)))
     for i in range(len(s_pitches)):
         for j in range(len(s_pitches)):
             score_ssm[i, j] = 1 if s_pitches[i] == s_pitches[j] else 0
 
-    diagonals = find_diagonal_runs_with_coords(score_ssm, min_length=min_diagonal_length)
+    diagonals = find_diagonal_runs_with_coords(
+        score_ssm, min_length=min_diagonal_length
+    )
     filtered_diagonals = remove_subset_runs(diagonals)
-    accepted_diagonals = remove_overlaps_with_simple_trimming(filtered_diagonals, min_length=min_diagonal_length)
+    accepted_diagonals = remove_overlaps_with_simple_trimming(
+        filtered_diagonals, min_length=min_diagonal_length
+    )
 
     if len(accepted_diagonals) > num_diagonals_limit:
         return None, None, None, None, None, None, None
     elif len(accepted_diagonals) == 0:
         return None, None, None, None, None, None, 0
-    
-    print(f"Found {len(accepted_diagonals) + 1} accepted diagonals with min_diagonal_length={min_diagonal_length}.")
+
+    print(
+        f"Found {len(accepted_diagonals) + 1} accepted diagonals with min_diagonal_length={min_diagonal_length}."
+    )
 
     diagonal_borders_dict = dict()
 
@@ -197,13 +216,13 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
     diagonals_beats_to_num_dict = dict()
     for diagonal in accepted_diagonals:
         diag1_start = diagonal[0][0]
-        diag1_start_beat = sna['onset_beat'][diag1_start]
+        diag1_start_beat = sna["onset_beat"][diag1_start]
         diag1_end = diagonal[-1][0]
-        diag1_end_beat = sna['onset_beat'][diag1_end]
+        diag1_end_beat = sna["onset_beat"][diag1_end]
         diag2_start = diagonal[0][1]
-        diag2_start_beat = sna['onset_beat'][diag2_start]
+        diag2_start_beat = sna["onset_beat"][diag2_start]
         diag2_end = diagonal[-1][1]
-        diag2_end_beat = sna['onset_beat'][diag2_end]
+        diag2_end_beat = sna["onset_beat"][diag2_end]
         expanded_diagonal1 = (diag1_start_beat, diag1_end_beat)
         expanded_diagonal2 = (diag2_start_beat, diag2_end_beat)
         if expanded_diagonal1 in expanded_accepted_diagonals:
@@ -235,9 +254,9 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
             if coord[0] > coord[1]:
                 equivalent_score_id_coord = coord[0]
                 ref_score_id_coord = coord[1]
-            
-            ref_score_id = sna['id'][ref_score_id_coord]
-            equivalent_score_id = sna['id'][equivalent_score_id_coord]
+
+            ref_score_id = sna["id"][ref_score_id_coord]
+            equivalent_score_id = sna["id"][equivalent_score_id_coord]
             ref_score_id_dict[equivalent_score_id] = ref_score_id
 
     minimum_ref_id_dict = dict()
@@ -247,8 +266,8 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
         while temp_ref_id in ref_score_id_dict.keys():
             temp_ref_id = ref_score_id_dict[temp_ref_id]
         minimum_ref_id_dict[equiv_key] = temp_ref_id
-        equiv_beat = sna[sna['id'] == equiv_key]['onset_beat'][0]
-        ref_beat = sna[sna['id'] == temp_ref_id]['onset_beat'][0]
+        equiv_beat = sna[sna["id"] == equiv_key]["onset_beat"][0]
+        ref_beat = sna[sna["id"] == temp_ref_id]["onset_beat"][0]
         min_ref_onset_beat_dict[equiv_beat] = ref_beat
 
     min_ref_id_dict_keys = minimum_ref_id_dict.keys()
@@ -259,7 +278,7 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
         else:
             if equiv_key not in ids_association_dict[min_ref_id]:
                 ids_association_dict[min_ref_id].append(equiv_key)
-        
+
     ids_association_dict_keys = ids_association_dict.keys()
     for min_ref_id in ids_association_dict_keys:
         if min_ref_id not in minimum_ref_id_dict.keys():
@@ -267,7 +286,6 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
         if min_ref_id not in ids_association_dict[min_ref_id]:
             ids_association_dict[min_ref_id].append(min_ref_id)
 
-    
     min_ref_onset_beat_dict_keys = min_ref_onset_beat_dict.keys()
     for equiv_beat in min_ref_onset_beat_dict_keys:
         min_ref_beat = min_ref_onset_beat_dict[equiv_beat]
@@ -283,6 +301,13 @@ def look_for_equivalent_score_ids(sna, min_diagonal_length=20, num_diagonals_lim
             min_ref_onset_beat_dict[min_ref_beat] = min_ref_beat
         if min_ref_beat not in onset_beat_associations_dict[min_ref_beat]:
             onset_beat_associations_dict[min_ref_beat].append(min_ref_beat)
-            
 
-    return ids_association_dict, minimum_ref_id_dict, onset_beat_associations_dict, min_ref_onset_beat_dict, diagonals_beats_to_num_dict, diagonal_borders_dict, len(accepted_diagonals)
+    return (
+        ids_association_dict,
+        minimum_ref_id_dict,
+        onset_beat_associations_dict,
+        min_ref_onset_beat_dict,
+        diagonals_beats_to_num_dict,
+        diagonal_borders_dict,
+        len(accepted_diagonals),
+    )

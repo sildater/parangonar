@@ -4,9 +4,13 @@ import os
 
 import partitura as pt
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning, module="partitura")
 
-from partitura.utils.music import expand_grace_notes_from_local_grace_order, remove_double_notes_from_score_note_array
+from partitura.utils.music import (
+    expand_grace_notes_from_local_grace_order,
+    remove_double_notes_from_score_note_array,
+)
 
 from partitura.score import ScoreLike
 from partitura.performance import PerformanceLike
@@ -14,9 +18,10 @@ from partitura.performance import PerformanceLike
 from ..prob.switching_outerhmm import SwitchSnapOuterHMM
 
 from ..mismatch.switching_outerhmm_utils import (
-    calc_avg_notes_per_measure, 
-    look_for_equivalent_score_ids
+    calc_avg_notes_per_measure,
+    look_for_equivalent_score_ids,
 )
+
 
 class SwitchingOuterHMMMatcher(object):
     def __init__(
@@ -42,14 +47,13 @@ class SwitchingOuterHMMMatcher(object):
         output_dir: Optional[str] = None,
         output_filename: Optional[str] = None,
         consider_parallel_sections: bool = True,
-        section_omit_reason: Optional[str] = None
-        ) -> None:
-
-        '''
+        section_omit_reason: Optional[str] = None,
+    ) -> None:
+        """
         Refer to parangonar/prob/switching_outerhmm.py for details on the parameters.
 
         score_metadata_folder: Use this to provide a path to a folder to store pre-computed score metadata.
-            This is especially useful for multiple runs of the matcher on the same score. 
+            This is especially useful for multiple runs of the matcher on the same score.
             If provided, the matcher will look for a pre-computed score metadata file in this folder before computing it again.
             If there is no existing score metadata file, it will compute the score metadata and save it to this folder for future use.
 
@@ -57,13 +61,13 @@ class SwitchingOuterHMMMatcher(object):
             A score_identifier is required if score_metadata_folder_path is provided.
 
         output_dir: Optional path to a directory where the matcher can save alignment files. Provide this to store a match file that stores section and omitted section information. If not provided, the matcher will not save any alignment files.
-        
+
         output_filename: Optional filename for the output match file. If not provided, the filename will be generated based on the score_identifier.
-        
+
         consider_parallel_sections: Boolean flag to indicate whether to align performance sections to multiple score sections that are musically identical.
-        
+
         section_omit_reason: Optional string to provide a reason for omitting a section. This is used when saving the match file to indicate why a section was omitted. If not provided, "not_performed" will be saved.
-        '''
+        """
 
         self.transitions = transitions
         self.pitch_error_probs = pitch_error_probs
@@ -116,7 +120,9 @@ class SwitchingOuterHMMMatcher(object):
             score_part = pt.score.unfold_part_maximal(score_part)
         score_measure_number_map = score_part.measure_number_map
         print("Expanding grace notes in the score...")
-        sna = expand_grace_notes_from_local_grace_order(score_part, grace_offset_quarter=1/4, include_metrical_position=True)
+        sna = expand_grace_notes_from_local_grace_order(
+            score_part, grace_offset_quarter=1 / 4, include_metrical_position=True
+        )
         print("Removing double notes from the score note array...")
         sna = remove_double_notes_from_score_note_array(sna)
 
@@ -133,7 +139,6 @@ class SwitchingOuterHMMMatcher(object):
         mpq = performance.performedparts[0].mpq
         pna = performance.note_array()
 
-
         avg_notes_per_measure = calc_avg_notes_per_measure(sna)
         min_diagonal_length = 8 * avg_notes_per_measure
         num_diagonals_limit = round(len(sna) / (min_diagonal_length * 2))
@@ -147,30 +152,64 @@ class SwitchingOuterHMMMatcher(object):
                 if score_metadata_file.startswith("."):
                     continue  # Skip hidden files
                 if score_metadata_file.endswith(".npz"):
-                    metadata_score_identifier = score_metadata_file.split(".")[0].split("_metadata")[0]
+                    metadata_score_identifier = score_metadata_file.split(".")[0].split(
+                        "_metadata"
+                    )[0]
                     if metadata_score_identifier == self.score_identifier:
-                        print(f"Found existing score metadata file {score_metadata_file} for {self.score_identifier}. Loading metadata...")
-                        metadata_fn = os.path.join(self.score_metadata_folder, score_metadata_file)
+                        print(
+                            f"Found existing score metadata file {score_metadata_file} for {self.score_identifier}. Loading metadata..."
+                        )
+                        metadata_fn = os.path.join(
+                            self.score_metadata_folder, score_metadata_file
+                        )
                         try:
                             loaded_metadata = np.load(metadata_fn, allow_pickle=True)
                         except Exception as e:
-                            print(f"Error loading metadata file {metadata_fn}: {e}. Starting diagonal length optimization process...")
+                            print(
+                                f"Error loading metadata file {metadata_fn}: {e}. Starting diagonal length optimization process..."
+                            )
                             break
-                        ids_association_dict = loaded_metadata['ids_association_dict'].item()
-                        minimum_ref_id_dict = loaded_metadata['minimum_ref_id_dict'].item()
-                        onset_beat_associations_dict = loaded_metadata['onset_beat_associations_dict'].item()
-                        min_ref_onset_beat_dict = loaded_metadata['min_ref_onset_beat_dict'].item()
-                        diagonals_beats_to_num_dict = loaded_metadata['diagonals_beats_to_num_dict'].item()
-                        diagonal_borders_dict = loaded_metadata['diagonal_borders_dict'].item()
-                        num_diagonals = loaded_metadata['num_diagonals'].item()
+                        ids_association_dict = loaded_metadata[
+                            "ids_association_dict"
+                        ].item()
+                        minimum_ref_id_dict = loaded_metadata[
+                            "minimum_ref_id_dict"
+                        ].item()
+                        onset_beat_associations_dict = loaded_metadata[
+                            "onset_beat_associations_dict"
+                        ].item()
+                        min_ref_onset_beat_dict = loaded_metadata[
+                            "min_ref_onset_beat_dict"
+                        ].item()
+                        diagonals_beats_to_num_dict = loaded_metadata[
+                            "diagonals_beats_to_num_dict"
+                        ].item()
+                        diagonal_borders_dict = loaded_metadata[
+                            "diagonal_borders_dict"
+                        ].item()
+                        num_diagonals = loaded_metadata["num_diagonals"].item()
                         optimum_diagonal_length_found = True
                         print("Metadata loaded successfully.")
                         break
 
         if not optimum_diagonal_length_found:
-            print("No existing metadata found for this score. Starting diagonal length optimization process...")
+            print(
+                "No existing metadata found for this score. Starting diagonal length optimization process..."
+            )
             while not optimum_diagonal_length_found:
-                ids_association_dict, minimum_ref_id_dict, onset_beat_associations_dict, min_ref_onset_beat_dict, diagonals_beats_to_num_dict, diagonal_borders_dict, num_diagonals = look_for_equivalent_score_ids(sna, min_diagonal_length=min_diagonal_length, num_diagonals_limit=num_diagonals_limit)
+                (
+                    ids_association_dict,
+                    minimum_ref_id_dict,
+                    onset_beat_associations_dict,
+                    min_ref_onset_beat_dict,
+                    diagonals_beats_to_num_dict,
+                    diagonal_borders_dict,
+                    num_diagonals,
+                ) = look_for_equivalent_score_ids(
+                    sna,
+                    min_diagonal_length=min_diagonal_length,
+                    num_diagonals_limit=num_diagonals_limit,
+                )
                 if num_diagonals == None:
                     min_diagonal_length = int(min_diagonal_length * 1.5)
                 elif num_diagonals == 0:
@@ -179,10 +218,24 @@ class SwitchingOuterHMMMatcher(object):
                 else:
                     optimum_diagonal_length_found = True
 
-            if self.score_metadata_folder is not None and self.score_identifier is not None:
+            if (
+                self.score_metadata_folder is not None
+                and self.score_identifier is not None
+            ):
                 # Save the metadata for future use
-                metadata_fn = os.path.join(self.score_metadata_folder, f"{self.score_identifier}_metadata.npz")
-                np.savez(metadata_fn, ids_association_dict=ids_association_dict, minimum_ref_id_dict=minimum_ref_id_dict, onset_beat_associations_dict=onset_beat_associations_dict, min_ref_onset_beat_dict=min_ref_onset_beat_dict, diagonals_beats_to_num_dict=diagonals_beats_to_num_dict, diagonal_borders_dict=diagonal_borders_dict, num_diagonals=num_diagonals)
+                metadata_fn = os.path.join(
+                    self.score_metadata_folder, f"{self.score_identifier}_metadata.npz"
+                )
+                np.savez(
+                    metadata_fn,
+                    ids_association_dict=ids_association_dict,
+                    minimum_ref_id_dict=minimum_ref_id_dict,
+                    onset_beat_associations_dict=onset_beat_associations_dict,
+                    min_ref_onset_beat_dict=min_ref_onset_beat_dict,
+                    diagonals_beats_to_num_dict=diagonals_beats_to_num_dict,
+                    diagonal_borders_dict=diagonal_borders_dict,
+                    num_diagonals=num_diagonals,
+                )
                 print(f"Metadata saved to {metadata_fn}.")
 
         self.switchSnapOuterHMM = SwitchSnapOuterHMM(
@@ -218,9 +271,13 @@ class SwitchingOuterHMMMatcher(object):
         alignment, alignment_dict = self.switchSnapOuterHMM.run()
 
         print("Post-processing alignment to clean quick to-fro jumps...")
-        processed_alignment, processed_alignment_dict = self.switchSnapOuterHMM.clean_quick_to_fro_jumps()
-                        
-        snapped_alignment, snapped_alignment_dict = self.switchSnapOuterHMM.snap_to_most_likely_diagonal()
+        processed_alignment, processed_alignment_dict = (
+            self.switchSnapOuterHMM.clean_quick_to_fro_jumps()
+        )
+
+        snapped_alignment, snapped_alignment_dict = (
+            self.switchSnapOuterHMM.snap_to_most_likely_diagonal()
+        )
 
         output_alignment = snapped_alignment
 
@@ -229,7 +286,9 @@ class SwitchingOuterHMMMatcher(object):
             self.switchSnapOuterHMM.create_parallel_alignment()
             output_alignment = self.switchSnapOuterHMM.parallel_alignment
 
-        print("Creating sections. The section lines and omitted section lines will only be printed if you save the match file using the output_dir parameter.")
+        print(
+            "Creating sections. The section lines and omitted section lines will only be printed if you save the match file using the output_dir parameter."
+        )
         sections = self.switchSnapOuterHMM.create_section_lines()
         omitted_sections = self.switchSnapOuterHMM.create_omitted_section_lines()
 
@@ -246,7 +305,7 @@ class SwitchingOuterHMMMatcher(object):
                     self.output_filename = f"{self.output_filename}.match"
 
             self.switchSnapOuterHMM.save_parangonada_csv(
-                self.output_dir,     
+                self.output_dir,
             )
 
             pt.save_match(
