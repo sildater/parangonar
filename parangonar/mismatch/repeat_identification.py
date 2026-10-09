@@ -259,3 +259,270 @@ class RepeatIdentifier(object):
             plt.close()
 
         return found_path, found_path_object
+
+
+
+
+
+
+class RepeatIdentifierCRF(object):
+    """
+    method wrapper to compute the most likely and musically sensible
+    (starts at the start, ends at the end, repeats a valid number of times)
+    sequence of score sections that correspond to an input performance.
+
+    """
+
+    def __init__(self, max_number_of_paths: int = 100000) -> None:
+        self.directions = np.array([[1, 1], [1, 0]])
+        self.dists = np.array([1, 1])
+        self.matcher = BoundedSmithWaterman(
+            threshold=0.5,
+            gamma_penalty=-1,
+            gamma_match=1,
+            directions=self.directions,
+            directional_distances=self.dists,
+            gain_max_val=10,
+        )
+        self.max_number_of_paths = max_number_of_paths
+
+    def prepare_score(self, score: Any) -> Tuple[Any, np.ndarray, List[Set[int]]]:
+        part = pt.score.merge_parts(score.parts)
+        score_note_array = part.note_array()
+        unique_onsets = np.unique(score_note_array["onset_beat"])
+        # # create pitch set representation
+        score_pitches_at_onsets = list()
+        for onset in unique_onsets:
+            score_pitches_at_onsets.append(
+                set(score_note_array[score_note_array["onset_beat"] == onset]["pitch"])
+            )
+        return part, unique_onsets, score_pitches_at_onsets
+
+    def prepare_performance(self, perf: Any) -> Tuple[np.ndarray, np.ndarray]:
+        perf_note_array = perf.note_array()
+        perf_pitches = perf_note_array["pitch"]
+        return perf_note_array, perf_pitches
+
+    def extract_segments(
+        self, part: Any, unique_onsets: np.ndarray, verbose: bool = False
+    ) -> Tuple[List[Any], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+        if verbose:
+            logger.debug("%s", "*" * 20)
+            logger.debug("SEGMENTS")
+            logger.debug("%s", pt.score.pretty_segments(part))
+            logger.debug("%s", "*" * 20)
+
+        # segments and paths
+        pt.score.add_segments(part, force_new=True)
+        segments = pt.score.get_segments(part)
+        paths = pt.score.get_paths(part)
+        # map segments to the score input to the alignment
+        segment_onset_idx = {}
+        segment_onsets = {}
+        for seg_id in segments.keys():
+            start = part.beat_map(segments[seg_id].start.t)
+            end = part.beat_map(segments[seg_id].end.t)
+            onset_mask = np.where(
+                np.all((unique_onsets >= start, unique_onsets < end), axis=0)
+            )
+            segment_onset_idx[seg_id] = np.arange(len(unique_onsets))[onset_mask[0]]
+            segment_onsets[seg_id] = unique_onsets[onset_mask[0]]
+        return paths, segment_onset_idx, segment_onsets
+
+    def viterbi_segmentation(
+        self,
+        n,
+        candidates,
+        transition=None,
+        segment_penalty=3.0,
+    ):
+        """
+        Find the maximum-scoring non-overlapping segmentation of 
+        a performance into corresponding score segment.
+
+        Parameters
+        ----------
+        n:
+            Length of performance in MIDI onsets.
+
+        candidates:
+            List of State objects.
+
+        transition:
+            Function transition(prev_label, current_label) -> score.
+            If None, transitions have score zero.
+            Return -np.inf for forbidden transitions.
+
+        segment_penalty:
+            Penalty applied whenever a segment is selected.
+
+        Returns
+        -------
+        states:
+            Optimal list of selected non-background segments.
+        best_score:
+            Optimal total score.
+        """
+
+        if transition is None:
+            def transition(prev_label, current_label):
+                return 0.0
+
+        # Index candidates by their END position.
+        ending_at = [[] for _ in range(n)]
+
+        for c in candidates:
+            ending_at[c.end].append(c)
+
+        # dp[pos, last_label] =
+        # best score for A[:pos], with `last_label` being the label
+        # of the last selected segment.
+        no_labels = max([c.label for c in candidates]) + 1
+
+        dp_crf = np.full((n + 1, no_labels), -np.inf)
+        back = [[None] * (no_labels) for _ in range(n + 1)]
+
+        # Start in first segment.
+        dp_crf[0, 0] = 0
+
+        # -----------------------------------------------------------------
+        # Segment transitions.
+        # -----------------------------------------------------------------
+
+        for end in range(1, n + 1):
+
+            for c in ending_at[end]:
+
+                start = c.start
+                label = c.label
+
+                # Best previous state ending at `start`.
+                for prev_label in range(0, no_labels):
+
+                    old = dp_crf[start, prev_label]
+                    if not np.isfinite(old):
+                        continue
+
+                    trans = transition(prev_label, label)
+
+                    if not np.isfinite(trans):
+                        continue
+
+                    score = (
+                        old
+                        + trans
+                        + c.score
+                        - segment_penalty
+                    )
+
+                    if score > dp[end, label]:
+                        dp[end, label] = score
+
+                        back[end][label] = (
+                            start,
+                            prev_label,
+                            c,
+                        )
+
+        # -----------------------------------------------------------------
+        # The final state may be any label.
+        # -----------------------------------------------------------------
+
+        final_label = int(np.argmax(dp[n]))
+        best_score = float(dp[n, final_label])
+
+        # -----------------------------------------------------------------
+        # Backtrack.
+        # -----------------------------------------------------------------
+
+        states = []
+
+        pos = n
+        label = final_label
+
+        while pos > 0:
+
+            item = back[pos][label]
+
+            if item is None:
+                # This can occur if the final prefix consists entirely of
+                # background states.
+                pos -= 1
+                label = 0
+                continue
+
+            prev_pos, prev_label, state = item
+
+            if state is not None:
+                states.append(state)
+
+            pos = prev_pos
+            label = prev_label
+
+        states.reverse()
+
+        return states, best_score
+
+    def __call__(
+        self,
+        score: Any,
+        performance: Any,
+        verbose: bool = False,
+        plot: Union[bool, str] = False,
+    ) -> Optional[Tuple[str, Any]]:
+        """
+        Parameters
+        ----------
+        score: object
+            a score object
+        performance : object
+            a performance object
+        """
+
+        part, unique_onsets, score_pitches_at_onsets = self.prepare_score(score)
+        perf_note_array, perf_pitches = self.prepare_performance(performance)
+        # compute coste
+        cost, backtracking = self.matcher(perf_pitches, score_pitches_at_onsets)
+
+        # figure out the possible score segments
+        paths, segment_onset_idx, segment_onsets = self.extract_segments(
+            part, unique_onsets, verbose=verbose
+        )
+
+        if len(paths) < 2:
+            logger.warning("no structural variations!")
+            logger.warning("%s", "*" * 20)
+            return None, None
+
+        path_gains = {}
+        for path in paths:
+            path_string = "".join(path.path)
+            if verbose:
+                logger.debug("Testing path: %s", path_string)
+            path_gain, full_path, full_path_list = self.compute_path_gain(
+                cost, path, backtracking, segment_onset_idx, directions=self.directions
+            )
+            path_gains[path_gain] = (path_string, path, full_path_list)
+
+        max_gain = max([k for k in path_gains.keys()])
+        found_path, found_path_object, found_full_path_list = path_gains[max_gain]
+        if verbose:
+            logger.debug("best fitting path: %s", found_path)
+
+        if plot:
+            colors = ["r", "g", "b"]
+            plt.imshow(cost, aspect="auto")
+            for pp_no, pp_val in enumerate(found_full_path_list):
+                partial_path_id, partial_path = pp_val
+                plt.plot(partial_path[:, 1], partial_path[:, 0], c=colors[pp_no % 3])
+                plt.text(
+                    partial_path[0, 1],
+                    partial_path[0, 0],
+                    partial_path_id,
+                    c=colors[pp_no % 3],
+                    fontsize=12,
+                )
+            plt.savefig(plot + "_" + found_path + "_.png")
+            plt.close()
+
+        return found_path, found_path_object

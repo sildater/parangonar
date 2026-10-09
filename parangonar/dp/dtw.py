@@ -86,7 +86,9 @@ class WeightedDynamicTimeWarping(object):
         pwD = self.cdist_fun(X, Y, self.metric)
 
         out = self.from_distance_matrix(
-            pwD, return_matrices=return_matrices, return_cost=return_cost
+            pwD, 
+            return_matrices=return_matrices, 
+            return_cost=return_cost
         )
         return out
 
@@ -323,6 +325,141 @@ class FlexDynamicTimeWarping(object):
 
 # alias
 FDTW = FlexDynamicTimeWarping
+
+
+class JumpDynamicTimeWarping(object):
+    """
+    Jump Weighted Dynamic Time Warping (JumpDTW).
+
+    Parameters
+    ----------
+    directional_weights: np.ndarray
+        weights associated with each of the three possible steps
+    directions : double array
+        directions.
+    metric: callable
+        the pairwise distance metric to be used between the input
+    cdist_fun: callable
+        the pairwise distance to be used (scipy cdist or local cdist)
+
+    """
+
+    def __init__(
+        self,
+        directional_weights: np.ndarray = np.array([1, 1, 1]),
+        directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+        metric: Callable = euclidean,
+        cdist_fun: Callable = cdist,
+    ) -> None:
+        self.directional_weights = directional_weights
+        self.directions = directions
+        self.metric = metric
+        self.cdist_fun = cdist_fun
+
+    def __call__(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        jumps: np.ndarray = np.empty((0, 2), dtype=np.int64),
+        return_matrices: bool = False,
+        return_cost: bool = False,
+        seg_assign_start_id_map: dict = None,
+        seg_assign_end_id_map: dict = None,
+        seg_assign_from_to_map: dict = None,
+
+    ):
+        """
+        Parameters
+        ----------
+        X : np.ndarray
+            sequence 1 features, 1 row per step.
+        Y : np.ndarray
+            sequence 2 features, 1 row per step.
+        jumps : np.ndarray
+            array of jump indices: (n,2)
+        return_matrices: bool
+            return accumulated cost matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
+
+        X = np.asanyarray(X, dtype=float)
+        Y = np.asanyarray(Y, dtype=float)
+        # Compute pairwise distance
+        pwD = self.cdist_fun(X, Y, self.metric)
+
+        out = self.from_distance_matrix(
+            pwD, 
+            jumps=jumps,
+            return_matrices=return_matrices, 
+            return_cost=return_cost,
+            seg_assign_start_id_map = seg_assign_start_id_map,
+            seg_assign_end_id_map = seg_assign_end_id_map,
+            seg_assign_from_to_map = seg_assign_from_to_map
+        )
+        return out
+
+    def from_distance_matrix(
+        self, 
+        pwD: np.ndarray, 
+        jumps: np.ndarray = np.empty((0, 2), dtype=np.int64),
+        return_matrices: bool = False, 
+        return_cost: bool = False,
+        seg_assign_start_id_map: dict = None,
+        seg_assign_end_id_map: dict = None,
+        seg_assign_from_to_map: dict = None,
+
+
+    ):
+        """
+            Parameters
+        ----------
+        pwD : np.ndarray
+            pairwise distance matrix
+        jumps : np.ndarray
+            array of jump indices: (n,2)
+        return_matrices: bool
+            return accumulated costmatrix, backtracking, and
+            starting point matrix
+        return_cost : bool
+            return accumulated cost of the minimizing path.
+
+        Returns
+        -------
+        path : np.ndarray
+            Accumulated cost matrix
+        """
+
+        D, path, path_list = weighted_jump_dtw_forward_and_backward(
+            pwD, 
+            self.directional_weights, 
+            self.directions,
+            jumps,
+            seg_assign_start_id_map,
+            seg_assign_end_id_map,
+            seg_assign_from_to_map
+
+        )
+        out = (path,)
+        if return_matrices:
+            out += (D, path_list)
+        if return_cost:
+            out += (D[path[-1, 0], path[-1, 1]],)
+        return out
+
+
+# alias
+JDTW = JumpDynamicTimeWarping
+
+
+
+
+
 
 # DTW fw + bw
 
@@ -830,6 +967,292 @@ def flexdtw_backtracking(
             path.append(step)
 
     return np.array(path[::-1], dtype=int)
+
+
+# JDTW
+
+import numpy as np
+from numba import jit
+from typing import Tuple
+
+
+@jit(nopython=True)
+def weighted_jump_dtw_forward_and_backward(
+    pwD: np.ndarray,
+    directional_weights: np.ndarray = np.array([1, 1, 1]),
+    directions: np.ndarray = np.array([[1, 0], [1, 1], [0, 1]]),
+    jumps: np.ndarray = np.empty((0, 2), dtype=np.int64),
+    seg_assign_start_id_map: dict = None,
+    seg_assign_end_id_map: dict = None,
+    seg_assign_from_to_map: dict = None,
+) -> Tuple[np.ndarray, np.ndarray, list]:
+    """
+    compute JumpDTW cost matrix and backtracking path.
+
+    In addition to the normal DTW directions, 
+    the forward pass allows jumps between 
+    specified columns. A jump is represented as:
+
+        (jump_from_index, jump_to_index)
+
+    and operates in adjacent rows:
+
+        (i, jump_from_index) -> (i-1, jump_to_index)
+
+    Parameters
+    ----------
+    pwD : np.ndarray
+        Pairwise distance matrix of shape (M, N).
+
+    directional_weights : np.ndarray
+        Weights associated with each normal DTW direction.
+
+    directions : np.ndarray
+        Array of normal DTW directions, e.g.
+
+            [[1, 0],
+             [1, 1],
+             [0, 1]]
+
+    jumps : np.ndarray
+        Array of shape (K, 2), where each row contains:
+
+            [jump_from_index, jump_to_index]
+
+        The indices refer to columns of pwD, i.e. the range [0, N-1].
+
+    Returns
+    -------
+    output_D : np.ndarray
+        Accumulated DTW cost matrix of shape (M, N).
+
+    output_path : np.ndarray
+        Backtracked path through the cost matrix.
+    """
+
+    M = pwD.shape[0]
+    N = pwD.shape[1]
+
+    # Accumulated cost matrix.
+    D = np.ones((M + 1, N + 1), dtype=np.float64) * np.inf
+
+    # Backtracking information.
+    #
+    # >= 0  -> normal DTW direction index
+    # < -1  -> jump
+    #
+    # For jumps, we store -(jump_index + 2), so that:
+    #   -2 -> jumps[0]
+    #   -3 -> jumps[1]
+    #   ...
+
+    B = np.ones((M, N), dtype=np.int64) * -1
+
+    D[0, 0] = 0.0
+    # center the pairwise distances
+    pwD = (pwD - pwD.min()) / (pwD.max()-pwD.min())
+
+    jump_tos = set(jumps[:,1])
+    # ------------------------------------------------------------------
+    # Forward pass
+    # ------------------------------------------------------------------
+    for i in range(1, M + 1):
+        for j in range(1, N + 1):
+
+            mincost = D[i, j]#np.inf
+            minidx = -1
+            best_is_jump = False
+            best_jump_idx = -1
+
+            # ----------------------------------------------------------
+            # Normal DTW directions
+            # ----------------------------------------------------------
+            for directionsidx, direction in enumerate(directions):
+
+                istep = direction[0]
+                jstep = direction[1]
+
+                previ = i - istep
+                prevj = j - jstep
+
+                if previ >= 0 and prevj >= 0:
+
+                    cost = (
+                        D[previ, prevj]
+                        + pwD[i - 1, j - 1]
+                        * directional_weights[directionsidx]
+                    )
+
+                    if cost < mincost:
+                        mincost = cost
+                        minidx = directionsidx
+                        best_is_jump = False
+
+            # ----------------------------------------------------------
+            # Jump transitions
+            # ----------------------------------------------------------
+            
+            if j - 1 in jump_tos:
+                for jump_idx in range(jumps.shape[0]):
+
+                    jump_from = jumps[jump_idx, 0]
+                    jump_to = jumps[jump_idx, 1]
+                    if j - 1 == jump_to:
+                        # print(jump_to, jump_from)
+                        prevj = jump_from + 1
+                        previ = i - 1
+                        dist_jump = abs(jump_to - jump_from)
+
+                        if prevj >= 0 and prevj < N + 1 and previ >= 0:
+                            cost = D[previ, prevj] + pwD[i - 1, j - 1] - 0.16 * dist_jump
+
+                            if cost < mincost:
+                                mincost = cost
+                                best_is_jump = True
+                                best_jump_idx = jump_idx
+
+
+            # ----------------------------------------------------------
+            # Store best predecessor
+            # ----------------------------------------------------------
+            D[i, j] = mincost
+
+            if best_is_jump:
+                B[i - 1, j - 1] = -(best_jump_idx + 2)
+            else:
+                B[i - 1, j - 1] = minidx
+
+    # ------------------------------------------------------------------
+    # Backtracking
+    # ------------------------------------------------------------------
+
+
+
+
+    n = N - 1
+    m = M - 1
+
+    step = [m, n]
+    path = [step]
+
+    crit = True
+    path_list = ["END"]
+
+    if (
+        (seg_assign_from_to_map is not None) and 
+        (seg_assign_start_id_map is not None) and
+        (seg_assign_end_id_map is not None)
+        ):
+
+        last_seen_end_id = ""
+        while crit:
+
+            staged_id = seg_assign_end_id_map.get(n, None)
+            if staged_id is not None:
+                last_seen_end_id = staged_id
+                # print(last_seen_end_id)
+
+            seg_id = seg_assign_start_id_map.get(n, None)
+            if seg_id is not None:
+                # print("start id", seg_id)
+                if seg_id == last_seen_end_id:
+                    tos = seg_assign_from_to_map.get(seg_id, None)
+
+                    if path_list[-1] in tos:
+                        path_list.append(seg_id)
+                        last_seen_end_id = ""
+
+            if n == 0 and m == 0:
+                crit = False
+
+            else:
+
+                backtracking_pointer = B[m, n]
+
+                if backtracking_pointer >= 0:
+                    # Normal DTW step
+                    bt_vector = directions[backtracking_pointer]
+                    m -= bt_vector[0]
+                    n -= bt_vector[1]
+                   
+
+
+                elif backtracking_pointer < -1:
+                    # print("jump_backtracking")
+                    # Jump
+                    #
+                    # Decode:
+                    #   -2 -> jump 0
+                    #   -3 -> jump 1
+                    #   ...
+                    jump_idx = -backtracking_pointer - 2
+                    jump_from = jumps[jump_idx, 0]
+                    # print("jump_backtracking", jump_from, n)
+                    n = jump_from
+                    m -= 1
+
+                else:
+                    print("invalid pointer")
+                    crit = False
+
+
+                step = [m, n]
+            path.append(step)
+        
+
+
+
+
+    else:
+        while crit:
+            # print(m, n)
+
+            if n == 0 and m == 0:
+                crit = False
+
+            elif m < 0:
+                crit = False
+
+            else:
+
+                backtracking_pointer = B[m, n]
+                # print(backtracking_pointer)
+
+                if backtracking_pointer >= 0:
+                    # Normal DTW step
+                    bt_vector = directions[backtracking_pointer]
+                    m -= bt_vector[0]
+                    n -= bt_vector[1]
+
+                elif backtracking_pointer < -1:
+                    # print("jump_backtracking")
+                    # Jump
+                    #
+                    # Decode:
+                    #   -2 -> jump 0
+                    #   -3 -> jump 1
+                    #   ...
+                    jump_idx = -backtracking_pointer - 2
+                    jump_from = jumps[jump_idx, 0]
+                    # print("jump_backtracking", jump_from, n)
+                    n = jump_from
+                    m -= 1
+
+                else:
+                    print("invalid pointer")
+                    crit = False
+
+
+                step = [m, n]
+            path.append(step)
+
+
+
+    output_path = np.array(path, dtype=np.int32)[::-1]
+    output_D = D[1:, 1:]
+
+    return output_D, output_path[1:, :], path_list[::-1]
+    
 
 
 if __name__ == "__main__":
