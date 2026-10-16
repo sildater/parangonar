@@ -522,6 +522,12 @@ class OnlineTransformerMatcher(object):
         """
         return self.current_position < self.N_ref - offset
 
+    def _clip_to_score(self, index) -> int:
+        """
+        clip a score onset index to the valid range [0, N_ref - 1]
+        """
+        return int(min(max(index, 0), self.N_ref - 1))
+
     def call_legacy(self, performance_note) -> int:
         """
         main entrypoint for matchmaker.
@@ -583,6 +589,7 @@ class OnlineTransformerMatcher(object):
             new_pred_id = (
                 pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
             )
+            new_pred_id = self._clip_to_score(current_id + new_pred_id) - current_id
             pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
             possible_score_notes = self.score_by_pitch[p_pitch]
             possible_score_notes = na_within(
@@ -673,6 +680,8 @@ class OnlineTransformerMatcher(object):
         new_pred_id = (
             pred_id - len(perf_seq) - 1 - (current_id - np.max((current_id - 7, 0)))
         )
+        # predictions on performance or padding tokens fall outside the score
+        new_pred_id = self._clip_to_score(current_id + new_pred_id) - current_id
         ## <----x-> window of sensibility
         if new_pred_id > -5 and new_pred_id < 2:
             pred_score_onset = self._unique_score_onsets[current_id + new_pred_id]
@@ -782,7 +791,7 @@ class OnlineTransformerMatcher(object):
         if self.stuck_with_no_options >= 10 and self.stuck_with_no_options < 11:
             # self.stuck_with_no_options = 0
             # just jump forward
-            self.current_position += 8
+            self.current_position = self._clip_to_score(self.current_position + 8)
             self._warping_path[-1] = (self.current_position, self.input_index - 1)
             logger.warning(
                 "STUCK with no options for 10 inputs at input idx: %s", self.input_index
@@ -996,7 +1005,7 @@ class OnlinePureTransformerMatcher(object):
         #             return idx
         # return current_idx
         max_jump_idx = 16
-        max_backwards = 4
+        max_backwards = min(4, current_idx)
         logger.debug(
             "slice of backup matrix %s",
             self.backup_cost_matrix[
@@ -1220,6 +1229,12 @@ class OnlinePureTransformerMatcher(object):
         """
         return self.current_position < self.N_ref - offset
 
+    def _clip_to_score(self, index) -> int:
+        """
+        clip a score onset index to the valid range [0, N_ref - 1]
+        """
+        return int(min(max(index, 0), self.N_ref - 1))
+
     def __call__(self, performance_note) -> int:
         """
         main entrypoint for matchmaker.
@@ -1248,6 +1263,8 @@ class OnlinePureTransformerMatcher(object):
             .numpy()
         )
         new_pred_id = pred_id - len(perf_seq) - 1 + np.max((current_id - 7, 0))
+        # predictions on performance or padding tokens fall outside the score
+        new_pred_id = self._clip_to_score(new_pred_id)
         if self.allow_jump:
             new_pred_id = self.update_lostness_tracker(
                 new_pred_id, p_pitch, performance_note["id"]
@@ -1286,10 +1303,14 @@ class TOLTWMatcher(object):
         if init_tempo is not None:
             self.init_tempo = init_tempo
         else:
-            # start with a rough estimate of 90 qpm, divided by initial bpq
+            # start with a rough estimate of 90 qpm, divided by initial bpq.
+            # read bpq off the first note with a duration: a leading grace
+            # note gives 0/0, and a NaN starting tempo never tracks.
+            timed_notes = self.score_note_array_full[
+                self.score_note_array_full["duration_quarter"] > 0
+            ]
             beat_per_quarter = (
-                self.score_note_array_full["duration_beat"][0]
-                / self.score_note_array_full["duration_quarter"][0]
+                timed_notes["duration_beat"][0] / timed_notes["duration_quarter"][0]
             )
             self.init_tempo = 60 / 90 / beat_per_quarter
         self.features_s = self.prepare_score(self.score_note_array_full)
