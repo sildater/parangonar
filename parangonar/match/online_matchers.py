@@ -791,6 +791,7 @@ class OnlineTransformerMatcher(object):
         if self.stuck_with_no_options >= 10 and self.stuck_with_no_options < 11:
             # self.stuck_with_no_options = 0
             # just jump forward
+            # self.current_position += 8
             self.current_position = self._clip_to_score(self.current_position + 8)
             self._warping_path[-1] = (self.current_position, self.input_index - 1)
             logger.warning(
