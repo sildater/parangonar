@@ -14,6 +14,8 @@ from partitura.score import Part, Score, ScoreLike
 
 from tqdm import tqdm
 
+from parangonar.mismatch.switching_outerhmm_utils import CleanupParams, clean_warping_path
+
 NDArrayFloat = NDArray[np.float32]
 NDArrayInt = NDArray[np.int32]
 
@@ -1432,6 +1434,111 @@ class SwitchSnapOuterHMM(object):
 
         return self.processed_alignment, self.processed_alignment_dict
 
+    def clean_excursions(
+            self,
+            params: Optional[CleanupParams] = None,
+            verbose: bool = False,
+            **param_overrides,
+        ) -> tuple[List[dict], dict]:
+        '''
+        Post-process the alignment to remove momentary excursions of the HMM away from
+        the true score position (alternative to clean_quick_to_fro_jumps).
+
+        The warping path (one predicted score beat per performance note, in performance
+        order) is cleaned with a robust running-consensus detector and repaired by
+        interpolation / extrapolation from the clean neighbouring notes. Repaired beats
+        are always snapped to real score onsets, and the corresponding performance notes
+        are re-assigned to score notes via assign_closest_score_id().
+
+        Parameters:
+        -----------
+
+            params: A CleanupParams instance. If None, the defaults are used.
+
+            verbose: Whether to print a summary of the repairs.
+
+            **param_overrides: Individual CleanupParams fields to override,
+                e.g. clean_excursions(window=11, far_beats=6.0).
+
+        Returns:
+        -----------
+            processed_alignment: The cleaned alignment.
+            processed_alignment_dict: A dictionary mapping performance note IDs to their processed score beats.
+
+        The list of repairs (stage, kind, note range, old/new beats, pitch-match rates for stage 2)
+        is stored in self.excursion_report.
+        '''
+        if params is not None:
+            p = params
+        else:
+            p = CleanupParams()
+            p.window = self.average_notes_per_measure * 2 + 1 # take a window size of approx 2 measures
+            p.long_window = self.average_notes_per_measure * 8 + 1 # take a long window size of approx 8 measures
+        for key, value in param_overrides.items():
+            if not hasattr(p, key):
+                raise TypeError(f"Unknown cleanup parameter: {key}")
+            setattr(p, key, value)
+        # snap_to_most_likely_diagonal() looks beats up in min_ref_onset_beat_dict,
+        # so repaired beats must be exact score onsets
+        p.snap_to_score_onsets = True
+
+        ######### Extract the warping path in performance order #########
+        pids, warping_path, onsets, pitches = [], [], [], []
+        for p_note in self.performance_note_array:
+            pid = str(p_note["id"])
+            pids.append(pid)
+            warping_path.append(float(self.alignment_dict[pid]))
+            onsets.append(float(p_note["onset_sec"]))
+            pitches.append(p_note["pitch"])
+        # guard against (rare) non-monotonic onsets; the time axis only needs to be non-decreasing
+        onsets = np.maximum.accumulate(np.asarray(onsets, dtype=float))
+
+        ######### Detect and repair excursions #########
+        clean_beats, changed, report, _ = clean_warping_path(
+            warping_path,
+            onsets,
+            pitches=np.asarray(pitches, dtype=int),
+            score_beats=self.reference_features['onset_beat'],
+            score_pitches=self.reference_features['pitch'],
+            score_ids=self.reference_features['id'],
+            params=p,
+        )
+        self.excursion_report = report
+
+        ######### Build the processed alignment dict and update pid_sid_map #########
+        self.processed_alignment_dict = {}
+        for i, pid in enumerate(pids):
+            if not changed[i]:
+                self.processed_alignment_dict[pid] = self.alignment_dict[pid]
+                continue
+            target_beat = float(clean_beats[i])
+            score_pitches_at_beat = self.reference_features[self.reference_features['onset_beat'] == target_beat]['pitch'].tolist()
+            if len(score_pitches_at_beat) == 0:
+                # safety net: should not happen since repaired beats are snapped to score onsets
+                target_beat = float(self.unique_score_onsets[np.argmin(np.abs(self.unique_score_onsets - target_beat))])
+                score_pitches_at_beat = self.reference_features[self.reference_features['onset_beat'] == target_beat]['pitch'].tolist()
+            self.processed_alignment_dict[pid] = target_beat
+            self.assign_closest_score_id(target_beat, score_pitches_at_beat, pid, pitches[i])
+
+        if verbose:
+            num_kept = sum(1 for r in report if r['kind'].startswith('kept'))
+            print(f"clean_excursions: {len(report) - num_kept} excursions repaired "
+                  f"({int(changed.sum())} notes changed), {num_kept} long candidates kept (pitches support them).")
+
+        ######### Create the processed alignment #########
+        self.post_processing_done = True
+        self.processed_pid_alignment_map, self.processed_deletions_list = self.create_match_alignment_dict()
+        self.processed_alignment = self.create_match(self.processed_pid_alignment_map, self.processed_deletions_list)
+
+        self.processed_alignment_eval_dict = self.processed_alignment_dict.copy()
+
+        for line in self.processed_alignment:
+            if line['label'] == 'insertion':
+                pid_insertion = line['performance_id']
+                self.processed_alignment_eval_dict[pid_insertion] = -100
+
+        return self.processed_alignment, self.processed_alignment_dict
+    
     def assign_closest_score_id(
         self, target_beat, score_pitches_at_beat, p_id, p_pitch
     ):
