@@ -14,6 +14,8 @@ from partitura.score import Part, Score, ScoreLike
 
 from tqdm import tqdm
 
+from parangonar.mismatch.switching_outerhmm_utils import CleanupParams, clean_warping_path
+
 NDArrayFloat = NDArray[np.float32]
 NDArrayInt = NDArray[np.int32]
 
@@ -862,6 +864,7 @@ class SwitchSnapOuterHMM(object):
 
         ######### SECTION VARIABLES #########
         self.sections = []
+        self.omitted_sections = []
         self.section_omit_reason = section_omit_reason
 
         ######### EVALUATION VARIABLES #########
@@ -1432,6 +1435,111 @@ class SwitchSnapOuterHMM(object):
 
         return self.processed_alignment, self.processed_alignment_dict
 
+    def clean_excursions(
+            self,
+            params: Optional[CleanupParams] = None,
+            verbose: bool = False,
+            **param_overrides,
+        ) -> tuple[List[dict], dict]:
+        '''
+        Post-process the alignment to remove momentary excursions of the HMM away from
+        the true score position (alternative to clean_quick_to_fro_jumps).
+
+        The warping path (one predicted score beat per performance note, in performance
+        order) is cleaned with a robust running-consensus detector and repaired by
+        interpolation / extrapolation from the clean neighbouring notes. Repaired beats
+        are always snapped to real score onsets, and the corresponding performance notes
+        are re-assigned to score notes via assign_closest_score_id().
+
+        Parameters:
+        -----------
+
+            params: A CleanupParams instance. If None, the defaults are used.
+
+            verbose: Whether to print a summary of the repairs.
+
+            **param_overrides: Individual CleanupParams fields to override,
+                e.g. clean_excursions(window=11, far_beats=6.0).
+
+        Returns:
+        -----------
+            processed_alignment: The cleaned alignment.
+            processed_alignment_dict: A dictionary mapping performance note IDs to their processed score beats.
+
+        The list of repairs (stage, kind, note range, old/new beats, pitch-match rates for stage 2)
+        is stored in self.excursion_report.
+        '''
+        if params is not None:
+            p = params
+        else:
+            p = CleanupParams()
+            p.window = self.average_notes_per_measure * 2 + 1 # take a window size of approx 2 measures
+            p.long_window = self.average_notes_per_measure * 8 + 1 # take a long window size of approx 8 measures
+        for key, value in param_overrides.items():
+            if not hasattr(p, key):
+                raise TypeError(f"Unknown cleanup parameter: {key}")
+            setattr(p, key, value)
+        # snap_to_most_likely_diagonal() looks beats up in min_ref_onset_beat_dict,
+        # so repaired beats must be exact score onsets
+        p.snap_to_score_onsets = True
+
+        ######### Extract the warping path in performance order #########
+        pids, warping_path, onsets, pitches = [], [], [], []
+        for p_note in self.performance_note_array:
+            pid = str(p_note["id"])
+            pids.append(pid)
+            warping_path.append(float(self.alignment_dict[pid]))
+            onsets.append(float(p_note["onset_sec"]))
+            pitches.append(p_note["pitch"])
+        # guard against (rare) non-monotonic onsets; the time axis only needs to be non-decreasing
+        onsets = np.maximum.accumulate(np.asarray(onsets, dtype=float))
+
+        ######### Detect and repair excursions #########
+        clean_beats, changed, report, _ = clean_warping_path(
+            warping_path,
+            onsets,
+            pitches=np.asarray(pitches, dtype=int),
+            score_beats=self.reference_features['onset_beat'],
+            score_pitches=self.reference_features['pitch'],
+            score_ids=self.reference_features['id'],
+            params=p,
+        )
+        self.excursion_report = report
+
+        ######### Build the processed alignment dict and update pid_sid_map #########
+        self.processed_alignment_dict = {}
+        for i, pid in enumerate(pids):
+            if not changed[i]:
+                self.processed_alignment_dict[pid] = self.alignment_dict[pid]
+                continue
+            target_beat = float(clean_beats[i])
+            score_pitches_at_beat = self.reference_features[self.reference_features['onset_beat'] == target_beat]['pitch'].tolist()
+            if len(score_pitches_at_beat) == 0:
+                # safety net: should not happen since repaired beats are snapped to score onsets
+                target_beat = float(self.unique_score_onsets[np.argmin(np.abs(self.unique_score_onsets - target_beat))])
+                score_pitches_at_beat = self.reference_features[self.reference_features['onset_beat'] == target_beat]['pitch'].tolist()
+            self.processed_alignment_dict[pid] = target_beat
+            self.assign_closest_score_id(target_beat, score_pitches_at_beat, pid, pitches[i])
+
+        if verbose:
+            num_kept = sum(1 for r in report if r['kind'].startswith('kept'))
+            print(f"clean_excursions: {len(report) - num_kept} excursions repaired "
+                  f"({int(changed.sum())} notes changed), {num_kept} long candidates kept (pitches support them).")
+
+        ######### Create the processed alignment #########
+        self.post_processing_done = True
+        self.processed_pid_alignment_map, self.processed_deletions_list = self.create_match_alignment_dict()
+        self.processed_alignment = self.create_match(self.processed_pid_alignment_map, self.processed_deletions_list)
+
+        self.processed_alignment_eval_dict = self.processed_alignment_dict.copy()
+
+        for line in self.processed_alignment:
+            if line['label'] == 'insertion':
+                pid_insertion = line['performance_id']
+                self.processed_alignment_eval_dict[pid_insertion] = -100
+
+        return self.processed_alignment, self.processed_alignment_dict
+    
     def assign_closest_score_id(
         self, target_beat, score_pitches_at_beat, p_id, p_pitch
     ):
@@ -1773,7 +1881,11 @@ class SwitchSnapOuterHMM(object):
                                 (parallel_score_id, performance_id)
                             ] = parallel_alignment_item
 
-    def create_omitted_section_lines(self):
+    def create_omitted_section_lines(
+            self,
+            merge_gap_beats: float = 4.0,
+            min_section_beats: float = 4.0,
+        ):
         """
         Create a list of omitted section lines based on the alignment.
         Each omitted section line is represented as a dictionary with the following keys:
@@ -1782,27 +1894,36 @@ class SwitchSnapOuterHMM(object):
         'start_in_beats_original'
         'end_in_beats_original'
         'section_attr_list'
+ 
+        Parameters:
+        -----------
+ 
+            merge_gap_beats: Consecutive omitted sections whose gap (start of the next section minus
+                end of the previous one, in unfolded beats) is at most this many beats are merged into one.
+                This prevents a few stray aligned notes from splitting one omitted section into several.
+ 
+            min_section_beats: Minimum length (in unfolded beats) of an omitted section, applied after merging.
         """
-
+ 
         if self.evaluate_post_processed_alignment:
             alignment_dict_to_process = self.snapped_alignment_dict.copy()
         else:
             alignment_dict_to_process = self.alignment_dict.copy()
-
+ 
         # get all the values of alignment_dict_to_process and sort them
         aligned_beats = sorted(set(alignment_dict_to_process.values()))
         omitted_beats = self.unique_score_onsets.copy()
         omitted_beats = omitted_beats[~np.isin(omitted_beats, aligned_beats)]
         omitted_sections = []
-
+ 
         last_beat = None
         section_number = 1
         next_unique_onset = None
         omitted_section = None
-
+ 
         if self.section_omit_reason is None:
             self.section_omit_reason = "not_performed"
-
+ 
         for i, beat in enumerate(omitted_beats):
             sid = str(
                 self.reference_features[self.reference_features["onset_beat"] == beat][
@@ -1816,8 +1937,11 @@ class SwitchSnapOuterHMM(object):
                 max(sid_duration_beat_array) if len(sid_duration_beat_array) > 0 else 0
             )
             beat_offset = beat + sid_duration_beat
-            if "-2" in sid:
-                sid_original = sid.replace("-2", "-1")
+            # repeated passages in the unfolded score carry a suffix "-2", "-3", "-10", ...;
+            # map them to the first occurrence "-1"
+            sid_base, sid_separator, sid_suffix = sid.rpartition("-")
+            if sid_separator and sid_suffix.isdigit() and int(sid_suffix) >= 2:
+                sid_original = f"{sid_base}-1"
                 sid_original_onset_beat = self.reference_features[
                     self.reference_features["id"] == sid_original
                 ]["onset_beat"].item()
@@ -1843,7 +1967,7 @@ class SwitchSnapOuterHMM(object):
                     max(duration_beat_array) if len(duration_beat_array) > 0 else 0
                 )
                 end_in_beats_original = beat + duration_beat
-
+ 
             if i == 0:
                 omitted_section = dict()
                 omitted_section["id"] = f"os{section_number}"
@@ -1860,7 +1984,7 @@ class SwitchSnapOuterHMM(object):
                     else self.unique_score_onsets[-1]
                 )
                 continue
-
+ 
             if beat >= last_beat and beat <= next_unique_onset:
                 omitted_section["end_in_beats_unfolded"] = beat_offset
                 omitted_section["end_in_beats_original"] = end_in_beats_original
@@ -1872,14 +1996,10 @@ class SwitchSnapOuterHMM(object):
                     else self.unique_score_onsets[-1]
                 )
             else:
-                if (
-                    omitted_section["end_in_beats_unfolded"]
-                    - omitted_section["start_in_beats_unfolded"]
-                    >= 4
-                ):  # minimum section length of 4 beats
-                    omitted_sections.append(omitted_section)
-                    section_number += 1
-
+                # collect every section here; merging and the minimum length filter are applied after the loop
+                omitted_sections.append(omitted_section)
+                section_number += 1
+ 
                 omitted_section = dict()
                 omitted_section["id"] = f"os{section_number}"
                 omitted_section["start_in_beats_unfolded"] = beat
@@ -1894,18 +2014,419 @@ class SwitchSnapOuterHMM(object):
                     > 0
                     else self.unique_score_onsets[-1]
                 )
-
-        if (
-            omitted_section is not None
-            and omitted_section["end_in_beats_unfolded"]
-            - omitted_section["start_in_beats_unfolded"]
-            >= 4
-        ):
+ 
+        if omitted_section is not None:
             omitted_sections.append(omitted_section)
-
+ 
+        # merge consecutive omitted sections separated by a gap of at most merge_gap_beats
+        merged_sections = []
+        for section in omitted_sections:
+            if (
+                len(merged_sections) > 0
+                and section["start_in_beats_unfolded"]
+                - merged_sections[-1]["end_in_beats_unfolded"]
+                <= merge_gap_beats
+            ):
+                previous = merged_sections[-1]
+                if section["end_in_beats_unfolded"] > previous["end_in_beats_unfolded"]:
+                    previous["end_in_beats_unfolded"] = section["end_in_beats_unfolded"]
+                    previous["end_in_beats_original"] = section["end_in_beats_original"]
+            else:
+                merged_sections.append(section)
+ 
+        # apply the minimum section length and renumber the section ids
+        omitted_sections = []
+        for section in merged_sections:
+            if (
+                section["end_in_beats_unfolded"] - section["start_in_beats_unfolded"]
+                >= min_section_beats
+            ):
+                section["id"] = f"os{len(omitted_sections) + 1}"
+                omitted_sections.append(section)
+ 
+        self.omitted_sections = omitted_sections
         return omitted_sections
 
-    def create_section_lines(self):
+    def create_section_lines(
+            self,
+            back_jump_beats: float = 0.5,
+            forward_jump_beats: float = 4.0,
+            persistence_notes: int = 3,
+            max_skip_onsets: int = 2,
+            hesitation_max_beats: float = 2.0,
+            min_new_fraction_first_run: float = 0.25,
+            trailing_strays_to_next_section: bool = True,
+            stray_min_gap_sec: float = 1.0,
+            stray_gap_ratio: float = 2.0,
+        ):
+        """
+        Create a list of section lines based on the alignment.
+        Each section line is represented as a dictionary with the following keys:
+        'id'
+        'start_in_beats_unfolded'
+        'end_in_beats_unfolded'
+        'start_in_beats_original'
+        'end_in_beats_original'
+        'start_in_perf_time'
+        'end_in_perf_time'
+        'section_attr_list'
+ 
+        Sections are found on the warping path of the matched notes (in performance order; insertions
+        are ignored for the segmentation and only extend the section of the most recent matched note in
+        performance time), using a running-maximum rule:
+ 
+            - For the current section, keep the maximum score onset beat reached so far.
+            - A matched note is a candidate section boundary if it lies more than back_jump_beats below
+              that maximum (the performer went back) or more than forward_jump_beats above it (the
+              performer jumped ahead).
+            - A candidate is confirmed, and starts a new section, only if the next persistence_notes
+              matched notes continue sequentially from it: each is at most back_jump_beats below the
+              highest beat of the new run so far, and at most max_skip_onsets unique score onsets ahead of it.
+            - An unconfirmed candidate is a stray alignment: it stays in the current section (and is tagged
+              with it), but does not change the section's running maximum, score beats or labels.
+            - When a new section is confirmed, the stray notes at the very end of the previous section (after its
+              last continuing note) are divided between the two sections (if trailing_strays_to_next_section is True).
+              Step 1 (performance time): if the onset of the first stray is at least stray_min_gap_sec after the
+              latest offset of the previous section's remaining notes, and its distance to the new section's first
+              onset is at most that gap divided by stray_gap_ratio, all strays move to the new section.
+              Step 2 (score beats, if step 1 does not apply): each stray prefers the section it is closer to in score beats: the previous section's running maximum,
+              or the new section's first beat (ties go to the previous section). The strays are then split at one
+              point, earlier ones staying in the previous section and later ones moving to the new section, so that
+              as few strays as possible end up in the section they are not closer to; if several split points are
+              equally good, the one that follows the majority preference is used. Moved strays stay strays (no effect
+              on score beats or labels), but the new section starts at the first of them in performance time.
+ 
+        Each section gets one attribute:
+            'hesitation_stutter': the section is less than hesitation_max_beats long
+                (end_in_beats_unfolded - start_in_beats_unfolded),
+            'first_rehearsal_run_of_section': otherwise, if at least min_new_fraction_first_run of its
+                matched notes were not matched in any earlier section,
+            'rehearsal_repetition': otherwise.
+ 
+        The matched notes of each section (performance index, score beat, stray flag) are stored in
+        self.section_note_points, which plot_section_lines() uses.
+ 
+        Parameters:
+        -----------
+ 
+            back_jump_beats: How far below the section's running maximum a note must lie to be a candidate boundary.
+ 
+            forward_jump_beats: How far above the section's running maximum a note must lie to be a candidate boundary.
+ 
+            persistence_notes: Number of following matched notes that must continue from a candidate to confirm it.
+ 
+            max_skip_onsets: How many unique score onsets ahead a following note may be and still count as continuing.
+ 
+            hesitation_max_beats: Sections shorter than this (in unfolded score beats) are labelled 'hesitation_stutter'.
+ 
+            min_new_fraction_first_run: Minimum fraction of new (not previously matched) notes for a section to be
+                labelled 'first_rehearsal_run_of_section'.
+ 
+            trailing_strays_to_next_section: Divide the stray notes at the end of a section between that section and
+                the next one by distance (see above). If False, they all stay in the earlier section.
+ 
+            stray_min_gap_sec: Step 1 only applies if the first trailing stray starts at least this many seconds after
+                the previous section's last offset.
+ 
+            stray_gap_ratio: Step 1 moves all trailing strays to the new section if the first stray is at least this
+                factor closer (in seconds) to the new section's first onset than to the previous section's last offset.
+        """
+ 
+        if self.evaluate_post_processed_alignment:
+            alignment_list = self.snapped_alignment.copy()
+        else:
+            alignment_list = self.alignment.copy()
+ 
+        sna = self.reference_features.copy()
+        pna = self.performance_note_array.copy()
+        eps = 1e-6
+ 
+        score_rows = {str(s_note["id"]): s_note for s_note in sna}
+        perf_rows = {str(p_note["id"]): p_note for p_note in pna}
+        perf_index = {str(p_note["id"]): index for index, p_note in enumerate(pna)}
+        unique_onsets = np.asarray(self.unique_score_onsets, dtype=float)
+ 
+        def onset_ahead(beat, n):
+            # the n-th unique score onset after beat (or the last onset of the score)
+            index = np.searchsorted(unique_onsets, beat + eps, side="left") + n - 1
+            return float(unique_onsets[min(index, len(unique_onsets) - 1)])
+ 
+        ######### Performance time in seconds #########
+        has_duration_sec = "duration_sec" in pna.dtype.names
+        time_order = np.argsort(pna["onset_tick"], kind="stable")
+        tick_axis = pna["onset_tick"][time_order].astype(float)
+        sec_axis = pna["onset_sec"][time_order].astype(float)
+ 
+        def tick_to_sec(tick):
+            # piecewise-linear tick -> seconds map from the performance notes (linear extrapolation at the ends)
+            if len(tick_axis) < 2 or tick_axis[-1] == tick_axis[0]:
+                return float(sec_axis[0]) if len(sec_axis) > 0 else 0.0
+            slope = (sec_axis[-1] - sec_axis[0]) / (tick_axis[-1] - tick_axis[0])
+            if tick < tick_axis[0]:
+                return float(sec_axis[0] + (tick - tick_axis[0]) * slope)
+            if tick > tick_axis[-1]:
+                return float(sec_axis[-1] + (tick - tick_axis[-1]) * slope)
+            return float(np.interp(tick, tick_axis, sec_axis))
+ 
+        ######### Collect the notes in performance order #########
+        notes = []
+        for line in alignment_list:
+            if line["label"] == "deletion":
+                continue
+            pid = str(line["performance_id"])
+            p_note = perf_rows[pid]
+            onset_sec = float(p_note["onset_sec"])
+            offset_sec = (
+                onset_sec + float(p_note["duration_sec"])
+                if has_duration_sec
+                else tick_to_sec(float(p_note["onset_tick"] + p_note["duration_tick"]))
+            )
+            note = {
+                "pid": pid,
+                "label": line["label"],
+                "onset_tick": p_note["onset_tick"],
+                "offset_tick": p_note["onset_tick"] + p_note["duration_tick"],
+                "onset_sec": onset_sec,
+                "offset_sec": offset_sec,
+                "sid": None,
+                "beat": None,
+            }
+            if line["label"] == "match":
+                sid = str(line["score_id"])
+                s_note = score_rows.get(sid)
+                if s_note is not None:
+                    score_onset_beat = float(s_note["onset_beat"])
+                    score_offset_beat = score_onset_beat + float(s_note["duration_beat"])
+                    # repeated passages in the unfolded score carry a suffix "-2", "-3", ..., "-10", ...;
+                    # map them to the first occurrence "-1" (split at the last "-" so ids containing other "-" are safe)
+                    sid_base, sid_separator, sid_suffix = sid.rpartition("-")
+                    if (
+                        sid_separator
+                        and sid_suffix.isdigit()
+                        and int(sid_suffix) >= 2
+                        and f"{sid_base}-1" in score_rows
+                    ):
+                        s_original = score_rows[f"{sid_base}-1"]
+                        start_in_beats_original = float(s_original["onset_beat"])
+                        end_in_beats_original = start_in_beats_original + float(s_original["duration_beat"])
+                    else:
+                        start_in_beats_original = score_onset_beat
+                        end_in_beats_original = score_offset_beat
+                    note.update(
+                        sid=sid,
+                        beat=score_onset_beat,
+                        offset_beat=score_offset_beat,
+                        start_in_beats_original=start_in_beats_original,
+                        end_in_beats_original=end_in_beats_original,
+                    )
+            notes.append(note)
+ 
+        # the warping path: matched notes with a score position, in performance order
+        path = [k for k, note in enumerate(notes) if note["beat"] is not None]
+ 
+        def choose_stray_split(prefers_next):
+            # split point k: strays [:k] stay in the previous section, strays [k:] move to the new section.
+            # Minimise the number of strays placed against their preference; break ties toward the majority.
+            num = len(prefers_next)
+            errors = [
+                sum(prefers_next[:k]) + sum(not p for p in prefers_next[k:])
+                for k in range(num + 1)
+            ]
+            best = min(errors)
+            best_splits = [k for k in range(num + 1) if errors[k] == best]
+            majority_next = sum(prefers_next) > num / 2
+            return min(best_splits) if majority_next else max(best_splits)
+ 
+        def is_confirmed(position):
+            # do the next persistence_notes matched notes continue sequentially from the candidate?
+            followers = path[position + 1:position + 1 + persistence_notes]
+            if len(followers) == 0:
+                return False
+            run_max = notes[path[position]]["beat"]
+            for k in followers:
+                beat = notes[k]["beat"]
+                if beat < run_max - back_jump_beats - eps or beat > onset_ahead(run_max, max_skip_onsets) + eps:
+                    return False
+                run_max = max(run_max, beat)
+            return True
+ 
+        ######### Segment the warping path with the running-maximum rule #########
+        groups = []  # each group: {"members": [note indices], "stray": set(note indices), "max_beat": float}
+        group = None
+        for position, k in enumerate(path):
+            beat = notes[k]["beat"]
+            if group is None:
+                group = {"members": [k], "stray": set(), "max_beat": beat}
+                groups.append(group)
+                continue
+            is_candidate = (
+                beat < group["max_beat"] - back_jump_beats - eps
+                or beat > group["max_beat"] + forward_jump_beats + eps
+            )
+            if is_candidate and is_confirmed(position):
+                # strays at the end of the previous section: divide them between the previous and the new
+                # section by their distance to the previous section's running maximum and the new section's start
+                moved = []
+                if trailing_strays_to_next_section:
+                    trailing = []
+                    while group["members"][-1] in group["stray"]:
+                        trailing.insert(0, group["members"].pop())
+                    if len(trailing) > 0:
+                        # step 1 (performance time): a clear pause after the previous section, and the first stray
+                        # much closer to the new section's first onset -> all strays belong to the new section
+                        first_stray_onset = notes[trailing[0]]["onset_sec"]
+                        previous_last_offset = max(notes[m]["offset_sec"] for m in group["members"])
+                        gap_to_previous = first_stray_onset - previous_last_offset
+                        gap_to_next = notes[k]["onset_sec"] - first_stray_onset
+                        if (
+                            gap_to_previous >= stray_min_gap_sec - eps
+                            and gap_to_next <= gap_to_previous / stray_gap_ratio + eps
+                        ):
+                            split = 0
+                        else:
+                            # step 2 (score beats): each stray prefers the section it is closer to
+                            prefers_next = [
+                                abs(notes[t]["beat"] - beat) < abs(notes[t]["beat"] - group["max_beat"])
+                                for t in trailing
+                            ]
+                            split = choose_stray_split(prefers_next)
+                        group["members"].extend(trailing[:split])  # stay strays of the previous section
+                        moved = trailing[split:]
+                        for t in moved:
+                            group["stray"].discard(t)
+                group = {"members": moved + [k], "stray": set(moved), "max_beat": beat}
+                groups.append(group)
+            elif is_candidate:
+                group["members"].append(k)
+                group["stray"].add(k)
+            else:
+                group["members"].append(k)
+                group["max_beat"] = max(group["max_beat"], beat)
+ 
+        # attach insertions (and matches without a score position) to the section of the most recent matched note
+        group_of_note = {}
+        for group_index, group in enumerate(groups):
+            for k in group["members"]:
+                group_of_note[k] = group_index
+        current_group = 0 if len(groups) > 0 else None
+        for k in range(len(notes)):
+            if k in group_of_note:
+                current_group = group_of_note[k]
+            elif current_group is not None:
+                groups[current_group]["members"].append(k)
+                groups[current_group]["stray"].add(k)
+ 
+        ######### Build the section lines #########
+        sections = []
+        self.section_note_points = {}
+        encountered_sids = set()
+        for group in groups:
+            core = [k for k in group["members"] if k not in group["stray"]]
+            section_number = len(sections) + 1
+            section_id = f"s{section_number}"
+            first_note = notes[core[0]]
+            last_note = max((notes[k] for k in core), key=lambda n: n["offset_beat"])
+ 
+            section = dict()
+            section["id"] = section_id
+            section["start_in_beats_unfolded"] = first_note["beat"]
+            section["end_in_beats_unfolded"] = last_note["offset_beat"]
+            section["start_in_beats_original"] = first_note["start_in_beats_original"]
+            section["end_in_beats_original"] = last_note["end_in_beats_original"]
+            matched_members = [k for k in group["members"] if notes[k]["beat"] is not None]
+            section["start_in_perf_time"] = min(notes[k]["onset_tick"] for k in matched_members)
+            section["end_in_perf_time"] = max(notes[k]["offset_tick"] for k in group["members"])
+ 
+            encountered_notes = 0
+            unencountered_notes = 0
+            for k in core:
+                if notes[k]["sid"] in encountered_sids:
+                    encountered_notes += 1
+                else:
+                    unencountered_notes += 1
+                    encountered_sids.add(notes[k]["sid"])
+ 
+            section_length_beats = section["end_in_beats_unfolded"] - section["start_in_beats_unfolded"]
+            if section_length_beats < hesitation_max_beats - eps:
+                section["section_attr_list"] = ["hesitation_stutter"]
+            elif unencountered_notes >= min_new_fraction_first_run * (encountered_notes + unencountered_notes):
+                section["section_attr_list"] = ["first_rehearsal_run_of_section"]
+            else:
+                section["section_attr_list"] = ["rehearsal_repetition"]
+ 
+            # tag the matched notes of this section (including stray ones) in the parallel alignment
+            for k in sorted(group["members"]):
+                if notes[k]["label"] != "match" or notes[k]["sid"] is None:
+                    continue
+                alignment_entry = self.parallel_alignment_dict.get((notes[k]["sid"], notes[k]["pid"]), None)
+                if alignment_entry is not None:
+                    # get the index in self.parallel_alignment which is equal to alignment_entry
+                    parallel_alignment_index = self.parallel_alignment.index(alignment_entry)
+                    if "score_attributes_list" not in self.parallel_alignment[parallel_alignment_index]:
+                        self.parallel_alignment[parallel_alignment_index]["score_attributes_list"] = []
+                    self.parallel_alignment[parallel_alignment_index]["score_attributes_list"].append(
+                        f"section_{section_id}"
+                    )
+ 
+            self.section_note_points[section_id] = [
+                (perf_index[notes[k]["pid"]], notes[k]["beat"], k in group["stray"])
+                for k in sorted(group["members"])
+                if notes[k]["beat"] is not None
+            ]
+            sections.append(section)
+ 
+        self.sections = sections
+        return sections
+ 
+    def plot_section_lines(self, sections=None, ax=None, save_path=None, figsize=(20, 8)):
+        """
+        Plot the warping path of the matched notes coloured by section (as found by create_section_lines()),
+        with stray alignments marked as crosses and a dashed line at the start of each section.
+ 
+        Parameters:
+        -----------
+ 
+            sections: The sections to plot. If None, self.sections is used.
+ 
+            ax: A matplotlib axis to draw on. If None, a new figure is created.
+ 
+            save_path: If given, the figure is saved to this path.
+ 
+            figsize: Size of the new figure (if ax is None).
+ 
+        Returns:
+        -----------
+            ax: The matplotlib axis.
+        """
+        if sections is None:
+            sections = self.sections
+        if ax is None:
+            _, ax = plt.subplots(figsize=figsize)
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        for section_index, section in enumerate(sections):
+            points = self.section_note_points.get(section["id"], [])
+            if len(points) == 0:
+                continue
+            color = colors[section_index % len(colors)]
+            regular = [(x, y) for x, y, stray in points if not stray]
+            strays = [(x, y) for x, y, stray in points if stray]
+            if regular:
+                ax.scatter(*zip(*regular), s=8, color=color)
+            if strays:
+                ax.scatter(*zip(*strays), s=40, color=color, marker="x")
+            ax.axvline(regular[0][0] if regular else points[0][0], color=color, ls="--", lw=0.8, alpha=0.6)
+            label_x, label_y = regular[0] if regular else points[0][:2]
+            ax.annotate(section["id"], (label_x, label_y), textcoords="offset points", xytext=(2, 6), fontsize=7, color=color)
+        ax.set_xlabel("Performance Note ID")
+        ax.set_ylabel("Score Time in Beats")
+        ax.set_title(f"Sections ({len(sections)}); crosses = stray alignments")
+        ax.grid(True)
+        if save_path is not None:
+            ax.figure.savefig(save_path, bbox_inches="tight")
+        return ax
+    
+
+    def create_section_lines_legacy(self):
         """
         Create a list of section lines based on the alignment.
         Each section line is represented as a dictionary with the following keys:
@@ -1917,27 +2438,27 @@ class SwitchSnapOuterHMM(object):
         'end_in_perf_time'
         'section_attr_list'
         """
-
+ 
         if self.evaluate_post_processed_alignment:
             alignment_list = self.snapped_alignment.copy()
         else:
             alignment_list = self.alignment.copy()
-
+ 
         sna = self.reference_features.copy()
         pna = self.performance_note_array.copy()
-
+ 
         sections = []
         section = None
         section_number = 1
         encountered_notes = 0
         unencountered_notes = 0
-
+ 
         encountered_sids = []
-
+ 
         for i, line in enumerate(alignment_list):
             if line["label"] == "deletion":
                 continue
-
+ 
             elif line["label"] == "match":
                 sid = line["score_id"]
                 pid = line["performance_id"]
@@ -1948,9 +2469,11 @@ class SwitchSnapOuterHMM(object):
                 perf_onset_tick = pna[pna["id"] == pid]["onset_tick"][0]
                 perf_duration_tick = pna[pna["id"] == pid]["duration_tick"][0]
                 perf_offset_tick = perf_onset_tick + perf_duration_tick
-
-                if "-2" in sid:
-                    sid_original = sid.replace("-2", "-1")
+ 
+                # repeated passages in the unfolded score carry a suffix "-2", "-3", "-10", ...;
+                sid_base, sid_separator, sid_suffix = sid.rpartition("-")
+                if sid_separator and sid_suffix.isdigit() and int(sid_suffix) >= 2:
+                    sid_original = f"{sid_base}-1"
                     sid_original_onset_beat = sna[sna["id"] == sid_original][
                         "onset_beat"
                     ].item()
@@ -1965,7 +2488,31 @@ class SwitchSnapOuterHMM(object):
                 else:
                     start_in_beats_original = score_onset_beat
                     end_in_beats_original = score_offset_beat
-
+ 
+                # if this note does not continue the current section, close the current section first,
+                # so that this note becomes the first note of the new section
+                if section is not None:
+                    measure_no = self.score_measure_number_map(score_onset_div)
+                    continues_section = (
+                        score_onset_beat >= current_score_onset - 1
+                        and score_onset_beat <= next_score_onset
+                    ) or (
+                        measure_no in [current_measure_no, next_score_measure_no]
+                        and score_onset_beat >= current_score_onset
+                    )
+                    if not continues_section:
+                        if encountered_notes > unencountered_notes:
+                            section["section_attr_list"].append("rehearsal_repetition")
+                        else:
+                            section["section_attr_list"].append(
+                                "first_rehearsal_run_of_section"
+                            )
+                        sections.append(section)
+                        section = None
+                        section_number += 1
+                        encountered_notes = 0
+                        unencountered_notes = 0
+ 
                 if section is None:
                     section = dict()
                     section["id"] = f"s{section_number}"
@@ -1976,7 +2523,7 @@ class SwitchSnapOuterHMM(object):
                     section["start_in_perf_time"] = perf_onset_tick
                     section["end_in_perf_time"] = perf_offset_tick
                     section["section_attr_list"] = []
-
+ 
                     current_score_onset = score_onset_beat
                     current_measure_no = self.score_measure_number_map(score_onset_div)
                     next_unique_onsets = self.unique_score_onsets[
@@ -1986,7 +2533,7 @@ class SwitchSnapOuterHMM(object):
                         next_score_onset = next_unique_onsets[0]
                     else:
                         next_score_onset = self.unique_score_onsets[-1]
-
+ 
                     next_score_onset_div = (
                         sna[sna["onset_beat"] == next_score_onset]["onset_div"][0]
                         if next_score_onset is not None
@@ -1997,13 +2544,13 @@ class SwitchSnapOuterHMM(object):
                         if next_score_onset_div is not None
                         else None
                     )
-
+ 
                     if sid in encountered_sids:
                         encountered_notes += 1
                     else:
                         unencountered_notes += 1
                         encountered_sids.append(sid)
-
+ 
                     alignment_entry = self.parallel_alignment_dict.get((sid, pid), None)
                     if alignment_entry is not None:
                         # get the index in self.parallel_alignment which is equal to alignment_entry
@@ -2020,7 +2567,7 @@ class SwitchSnapOuterHMM(object):
                         self.parallel_alignment[parallel_alignment_index][
                             "score_attributes_list"
                         ].append(f"section_s{section_number}")
-
+ 
                 else:
                     if (
                         score_onset_beat >= current_score_onset - 1
@@ -2040,7 +2587,7 @@ class SwitchSnapOuterHMM(object):
                             next_score_onset = next_unique_onsets[0]
                         else:
                             next_score_onset = self.unique_score_onsets[-1]
-
+ 
                         next_score_onset_div = (
                             sna[sna["onset_beat"] == next_score_onset]["onset_div"][0]
                             if next_score_onset is not None
@@ -2051,13 +2598,13 @@ class SwitchSnapOuterHMM(object):
                             if next_score_onset_div is not None
                             else None
                         )
-
+ 
                         if sid in encountered_sids:
                             encountered_notes += 1
                         else:
                             unencountered_notes += 1
                             encountered_sids.append(sid)
-
+ 
                         alignment_entry = self.parallel_alignment_dict.get(
                             (sid, pid), None
                         )
@@ -2076,7 +2623,7 @@ class SwitchSnapOuterHMM(object):
                             self.parallel_alignment[parallel_alignment_index][
                                 "score_attributes_list"
                             ].append(f"section_s{section_number}")
-
+ 
                     else:
                         measure_no = self.score_measure_number_map(score_onset_div)
                         if (
@@ -2097,7 +2644,7 @@ class SwitchSnapOuterHMM(object):
                                 next_score_onset = next_unique_onsets[0]
                             else:
                                 next_score_onset = self.unique_score_onsets[-1]
-
+ 
                             next_score_onset_div = (
                                 sna[sna["onset_beat"] == next_score_onset]["onset_div"][
                                     0
@@ -2110,13 +2657,13 @@ class SwitchSnapOuterHMM(object):
                                 if next_score_onset_div is not None
                                 else None
                             )
-
+ 
                             if sid in encountered_sids:
                                 encountered_notes += 1
                             else:
                                 unencountered_notes += 1
                                 encountered_sids.append(sid)
-
+ 
                             alignment_entry = self.parallel_alignment_dict.get(
                                 (sid, pid), None
                             )
@@ -2137,43 +2684,7 @@ class SwitchSnapOuterHMM(object):
                                 self.parallel_alignment[parallel_alignment_index][
                                     "score_attributes_list"
                                 ].append(f"section_s{section_number}")
-
-                        else:
-                            if encountered_notes > unencountered_notes:
-                                section["section_attr_list"].append(
-                                    "rehearsal_repetition"
-                                )
-                            else:
-                                section["section_attr_list"].append(
-                                    "first_rehearsal_run_of_section"
-                                )
-
-                            alignment_entry = self.parallel_alignment_dict.get(
-                                (sid, pid), None
-                            )
-                            if alignment_entry is not None:
-                                # get the index in self.parallel_alignment which is equal to alignment_entry
-                                parallel_alignment_index = (
-                                    self.parallel_alignment.index(alignment_entry)
-                                )
-                                if (
-                                    "score_attributes_list"
-                                    not in self.parallel_alignment[
-                                        parallel_alignment_index
-                                    ]
-                                ):
-                                    self.parallel_alignment[parallel_alignment_index][
-                                        "score_attributes_list"
-                                    ] = []
-                                self.parallel_alignment[parallel_alignment_index][
-                                    "score_attributes_list"
-                                ].append(f"section_s{section_number}")
-
-                            sections.append(section)
-                            section = None
-                            section_number += 1
-                            encountered_notes = 0
-                            unencountered_notes = 0
+ 
             else:
                 if section is not None:
                     pid = line["performance_id"]
@@ -2181,7 +2692,15 @@ class SwitchSnapOuterHMM(object):
                     perf_duration_tick = pna[pna["id"] == pid]["duration_tick"][0]
                     perf_offset_tick = perf_onset_tick + perf_duration_tick
                     section["end_in_perf_time"] = perf_offset_tick
-
+ 
+        # the last section is still open after the loop: label it and add it
+        if section is not None:
+            if encountered_notes > unencountered_notes:
+                section["section_attr_list"].append("rehearsal_repetition")
+            else:
+                section["section_attr_list"].append("first_rehearsal_run_of_section")
+            sections.append(section)
+ 
         self.sections = sections
         return sections
 

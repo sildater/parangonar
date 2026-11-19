@@ -270,11 +270,12 @@ class SwitchingOuterHMMMatcher(object):
 
         alignment, alignment_dict = self.switchSnapOuterHMM.run()
 
-        print("Post-processing alignment to clean quick to-fro jumps...")
+        print("Post-processing alignment to clean excursions...")
         processed_alignment, processed_alignment_dict = (
-            self.switchSnapOuterHMM.clean_quick_to_fro_jumps()
+            self.switchSnapOuterHMM.clean_excursions()
         )
 
+        print("Post-processing alignment to snap to most likely diagonal...")
         snapped_alignment, snapped_alignment_dict = (
             self.switchSnapOuterHMM.snap_to_most_likely_diagonal()
         )
