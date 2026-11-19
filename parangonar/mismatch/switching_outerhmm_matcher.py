@@ -275,6 +275,7 @@ class SwitchingOuterHMMMatcher(object):
             self.switchSnapOuterHMM.clean_excursions()
         )
 
+        print("Post-processing alignment to snap to most likely diagonal...")
         snapped_alignment, snapped_alignment_dict = (
             self.switchSnapOuterHMM.snap_to_most_likely_diagonal()
         )
